@@ -84,7 +84,7 @@
 
       root.innerHTML = '<div class="home">' +
         (newMonthCreated ? '<div class="toast-new-month" id="toast-new-month">Создан новый месяц: ' + newMonthCreated + '</div>' : '') +
-        '<p class="home-greeting">Здарова, User!</p>' +
+        '<p class="home-greeting">Здарова, Тимка!</p>' +
         '<h1>Месячные бюджеты</h1>' +
         '<p class="subtitle">Выбери месяц или создай новый лист. Неверный месяц можно удалить целиком.</p>' +
         '<form class="create-month-form" id="create-month-form">' +
@@ -186,6 +186,8 @@
 
       var expenses = month.expenses || [];
       var incomes = month.incomes || [];
+      expenses.forEach(function (e, i) { e._idx = i; });
+      incomes.forEach(function (e, i) { e._idx = i; });
       var totalExpenses = expenses.reduce(function (s, e) { return s + e.amount; }, 0);
       var income = totalIncome(month);
       var balance = income - totalExpenses;
@@ -235,10 +237,10 @@
       var barData = barLabels.map(function (d) { return byDay[d]; });
 
       var sortedExpenses = expenses.slice().sort(function (a, b) {
-        return monthSortExpenses === 'desc' ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date);
+        return monthSortExpenses === 'desc' ? b._idx - a._idx : a._idx - b._idx;
       });
       var sortedIncomes = incomes.slice().sort(function (a, b) {
-        return monthSortIncomes === 'desc' ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date);
+        return monthSortIncomes === 'desc' ? b._idx - a._idx : a._idx - b._idx;
       });
       var incomeCatMap = {};
       incomeCats.forEach(function (c) { incomeCatMap[c.id] = c.name; });
@@ -270,9 +272,9 @@
             '<button type="button" class="btn-primary btn-income" id="btn-add-income">+ Добавить доход</button>' +
           '</div>' +
           '<section class="section"><h2>Доходы за месяц</h2>' +
-          '<div class="sort-row"><label>Сортировка по дате: </label><select id="sort-incomes">' +
-            '<option value="desc"' + (monthSortIncomes === 'desc' ? ' selected' : '') + '>Сначала новые</option>' +
+          '<div class="sort-row"><label>Порядок: </label><select id="sort-incomes">' +
             '<option value="asc"' + (monthSortIncomes === 'asc' ? ' selected' : '') + '>Сначала старые</option>' +
+            '<option value="desc"' + (monthSortIncomes === 'desc' ? ' selected' : '') + '>Сначала новые</option>' +
           '</select></div>' +
           '<div class="table-wrap"><table class="expenses-table"><thead><tr><th>Дата</th><th>День</th><th>Категория</th><th>Сумма</th><th>Описание</th><th></th></tr></thead><tbody>' +
           (sortedIncomes.length === 0
@@ -287,9 +289,9 @@
               }).join('')) +
           '</tbody></table></div></section>' +
           '<section class="section"><h2>Все траты за месяц</h2>' +
-          '<div class="sort-row"><label>Сортировка по дате: </label><select id="sort-expenses">' +
-            '<option value="desc"' + (monthSortExpenses === 'desc' ? ' selected' : '') + '>Сначала новые</option>' +
+          '<div class="sort-row"><label>Порядок: </label><select id="sort-expenses">' +
             '<option value="asc"' + (monthSortExpenses === 'asc' ? ' selected' : '') + '>Сначала старые</option>' +
+            '<option value="desc"' + (monthSortExpenses === 'desc' ? ' selected' : '') + '>Сначала новые</option>' +
           '</select></div>' +
           '<div class="table-wrap"><table class="expenses-table"><thead><tr><th>Дата</th><th>День</th><th>Категория</th><th>Подкатегория</th><th>Сумма</th><th>Описание</th><th></th></tr></thead><tbody>' +
           (sortedExpenses.length === 0
