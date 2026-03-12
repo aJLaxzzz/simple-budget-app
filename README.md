@@ -31,8 +31,8 @@
 ## Запуск из терминала
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/budget.git
-cd budget
+git clone https://github.com/aJLaxzzz/simple-budget-app.git
+cd simple-budget-app
 go build -o budget .
 ./budget
 ```
