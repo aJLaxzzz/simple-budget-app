@@ -10,6 +10,8 @@
 
   var monthSortExpenses = 'desc';
   var monthSortIncomes = 'desc';
+  var monthExpenseFilterCategory = '';
+  var monthExpenseFilterSubcategory = '';
 
   function parseHash() {
     const hash = (window.location.hash || '#/').slice(1);
@@ -228,6 +230,7 @@
         var o = bySubKey[k];
         return { categoryId: o.categoryId, categoryName: o.categoryName, subcategoryName: o.subcategoryName, sum: Math.round(o.sum) };
       }).sort(function (a, b) { return b.sum - a.sum; });
+      var hbarHeight = Math.max(220, subcategoryAnalytics.length * 24);
 
       var byDay = {};
       expenses.forEach(function (e) {
@@ -244,6 +247,31 @@
       });
       var incomeCatMap = {};
       incomeCats.forEach(function (c) { incomeCatMap[c.id] = c.name; });
+      var selectedExpenseCategory = monthExpenseFilterCategory;
+      var selectedExpenseSubcategory = monthExpenseFilterSubcategory;
+      var filteredExpenses = expenses.filter(function (e) {
+        var categoryOk = !selectedExpenseCategory || e.category === selectedExpenseCategory;
+        var subcategoryOk = !selectedExpenseSubcategory || (e.subcategory || '') === selectedExpenseSubcategory;
+        return categoryOk && subcategoryOk;
+      });
+      sortedExpenses = filteredExpenses.slice().sort(function (a, b) {
+        return monthSortExpenses === 'desc' ? b._idx - a._idx : a._idx - b._idx;
+      });
+      var filterSubcategoryOptions = ['<option value="">Все подкатегории</option>'];
+      if (selectedExpenseCategory) {
+        var selectedCategoryObj = expenseCats.find(function (c) { return c.id === selectedExpenseCategory; });
+        (selectedCategoryObj && selectedCategoryObj.subcategories ? selectedCategoryObj.subcategories : []).forEach(function (sub) {
+          filterSubcategoryOptions.push('<option value="' + sub + '"' + (selectedExpenseSubcategory === sub ? ' selected' : '') + '>' + sub + '</option>');
+        });
+      } else {
+        var allSubsMap = {};
+        expenseCats.forEach(function (c) {
+          (c.subcategories || []).forEach(function (sub) { allSubsMap[sub] = true; });
+        });
+        Object.keys(allSubsMap).sort().forEach(function (sub) {
+          filterSubcategoryOptions.push('<option value="' + sub + '"' + (selectedExpenseSubcategory === sub ? ' selected' : '') + '>' + sub + '</option>');
+        });
+      }
 
       var daysInMonth = new Date(month.year, month.month, 0).getDate();
       var dayOptions = [];
@@ -285,14 +313,24 @@
                   '<td>' + (incomeCatMap[e.category] || e.category) + '</td>' +
                   '<td class="amount">' + e.amount.toLocaleString('ru-RU') + ' ₽</td>' +
                   '<td class="desc">' + (e.description || '—') + '</td>' +
-                  '<td><button type="button" class="btn-delete" title="Удалить">×</button></td></tr>';
+                  '<td><button type="button" class="btn-edit" title="Редактировать">✎</button><button type="button" class="btn-delete" title="Удалить">×</button></td></tr>';
               }).join('')) +
           '</tbody></table></div></section>' +
           '<section class="section"><h2>Все траты за месяц</h2>' +
-          '<div class="sort-row"><label>Порядок: </label><select id="sort-expenses">' +
+          '<div class="sort-row sort-row-expanded"><label>Порядок: </label><select id="sort-expenses">' +
             '<option value="asc"' + (monthSortExpenses === 'asc' ? ' selected' : '') + '>Сначала старые</option>' +
             '<option value="desc"' + (monthSortExpenses === 'desc' ? ' selected' : '') + '>Сначала новые</option>' +
-          '</select></div>' +
+          '</select>' +
+            '<label>Категория: </label><select id="filter-expense-category">' +
+              '<option value="">Все категории</option>' +
+              expenseCats.map(function (c) {
+                return '<option value="' + c.id + '"' + (selectedExpenseCategory === c.id ? ' selected' : '') + '>' + c.name + '</option>';
+              }).join('') +
+            '</select>' +
+            '<label>Подкатегория: </label><select id="filter-expense-subcategory">' +
+              filterSubcategoryOptions.join('') +
+            '</select>' +
+          '</div>' +
           '<div class="table-wrap"><table class="expenses-table"><thead><tr><th>Дата</th><th>День</th><th>Категория</th><th>Подкатегория</th><th>Сумма</th><th>Описание</th><th></th></tr></thead><tbody>' +
           (sortedExpenses.length === 0
             ? '<tr><td colspan="7" class="empty">Пока нет расходов. Нажми «Добавить расход».</td></tr>'
@@ -302,7 +340,7 @@
                   '<td>' + (categoryMap[e.category] || e.category) + '</td><td>' + (e.subcategory || '—') + '</td>' +
                   '<td class="amount">' + e.amount.toLocaleString('ru-RU') + ' ₽</td>' +
                   '<td class="desc">' + (e.description || '—') + '</td>' +
-                  '<td><button type="button" class="btn-delete" title="Удалить">×</button></td></tr>';
+                  '<td><button type="button" class="btn-edit" title="Редактировать">✎</button><button type="button" class="btn-delete" title="Удалить">×</button></td></tr>';
               }).join('')) +
           '</tbody></table></div></section>' +
           '<section class="section"><h2>Список категорий расходов</h2><div class="analytics-grid">' +
@@ -316,7 +354,7 @@
           '<div class="chart-pie"><div class="chart-container"><canvas id="chart-pie"></canvas></div></div>' +
           '</div></section>' +
           '<section class="section"><h2>Расходы по дням</h2><div class="chart-bar"><div class="chart-container"><canvas id="chart-bar"></canvas></div></div></section>' +
-          (subcategoryAnalytics.length > 0 ? '<section class="section"><h2>Топ подкатегорий</h2><div class="chart-bar"><div class="chart-container" style="height:220px"><canvas id="chart-hbar"></canvas></div></div></section>' : '') +
+          (subcategoryAnalytics.length > 0 ? '<section class="section"><h2>Топ подкатегорий</h2><div class="chart-bar"><div class="chart-container chart-container-hbar" style="height:' + hbarHeight + 'px"><canvas id="chart-hbar"></canvas></div></div></section>' : '') +
           (barLabels.length > 0 ? '<section class="section"><h2>Динамика расходов по дням</h2><div class="chart-bar"><div class="chart-container" style="height:200px"><canvas id="chart-line"></canvas></div></div></section>' : '') +
           '<p class="year-link"><a href="#/year/' + month.year + '">Аналитика за ' + month.year + ' год →</a></p>' +
         '</div>';
@@ -354,6 +392,15 @@
             .then(function () { renderMonthPage(monthId); });
         };
       });
+      root.querySelectorAll('tr[data-expense-id] .btn-edit').forEach(function (btn) {
+        btn.onclick = function () {
+          var row = btn.closest('tr');
+          var expId = row && row.dataset.expenseId;
+          var expense = expenses.find(function (e) { return e.id === expId; });
+          if (!expense) return;
+          openAddExpenseModal(monthId, month, expenseCats, function () { renderMonthPage(monthId); }, expense);
+        };
+      });
       root.querySelectorAll('tr[data-income-id] .btn-delete').forEach(function (btn) {
         btn.onclick = function () {
           var row = btn.closest('tr');
@@ -361,6 +408,15 @@
           if (!incId || !confirm('Удалить запись?')) return;
           api('/months/' + monthId + '/incomes/' + incId, { method: 'DELETE' })
             .then(function () { renderMonthPage(monthId); });
+        };
+      });
+      root.querySelectorAll('tr[data-income-id] .btn-edit').forEach(function (btn) {
+        btn.onclick = function () {
+          var row = btn.closest('tr');
+          var incId = row && row.dataset.incomeId;
+          var incomeEntry = incomes.find(function (e) { return e.id === incId; });
+          if (!incomeEntry) return;
+          openAddIncomeModal(monthId, month, incomeCats, function () { renderMonthPage(monthId); }, incomeEntry);
         };
       });
 
@@ -373,6 +429,22 @@
 
       document.getElementById('sort-expenses').onchange = function () {
         monthSortExpenses = this.value;
+        renderMonthPage(monthId);
+      };
+      document.getElementById('filter-expense-category').onchange = function () {
+        monthExpenseFilterCategory = this.value;
+        if (!monthExpenseFilterCategory) {
+          monthExpenseFilterSubcategory = '';
+        } else {
+          var cat = expenseCats.find(function (c) { return c.id === monthExpenseFilterCategory; });
+          if (cat && cat.subcategories && cat.subcategories.indexOf(monthExpenseFilterSubcategory) === -1) {
+            monthExpenseFilterSubcategory = '';
+          }
+        }
+        renderMonthPage(monthId);
+      };
+      document.getElementById('filter-expense-subcategory').onchange = function () {
+        monthExpenseFilterSubcategory = this.value;
         renderMonthPage(monthId);
       };
       document.getElementById('sort-incomes').onchange = function () {
@@ -421,14 +493,21 @@
               datasets: [{
                 label: '₽',
                 data: subcategoryAnalytics.map(function (a) { return a.sum; }),
-                backgroundColor: subcategoryAnalytics.map(function (a) { return categoryColorById[a.categoryId] || CHART_COLORS[0]; })
+                backgroundColor: subcategoryAnalytics.map(function (a) { return categoryColorById[a.categoryId] || CHART_COLORS[0]; }),
+                barThickness: 12,
+                maxBarThickness: 16,
+                categoryPercentage: 0.98,
+                barPercentage: 0.82
               }]
             },
             options: {
               indexAxis: 'y',
               responsive: true,
               maintainAspectRatio: false,
-              scales: { x: { ticks: { color: '#8b949e' } }, y: { ticks: { color: '#8b949e' } } },
+              scales: {
+                x: { ticks: { color: '#8b949e' } },
+                y: { ticks: { color: '#8b949e', autoSkip: false, font: { size: 11 } } }
+              },
               plugins: { legend: { display: false } }
             }
           }));
@@ -451,17 +530,19 @@
     });
   }
 
-  function openAddExpenseModal(monthId, month, categories, onAdded) {
+  function openAddExpenseModal(monthId, month, categories, onAdded, existingExpense) {
     var daysInMonth = new Date(month.year, month.month, 0).getDate();
-    var today = new Date().getDate();
-    if (today > daysInMonth) today = daysInMonth;
+    var selectedDay = existingExpense && existingExpense.date ? parseInt(existingExpense.date.slice(-2), 10) : new Date().getDate();
+    if (selectedDay > daysInMonth) selectedDay = daysInMonth;
+    if (selectedDay < 1 || Number.isNaN(selectedDay)) selectedDay = 1;
+    var isEdit = !!existingExpense;
     var modalEl = document.createElement('div');
     modalEl.className = 'modal-overlay';
     var dayOpts = '';
-    for (var d = 1; d <= daysInMonth; d++) dayOpts += '<option value="' + d + '"' + (d === today ? ' selected' : '') + '>' + d + '</option>';
+    for (var d = 1; d <= daysInMonth; d++) dayOpts += '<option value="' + d + '"' + (d === selectedDay ? ' selected' : '') + '>' + d + '</option>';
     modalEl.innerHTML =
       '<div class="modal">' +
-        '<div class="modal-header"><h2>Добавить расход</h2><button type="button" class="modal-close" aria-label="Закрыть">×</button></div>' +
+        '<div class="modal-header"><h2>' + (isEdit ? 'Редактировать расход' : 'Добавить расход') + '</h2><button type="button" class="modal-close" aria-label="Закрыть">×</button></div>' +
         '<form class="modal-form" id="expense-form">' +
           '<label><span>День месяца (1–' + daysInMonth + ')</span><select id="exp-day" required>' + dayOpts + '</select></label>' +
           '<label><span>Категория</span><select id="exp-category" required><option value="">Выбери категорию</option>' +
@@ -469,7 +550,7 @@
           '<label id="exp-subcat-wrap" style="display:none"><span>Подкатегория</span><select id="exp-subcategory"><option value="">—</option></select></label>' +
           '<label><span>Сумма (₽)</span><input type="text" id="exp-amount" inputmode="decimal" placeholder="0" required /></label>' +
           '<label><span>Описание</span><input type="text" id="exp-desc" placeholder="Необязательно" /></label>' +
-          '<div class="modal-actions"><button type="button" class="btn-secondary" id="exp-cancel">Отмена</button><button type="submit" class="btn-primary">Добавить</button></div>' +
+          '<div class="modal-actions"><button type="button" class="btn-secondary" id="exp-cancel">Отмена</button><button type="submit" class="btn-primary">' + (isEdit ? 'Сохранить' : 'Добавить') + '</button></div>' +
         '</form>' +
       '</div>';
     modalRoot.appendChild(modalEl);
@@ -492,6 +573,13 @@
       }
     }
     catSelect.onchange = updateSubcategories;
+    if (existingExpense) {
+      catSelect.value = existingExpense.category || '';
+      updateSubcategories();
+      subcatSelect.value = existingExpense.subcategory || '';
+      modalEl.querySelector('#exp-amount').value = existingExpense.amount != null ? String(existingExpense.amount) : '';
+      modalEl.querySelector('#exp-desc').value = existingExpense.description || '';
+    }
 
     function closeModal() { modalEl.remove(); }
 
@@ -502,8 +590,9 @@
       var amount = parseFloat(modalEl.querySelector('#exp-amount').value.replace(/,/, '.').replace(/\s/g, '')) || 0;
       var day = parseInt(modalEl.querySelector('#exp-day').value, 10);
       if (!catSelect.value || amount <= 0) return;
-      api('/months/' + monthId + '/expenses', {
-        method: 'POST',
+      var url = '/months/' + monthId + '/expenses' + (isEdit ? '/' + existingExpense.id : '');
+      api(url, {
+        method: isEdit ? 'PATCH' : 'POST',
         body: JSON.stringify({
           category: catSelect.value,
           subcategory: subcatSelect.value || '',
@@ -517,27 +606,34 @@
     modalEl.querySelector('.modal').onclick = function (e) { e.stopPropagation(); };
   }
 
-  function openAddIncomeModal(monthId, month, incomeCats, onAdded) {
+  function openAddIncomeModal(monthId, month, incomeCats, onAdded, existingIncome) {
     var daysInMonth = new Date(month.year, month.month, 0).getDate();
-    var today = new Date().getDate();
-    if (today > daysInMonth) today = daysInMonth;
+    var selectedDay = existingIncome && existingIncome.date ? parseInt(existingIncome.date.slice(-2), 10) : new Date().getDate();
+    if (selectedDay > daysInMonth) selectedDay = daysInMonth;
+    if (selectedDay < 1 || Number.isNaN(selectedDay)) selectedDay = 1;
+    var isEdit = !!existingIncome;
     var modalEl = document.createElement('div');
     modalEl.className = 'modal-overlay';
     var dayOpts = '';
-    for (var d = 1; d <= daysInMonth; d++) dayOpts += '<option value="' + d + '"' + (d === today ? ' selected' : '') + '>' + d + '</option>';
+    for (var d = 1; d <= daysInMonth; d++) dayOpts += '<option value="' + d + '"' + (d === selectedDay ? ' selected' : '') + '>' + d + '</option>';
     modalEl.innerHTML =
       '<div class="modal">' +
-        '<div class="modal-header"><h2>Добавить доход</h2><button type="button" class="modal-close" aria-label="Закрыть">×</button></div>' +
+        '<div class="modal-header"><h2>' + (isEdit ? 'Редактировать доход' : 'Добавить доход') + '</h2><button type="button" class="modal-close" aria-label="Закрыть">×</button></div>' +
         '<form class="modal-form" id="income-form">' +
           '<label><span>День месяца (1–' + daysInMonth + ')</span><select id="inc-day" required>' + dayOpts + '</select></label>' +
           '<label><span>Категория</span><select id="inc-category" required><option value="">Выбери категорию</option>' +
           incomeCats.map(function (c) { return '<option value="' + c.id + '">' + c.name + '</option>'; }).join('') + '</select></label>' +
           '<label><span>Сумма (₽)</span><input type="text" id="inc-amount" inputmode="decimal" placeholder="0" required /></label>' +
           '<label><span>Описание</span><input type="text" id="inc-desc" placeholder="Необязательно" /></label>' +
-          '<div class="modal-actions"><button type="button" class="btn-secondary" id="inc-cancel">Отмена</button><button type="submit" class="btn-primary">Добавить</button></div>' +
+          '<div class="modal-actions"><button type="button" class="btn-secondary" id="inc-cancel">Отмена</button><button type="submit" class="btn-primary">' + (isEdit ? 'Сохранить' : 'Добавить') + '</button></div>' +
         '</form>' +
       '</div>';
     modalRoot.appendChild(modalEl);
+    if (existingIncome) {
+      modalEl.querySelector('#inc-category').value = existingIncome.category || '';
+      modalEl.querySelector('#inc-amount').value = existingIncome.amount != null ? String(existingIncome.amount) : '';
+      modalEl.querySelector('#inc-desc').value = existingIncome.description || '';
+    }
 
     function closeModal() { modalEl.remove(); }
 
@@ -549,8 +645,9 @@
       var day = parseInt(modalEl.querySelector('#inc-day').value, 10);
       var cat = modalEl.querySelector('#inc-category').value;
       if (!cat || amount <= 0) return;
-      api('/months/' + monthId + '/incomes', {
-        method: 'POST',
+      var url = '/months/' + monthId + '/incomes' + (isEdit ? '/' + existingIncome.id : '');
+      api(url, {
+        method: isEdit ? 'PATCH' : 'POST',
         body: JSON.stringify({
           category: cat,
           amount: amount,

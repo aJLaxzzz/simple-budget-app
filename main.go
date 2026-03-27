@@ -67,7 +67,7 @@ type dataStore struct {
 }
 
 var (
-	store            dataStore
+	store             dataStore
 	expenseCategories []Category
 	incomeCategories  []Category
 )
@@ -403,6 +403,58 @@ func apiExpenses(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if r.Method == http.MethodPatch && len(parts) == 3 && parts[1] == "expenses" {
+		expID := parts[2]
+		var body struct {
+			Category    *string  `json:"category"`
+			Subcategory *string  `json:"subcategory"`
+			Amount      *float64 `json:"amount"`
+			Description *string  `json:"description"`
+			Date        *string  `json:"date"`
+			Day         *int     `json:"day"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "invalid json"})
+			return
+		}
+		for i := range m.Expenses {
+			if m.Expenses[i].ID != expID {
+				continue
+			}
+			if body.Category != nil {
+				m.Expenses[i].Category = strings.TrimSpace(*body.Category)
+			}
+			if body.Subcategory != nil {
+				m.Expenses[i].Subcategory = strings.TrimSpace(*body.Subcategory)
+			}
+			if body.Amount != nil {
+				m.Expenses[i].Amount = *body.Amount
+			}
+			if body.Description != nil {
+				m.Expenses[i].Description = strings.TrimSpace(*body.Description)
+			}
+
+			newDate := ""
+			if body.Day != nil && *body.Day >= 1 && *body.Day <= 31 {
+				newDate = dateFromDay(m.Month, m.Year, *body.Day)
+			} else if body.Date != nil {
+				newDate = strings.TrimSpace(*body.Date)
+			}
+			if newDate != "" {
+				m.Expenses[i].Date = newDate
+				m.Expenses[i].DayOfWeek = dayOfWeek(newDate)
+			}
+
+			_ = saveData()
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(m.Expenses[i])
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
 	http.NotFound(w, r)
 }
 
@@ -463,6 +515,54 @@ func apiIncomes(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusNoContent)
 				return
 			}
+		}
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	if r.Method == http.MethodPatch && len(parts) == 3 && parts[1] == "incomes" {
+		entryID := parts[2]
+		var body struct {
+			Category    *string  `json:"category"`
+			Amount      *float64 `json:"amount"`
+			Description *string  `json:"description"`
+			Date        *string  `json:"date"`
+			Day         *int     `json:"day"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "invalid json"})
+			return
+		}
+		for i := range m.Incomes {
+			if m.Incomes[i].ID != entryID {
+				continue
+			}
+			if body.Category != nil {
+				m.Incomes[i].Category = strings.TrimSpace(*body.Category)
+			}
+			if body.Amount != nil {
+				m.Incomes[i].Amount = *body.Amount
+			}
+			if body.Description != nil {
+				m.Incomes[i].Description = strings.TrimSpace(*body.Description)
+			}
+
+			newDate := ""
+			if body.Day != nil && *body.Day >= 1 && *body.Day <= 31 {
+				newDate = dateFromDay(m.Month, m.Year, *body.Day)
+			} else if body.Date != nil {
+				newDate = strings.TrimSpace(*body.Date)
+			}
+			if newDate != "" {
+				m.Incomes[i].Date = newDate
+				m.Incomes[i].DayOfWeek = dayOfWeek(newDate)
+			}
+
+			_ = saveData()
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(m.Incomes[i])
+			return
 		}
 		w.WriteHeader(http.StatusNotFound)
 		return
@@ -640,8 +740,8 @@ func apiYearSummary(w http.ResponseWriter, r *http.Request) {
 		byMonthBalance[key] = inc - expSum
 	}
 	type catSum struct {
-		Name  string  `json:"name"`
-		Sum   float64 `json:"sum"`
+		Name    string  `json:"name"`
+		Sum     float64 `json:"sum"`
 		Percent float64 `json:"percent"`
 	}
 	var catList []catSum
@@ -654,15 +754,15 @@ func apiYearSummary(w http.ResponseWriter, r *http.Request) {
 	}
 	sort.Slice(catList, func(i, j int) bool { return catList[i].Sum > catList[j].Sum })
 	out := map[string]interface{}{
-		"year":              year,
-		"totalIncome":       incSum,
-		"totalExpenses":     totalExpenses,
-		"balance":           incSum - totalExpenses,
-		"byCategory":       catList,
-		"byMonthExpenses":   byMonthExpenses,
-		"byMonthIncome":     byMonthIncome,
-		"byMonthBalance":    byMonthBalance,
-		"months":            months,
+		"year":            year,
+		"totalIncome":     incSum,
+		"totalExpenses":   totalExpenses,
+		"balance":         incSum - totalExpenses,
+		"byCategory":      catList,
+		"byMonthExpenses": byMonthExpenses,
+		"byMonthIncome":   byMonthIncome,
+		"byMonthBalance":  byMonthBalance,
+		"months":          months,
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(out)
@@ -737,16 +837,16 @@ func incomeCategoryName(id string) string {
 }
 
 type searchHit struct {
-	MonthID    string  `json:"monthId"`
-	Month      int     `json:"month"`
-	Year       int     `json:"year"`
-	Type       string  `json:"type"`
-	Date       string  `json:"date"`
-	Category   string  `json:"category"`
-	Subcategory string `json:"subcategory,omitempty"`
-	Amount     float64 `json:"amount"`
-	Description string `json:"description"`
-	ID         string  `json:"id"`
+	MonthID     string  `json:"monthId"`
+	Month       int     `json:"month"`
+	Year        int     `json:"year"`
+	Type        string  `json:"type"`
+	Date        string  `json:"date"`
+	Category    string  `json:"category"`
+	Subcategory string  `json:"subcategory,omitempty"`
+	Amount      float64 `json:"amount"`
+	Description string  `json:"description"`
+	ID          string  `json:"id"`
 }
 
 func apiSearch(w http.ResponseWriter, r *http.Request) {

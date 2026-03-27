@@ -555,6 +555,25 @@ input:focus, select:focus, textarea:focus {
   color: var(--text);
   font-size: 0.9rem;
 }
+.sort-row-expanded { flex-wrap: wrap; gap: 0.6rem; }
+
+.filter-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+.filter-row label { font-size: 0.9rem; color: var(--text-muted); }
+.filter-row select {
+  padding: 0.45rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.9rem;
+  min-width: 170px;
+}
 
 .table-wrap {
   overflow-x: auto;
@@ -578,17 +597,44 @@ input:focus, select:focus, textarea:focus {
 .expenses-table .amount { font-family: var(--font-mono); font-weight: 600; white-space: nowrap; }
 .expenses-table .desc { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted); }
 .expenses-table .empty { color: var(--text-muted); text-align: center; padding: 2.5rem; font-size: 0.9rem; }
+.expenses-table td:first-child { white-space: nowrap; }
+.expenses-table td:last-child { white-space: nowrap; min-width: 82px; }
 
 .btn-delete {
   background: none;
   border: none;
   color: var(--text-subtle);
-  font-size: 1.35rem;
+  font-size: 1rem;
   line-height: 1;
-  padding: 0.25rem;
+  width: 22px;
+  height: 22px;
+  padding: 0;
   border-radius: 6px;
 }
 .btn-delete:hover { color: var(--red); background: var(--red-soft); }
+.btn-delete { margin-left: 0.2rem; display: inline-flex; align-items: center; justify-content: center; }
+
+.btn-edit {
+  margin-right: 0.15rem;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.btn-edit:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
 
 .analytics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; align-items: start; }
 @media (max-width: 700px) { .analytics-grid { grid-template-columns: 1fr; } }
@@ -629,6 +675,7 @@ input:focus, select:focus, textarea:focus {
 
 .chart-container { position: relative; height: 280px; }
 .chart-bar .chart-container { height: 260px; }
+.chart-container-hbar { min-height: 300px; }
 
 .muted { color: var(--text-muted); font-size: 0.9rem; }
 
