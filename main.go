@@ -3,21 +3,18 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"math/rand"
 	"net/http"
 	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 )
 
-const (
+var (
 	dataFile       = "data.json"
 	categoriesFile = "categories.json"
-	addr           = ":3001"
 )
 
 var dayNamesRu = []string{"Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"}
@@ -72,44 +69,6 @@ var (
 	incomeCategories  []Category
 )
 
-func loadCategories() {
-	raw, err := os.ReadFile(categoriesFile)
-	if err != nil || len(raw) == 0 {
-		expenseCategories = defaultExpenseCategories()
-		incomeCategories = defaultIncomeCategories()
-		_ = saveCategories()
-		return
-	}
-	var parsed struct {
-		Expense []Category `json:"expense"`
-		Income  []Category `json:"income"`
-	}
-	if err := json.Unmarshal(raw, &parsed); err != nil {
-		var arr []Category
-		if err := json.Unmarshal(raw, &arr); err == nil && len(arr) > 0 {
-			expenseCategories = arr
-			incomeCategories = defaultIncomeCategories()
-			_ = saveCategories()
-			return
-		}
-		expenseCategories = defaultExpenseCategories()
-		incomeCategories = defaultIncomeCategories()
-		_ = saveCategories()
-		return
-	}
-	if len(parsed.Expense) > 0 {
-		expenseCategories = parsed.Expense
-	} else {
-		expenseCategories = defaultExpenseCategories()
-	}
-	if len(parsed.Income) > 0 {
-		incomeCategories = parsed.Income
-	} else {
-		incomeCategories = defaultIncomeCategories()
-	}
-	_ = saveCategories()
-}
-
 func defaultExpenseCategories() []Category {
 	return []Category{
 		{ID: "food", Name: "Еда", Subcategories: []string{"Продукты", "Кафе", "Доставка", "Перекусы"}},
@@ -129,46 +88,6 @@ func defaultIncomeCategories() []Category {
 		{ID: "bonus", Name: "Премия"},
 		{ID: "other_income", Name: "Прочий доход"},
 	}
-}
-
-func saveCategories() error {
-	b, _ := json.MarshalIndent(map[string]interface{}{
-		"expense": expenseCategories,
-		"income":  incomeCategories,
-	}, "", "  ")
-	return os.WriteFile(categoriesFile, b, 0644)
-}
-
-func loadData() {
-	raw, err := os.ReadFile(dataFile)
-	if err != nil {
-		store.Months = []Month{}
-		_ = saveData()
-		return
-	}
-	var d dataStore
-	if err := json.Unmarshal(raw, &d); err != nil {
-		store.Months = []Month{}
-		_ = saveData()
-		return
-	}
-	store.Months = d.Months
-	if store.Months == nil {
-		store.Months = []Month{}
-	}
-	for i := range store.Months {
-		if store.Months[i].Expenses == nil {
-			store.Months[i].Expenses = []Expense{}
-		}
-		if store.Months[i].Incomes == nil {
-			store.Months[i].Incomes = []IncomeEntry{}
-		}
-	}
-}
-
-func saveData() error {
-	b, _ := json.MarshalIndent(store, "", "  ")
-	return os.WriteFile(dataFile, b, 0644)
 }
 
 func monthID(month, year int) string {
@@ -250,7 +169,10 @@ func apiDeleteMonth(w http.ResponseWriter, r *http.Request) {
 	for i := range store.Months {
 		if store.Months[i].ID == id {
 			store.Months = append(store.Months[:i], store.Months[i+1:]...)
-			_ = saveData()
+			if err := saveData(); err != nil {
+				reportSaveError(w, err)
+				return
+			}
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
@@ -294,7 +216,10 @@ func apiCreateMonth(w http.ResponseWriter, r *http.Request) {
 		}
 		return store.Months[i].Month < store.Months[j].Month
 	})
-	_ = saveData()
+	if err := saveData(); err != nil {
+		reportSaveError(w, err)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(newMonth)
@@ -320,9 +245,15 @@ func apiMonthIncome(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Income float64 `json:"income"`
 	}
-	_ = json.NewDecoder(r.Body).Decode(&body)
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
 	m.Income = body.Income
-	_ = saveData()
+	if err := saveData(); err != nil {
+		reportSaveError(w, err)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(m)
 }
@@ -363,7 +294,10 @@ func apiExpenses(w http.ResponseWriter, r *http.Request) {
 			Date        string  `json:"date"`
 			Day         int     `json:"day"`
 		}
-		_ = json.NewDecoder(r.Body).Decode(&body)
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, "invalid json", http.StatusBadRequest)
+			return
+		}
 		dateStr := body.Date
 		if body.Day >= 1 && body.Day <= 31 {
 			dateStr = dateFromDay(m.Month, m.Year, body.Day)
@@ -382,7 +316,10 @@ func apiExpenses(w http.ResponseWriter, r *http.Request) {
 			Description: body.Description,
 		}
 		m.Expenses = append(m.Expenses, exp)
-		_ = saveData()
+		if err := saveData(); err != nil {
+			reportSaveError(w, err)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
 		_ = json.NewEncoder(w).Encode(exp)
@@ -394,7 +331,10 @@ func apiExpenses(w http.ResponseWriter, r *http.Request) {
 		for i, e := range m.Expenses {
 			if e.ID == expID {
 				m.Expenses = append(m.Expenses[:i], m.Expenses[i+1:]...)
-				_ = saveData()
+				if err := saveData(); err != nil {
+					reportSaveError(w, err)
+					return
+				}
 				w.WriteHeader(http.StatusNoContent)
 				return
 			}
@@ -446,7 +386,10 @@ func apiExpenses(w http.ResponseWriter, r *http.Request) {
 				m.Expenses[i].DayOfWeek = dayOfWeek(newDate)
 			}
 
-			_ = saveData()
+			if err := saveData(); err != nil {
+				reportSaveError(w, err)
+				return
+			}
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(m.Expenses[i])
 			return
@@ -481,7 +424,10 @@ func apiIncomes(w http.ResponseWriter, r *http.Request) {
 			Date        string  `json:"date"`
 			Day         int     `json:"day"`
 		}
-		_ = json.NewDecoder(r.Body).Decode(&body)
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, "invalid json", http.StatusBadRequest)
+			return
+		}
 		dateStr := body.Date
 		if body.Day >= 1 && body.Day <= 31 {
 			dateStr = dateFromDay(m.Month, m.Year, body.Day)
@@ -499,7 +445,10 @@ func apiIncomes(w http.ResponseWriter, r *http.Request) {
 			Description: body.Description,
 		}
 		m.Incomes = append(m.Incomes, entry)
-		_ = saveData()
+		if err := saveData(); err != nil {
+			reportSaveError(w, err)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
 		_ = json.NewEncoder(w).Encode(entry)
@@ -511,7 +460,10 @@ func apiIncomes(w http.ResponseWriter, r *http.Request) {
 		for i, e := range m.Incomes {
 			if e.ID == entryID {
 				m.Incomes = append(m.Incomes[:i], m.Incomes[i+1:]...)
-				_ = saveData()
+				if err := saveData(); err != nil {
+					reportSaveError(w, err)
+					return
+				}
 				w.WriteHeader(http.StatusNoContent)
 				return
 			}
@@ -559,7 +511,10 @@ func apiIncomes(w http.ResponseWriter, r *http.Request) {
 				m.Incomes[i].DayOfWeek = dayOfWeek(newDate)
 			}
 
-			_ = saveData()
+			if err := saveData(); err != nil {
+				reportSaveError(w, err)
+				return
+			}
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(m.Incomes[i])
 			return
@@ -681,8 +636,7 @@ func apiSaveCategories(w http.ResponseWriter, r *http.Request) {
 	expenseCategories = newExpense
 	incomeCategories = newIncome
 	if err := saveCategories(); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(map[string]string{"error": "failed to save"})
+		reportSaveError(w, err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -785,20 +739,6 @@ func apiNow(w http.ResponseWriter, r *http.Request) {
 		"month": int(now.Month()),
 		"year":  now.Year(),
 	})
-}
-
-// apiShutdown сохраняет данные и завершает процесс (вызывается при закрытии вкладки).
-func apiShutdown(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet && r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-	_ = saveData()
-	w.WriteHeader(http.StatusOK)
-	go func() {
-		time.Sleep(300 * time.Millisecond)
-		os.Exit(0)
-	}()
 }
 
 // apiBackup отдаёт data.json как файл для скачивания (бэкап).
@@ -928,27 +868,7 @@ func apiSearch(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(results)
 }
 
-func staticHandler() http.Handler {
-	dir := "static"
-	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		dir = "."
-	}
-	fs := http.FileServer(http.Dir(dir))
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/" || r.URL.Path == "" {
-			indexPath := filepath.Join(dir, "index.html")
-			http.ServeFile(w, r, indexPath)
-			return
-		}
-		fs.ServeHTTP(w, r)
-	})
-}
-
-func main() {
-	rand.Seed(time.Now().UnixNano())
-	loadCategories()
-	loadData()
-
+func newFinancialHandler(static http.Handler) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/months", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/months" {
@@ -986,14 +906,9 @@ func main() {
 	mux.HandleFunc("/api/categories", apiCategories)
 	mux.HandleFunc("/api/years/", apiYearSummary)
 	mux.HandleFunc("/api/now", apiNow)
-	mux.HandleFunc("/api/shutdown", apiShutdown)
 	mux.HandleFunc("/api/backup", apiBackup)
 	mux.HandleFunc("/api/search", apiSearch)
-	mux.Handle("/", staticHandler())
+	mux.Handle("/", static)
 
-	abs, _ := filepath.Abs(".")
-	log.Printf("Личный бюджет: http://localhost%s (каталог: %s)", addr, abs)
-	if err := http.ListenAndServe(addr, mux); err != nil {
-		log.Fatal(err)
-	}
+	return financialHandler(mux)
 }

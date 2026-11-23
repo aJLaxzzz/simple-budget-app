@@ -1,0 +1,251 @@
+package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+)
+
+// The current application has one in-memory financial store. All API access,
+// including backups, must go through financialHandler.
+var financialMu sync.Mutex
+var writeJSONFile = atomicWriteFile
+
+// Reject unsupported fields rather than silently dropping them on the next save.
+// Missing legacy optional fields remain valid.
+func decodeStoredJSON(raw []byte, dst any) error {
+	d := json.NewDecoder(bytes.NewReader(raw))
+	d.DisallowUnknownFields()
+	if err := d.Decode(dst); err != nil {
+		return err
+	}
+	if err := d.Decode(new(any)); err != io.EOF {
+		return errors.New("unexpected content after JSON")
+	}
+	return nil
+}
+
+func loadData() error {
+	raw, err := os.ReadFile(dataFile)
+	if errors.Is(err, os.ErrNotExist) {
+		// Do not create or rewrite files during loading. The first successful edit
+		// persists a new store. A broken symlink is not a missing data file.
+		if _, e := os.Lstat(dataFile); !errors.Is(e, os.ErrNotExist) {
+			return fmt.Errorf("read %s: %w", dataFile, err)
+		}
+		store = dataStore{Months: []Month{}}
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read %s: %w", dataFile, err)
+	}
+	var shape map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &shape); err != nil || shape == nil || shape["months"] == nil {
+		return fmt.Errorf("invalid %s: expected object with months", dataFile)
+	}
+	var next dataStore
+	if err := decodeStoredJSON(raw, &next); err != nil {
+		return fmt.Errorf("decode %s: %w", dataFile, err)
+	}
+	if next.Months == nil {
+		next.Months = []Month{}
+	}
+	for i := range next.Months {
+		if next.Months[i].Expenses == nil {
+			next.Months[i].Expenses = []Expense{}
+		}
+		if next.Months[i].Incomes == nil {
+			next.Months[i].Incomes = []IncomeEntry{}
+		}
+	}
+	store = next
+	return nil
+}
+
+func loadCategories() error {
+	raw, err := os.ReadFile(categoriesFile)
+	if errors.Is(err, os.ErrNotExist) {
+		if _, e := os.Lstat(categoriesFile); !errors.Is(e, os.ErrNotExist) {
+			return fmt.Errorf("read %s: %w", categoriesFile, err)
+		}
+		expenseCategories, incomeCategories = defaultExpenseCategories(), defaultIncomeCategories()
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read %s: %w", categoriesFile, err)
+	}
+	var next CategoriesResponse
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) > 0 && trimmed[0] == '[' {
+		if err := decodeStoredJSON(raw, &next.Expense); err != nil {
+			return fmt.Errorf("decode %s: %w", categoriesFile, err)
+		}
+	} else {
+		var shape map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &shape); err != nil || shape == nil || (shape["expense"] == nil && shape["income"] == nil) {
+			return fmt.Errorf("invalid %s: expected categories", categoriesFile)
+		}
+		if err := decodeStoredJSON(raw, &next); err != nil {
+			return fmt.Errorf("decode %s: %w", categoriesFile, err)
+		}
+	}
+	if len(next.Expense) == 0 {
+		next.Expense = defaultExpenseCategories()
+	}
+	if len(next.Income) == 0 {
+		next.Income = defaultIncomeCategories()
+	}
+	expenseCategories, incomeCategories = next.Expense, next.Income
+	return nil
+}
+
+func saveData() error { return saveJSON(dataFile, store) }
+func saveCategories() error {
+	return saveJSON(categoriesFile, CategoriesResponse{Expense: expenseCategories, Income: incomeCategories})
+}
+func saveJSON(path string, value any) error {
+	b, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode %s: %w", path, err)
+	}
+	return writeJSONFile(path, b)
+}
+
+// Rename is the commit point: every returned error leaves the destination intact.
+// The temporary file lives on the same filesystem as the destination.
+func atomicWriteFile(path string, data []byte) error {
+	return atomicReplaceFile(path, func(f *os.File) error {
+		_, err := f.Write(data)
+		return err
+	})
+}
+
+func atomicReplaceFile(path string, write func(*os.File) error) error {
+	mode := os.FileMode(0600)
+	if info, err := os.Lstat(path); err == nil {
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("refusing to replace non-regular file %s", path)
+		}
+		mode = info.Mode().Perm()
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	dir, err := os.Open(filepath.Dir(path))
+	if err != nil {
+		return err
+	}
+	defer dir.Close()
+	f, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+"-*.tmp")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(f.Name())
+	defer f.Close()
+	if err = f.Chmod(mode); err != nil {
+		return err
+	}
+	if err = write(f); err != nil {
+		return err
+	}
+	if err = f.Sync(); err != nil {
+		return err
+	}
+	if err = f.Close(); err != nil {
+		return err
+	}
+	if err = os.Rename(f.Name(), path); err != nil {
+		return err
+	}
+	// A directory-sync failure occurs after commit. Do not report a rollback:
+	// the file has already changed. Log the reduced power-loss durability.
+	if err = dir.Sync(); err != nil {
+		log.Printf("WARNING: %s committed, directory sync failed: %v", path, err)
+	}
+	return nil
+}
+
+func reportSaveError(w http.ResponseWriter, err error) {
+	log.Printf("Saving financial data failed: %v", err)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusInternalServerError)
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": "Не удалось сохранить данные. Изменения не применены."})
+}
+
+type statusWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (w *statusWriter) WriteHeader(status int) {
+	if w.status == 0 {
+		w.status = status
+		w.ResponseWriter.WriteHeader(status)
+	}
+}
+func (w *statusWriter) Write(p []byte) (int, error) {
+	if w.status == 0 {
+		w.WriteHeader(http.StatusOK)
+	}
+	return w.ResponseWriter.Write(p)
+}
+
+func cloneCategories(src []Category) []Category {
+	if src == nil {
+		return nil
+	}
+	dst := append([]Category{}, src...)
+	for i := range dst {
+		if src[i].Subcategories != nil {
+			dst[i].Subcategories = append([]string{}, src[i].Subcategories...)
+		}
+	}
+	return dst
+}
+func cloneData(src dataStore) dataStore {
+	dst := dataStore{}
+	if src.Months == nil {
+		return dst
+	}
+	dst.Months = append([]Month{}, src.Months...)
+	for i := range dst.Months {
+		if src.Months[i].Expenses != nil {
+			dst.Months[i].Expenses = append([]Expense{}, src.Months[i].Expenses...)
+		}
+		if src.Months[i].Incomes != nil {
+			dst.Months[i].Incomes = append([]IncomeEntry{}, src.Months[i].Incomes...)
+		}
+	}
+	return dst
+}
+
+func financialHandler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasPrefix(r.URL.Path, "/api/") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		financialMu.Lock()
+		defer financialMu.Unlock()
+		if r.Method == http.MethodGet || r.Method == http.MethodHead {
+			next.ServeHTTP(w, r)
+			return
+		}
+		previous := cloneData(store)
+		expense, income := cloneCategories(expenseCategories), cloneCategories(incomeCategories)
+		sw := &statusWriter{ResponseWriter: w}
+		defer func() {
+			if sw.status >= 400 {
+				store, expenseCategories, incomeCategories = previous, expense, income
+			}
+		}()
+		next.ServeHTTP(sw, r)
+	})
+}

@@ -1,7 +1,75 @@
-# Бинарь после go build
+# Локальные исполняемые сборки; start-budget.command использует /budget
 /budget
+/simple-budget-app
+/build/
+/dist/
 
-# Локальные данные (не коммитить в открытый репозиторий)
-data.json
+# Финансовые данные и их локальные копии (только корень, не тестовые JSON)
+/data.json
+/categories.json
+/data-*.json
+/data.*.json
+/categories-*.json
+/categories.*.json
+/.data.json-*.tmp
+/.categories.json-*.tmp
 
+# Локальные SQLite, WAL/SHM, блокировки и снимки в корне
+/*.db
+/*.db-wal
+/*.db-shm
+/*.db.lock
+/*.sqlite
+/*.sqlite-wal
+/*.sqlite-shm
+/*.sqlite.lock
+/*.sqlite3
+/*.sqlite3-wal
+/*.sqlite3-shm
+/backups/
+/backup/
+/local-data/
+/budget-backup-*.json
+/planner-backup-*.zip
+/planner-backup-*.db
+
+# Секреты и персональная конфигурация; примеры можно хранить в Git
+/.env
+/.env.*
+!/.env.example
+!/.env.sample
+/secrets/
+/.secrets/
+/*.pem
+/*.key
+/*.p12
+/config.local.json
+/config.local.*
+/.idea/workspace.xml
+/.idea/shelf/
+
+# Воспроизводимые отчёты, скриншоты, трассы и журналы
+/artifacts/
+/test-results/
+/playwright-report/
+/blob-report/
+/coverage/
+/coverage*.out
+/coverage*.html
+/coverage*.lcov
+/logs/
+/*.log
+/npm-debug.log*
+
+# Локальные зависимости и кеши; исходники и фикстуры не исключаются
+/node_modules/
+/.cache/
+/.gocache/
+/.npm/
+/.tmp/
+/tmp/
+/temp/
 .DS_Store
+__pycache__/
+*.pyc
+*.pyo

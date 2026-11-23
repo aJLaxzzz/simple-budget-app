@@ -1,0 +1,3241 @@
+[
+  {
+    "id": "lucide:house",
+    "name": "Дом",
+    "category": "Дом и уборка",
+    "kind": "builtin",
+    "checksum": "2c13f570d9b9727c9b6c23400c95acfa9737e91884ed926332edb18fd47a2a76",
+    "synonyms": [
+      "уборка чистота домашние дела"
+    ]
+  },
+  {
+    "id": "lucide:sofa",
+    "name": "Диван",
+    "category": "Дом и уборка",
+    "kind": "builtin",
+    "checksum": "a80afdb349cb05b63f16172d65c2a74df3d9def07c622614128147a3c81b6221",
+    "synonyms": [
+      "уборка чистота домашние дела"
+    ]
+  },
+  {
+    "id": "lucide:bed",
+    "name": "Кровать",
+    "category": "Дом и уборка",
+    "kind": "builtin",
+    "checksum": "4baafee2f66b7d91447c68b418e1713c240266417a0884051483c1c83a978ecf",
+    "synonyms": [
+      "уборка чистота домашние дела"
+    ]
+  },
+  {
+    "id": "lucide:bed-double",
+    "name": "Двуспальная кровать",
+    "category": "Дом и уборка",
+    "kind": "builtin",
+    "checksum": "f00cd8d1904f5a24132d254eed9d3eb7f751a52aa9ba1d0d8bf0cca21d2325d2",
+    "synonyms": [
+      "уборка чистота домашние дела",
+      "постель бельё"
+    ]
+  },
+  {
+    "id": "lucide:bath",
+    "name": "Ванная",
+    "category": "Дом и уборка",
+    "kind": "builtin",
+    "checksum": "ed48aefa07ce66fcba115df07a57349da16a2b8aaa9115c946db1d92321a1054",
+    "synonyms": [
+      "уборка чистота домашние дела",
+      "почистить ванную уборка"
+    ]
+  },
+  {
+    "id": "lucide:broom",
+    "name": "Метла",
+    "category": "Дом и уборка",
+    "kind": "builtin",
+    "checksum": "6b3d7fd3957e7d3824a5dfb72b43d7dd13f6c7347cde074466bd56f0c7d95e0f",
+    "synonyms": [
+      "уборка чистота домашние дела"
+    ]
+  },
+  {
+    "id": "lucide:broom-sparkles",
+    "name": "Генеральная уборка",
+    "category": "Дом и уборка",
+    "kind": "builtin",
+    "checksum": "006eeb6b88457bdf8cee748427ea778c07400c07bb19b7656e862c15db44d4f5",
+    "synonyms": [
+      "уборка чистота домашние дела"
+    ]
+  },
+  {
+    "id": "lucide:mop",
+    "name": "Швабра",
+    "category": "Дом и уборка",
+    "kind": "builtin",
+    "checksum": "77204c214aab82e8a85c09577a892eaa26a6084ec8b7d29e5661619d7bf1c192",
+    "synonyms": [
+      "уборка чистота домашние дела",
+      "помыть полы уборка"
+    ]
+  },
+  {
+    "id": "lucide:mop-sparkles",
+    "name": "Влажная уборка",
+    "category": "Дом и уборка",
+    "kind": "builtin",
+    "checksum": "3bdfe587c8638c68f76d6331cd1fdd7873c4e0828bbbc4e64f3807978e3ab8c7",
+    "synonyms": [
+      "уборка чистота домашние дела"
+    ]
+  },
+  {
+    "id": "lucide:brush-cleaning",
+    "name": "Щётка для уборки",
+    "category": "Дом и уборка",
+    "kind": "builtin",
+    "checksum": "1f2379518973f2d486fc45688565186190e1d18df8114c5236beddbc9d4f4218",
+    "synonyms": [
+      "уборка чистота домашние дела"
+    ]
+  },
+  {
+    "id": "lucide:robot-vacuum",
+    "name": "Робот-пылесос",
+    "category": "Дом и уборка",
+    "kind": "builtin",
+    "checksum": "d66bdeaa61c99e69b6f0b45dc1ff7c685da2cddb2822881517372b178a24cb14",
+    "synonyms": [
+      "уборка чистота домашние дела",
+      "пылесос уборка"
+    ]
+  },
+  {
+    "id": "lucide:washing-machine",
+    "name": "Стирка",
+    "category": "Дом и уборка",
+    "kind": "builtin",
+    "checksum": "3eb0e6177010e2f83c6d33b9ba40a7f3a1e247404eae76f35ae283e3760575dd",
+    "synonyms": [
+      "уборка чистота домашние дела"
+    ]
+  },
+  {
+    "id": "lucide:soap-dispenser-droplet",
+    "name": "Моющее средство",
+    "category": "Дом и уборка",
+    "kind": "builtin",
+    "checksum": "fcca9b6b1accee865a3e9168ba7831af3ab5d3110a99f94077525703acd46de1",
+    "synonyms": [
+      "уборка чистота домашние дела",
+      "мыло мыть руки уборка"
+    ]
+  },
+  {
+    "id": "lucide:bubbles",
+    "name": "Мытьё",
+    "category": "Дом и уборка",
+    "kind": "builtin",
+    "checksum": "ffbcaaef42fecaf874d2129733b8a59fbe1d9212a9856340df88f195074e908a",
+    "synonyms": [
+      "уборка чистота домашние дела"
+    ]
+  },
+  {
+    "id": "lucide:toilet",
+    "name": "Санузел",
+    "category": "Дом и уборка",
+    "kind": "builtin",
+    "checksum": "a6b6f0e8fb13373bce13217e0b5ff50ed62c65cdf3b7f91f6a0d9783fe9303b5",
+    "synonyms": [
+      "уборка чистота домашние дела"
+    ]
+  },
+  {
+    "id": "lucide:shower-head",
+    "name": "Душ",
+    "category": "Дом и уборка",
+    "kind": "builtin",
+    "checksum": "f040dee549def6a3000b9169faddef4ae98400d239f4ef51fb69775246192d4c",
+    "synonyms": [
+      "уборка чистота домашние дела"
+    ]
+  },
+  {
+    "id": "lucide:shelving-unit",
+    "name": "Полки",
+    "category": "Дом и уборка",
+    "kind": "builtin",
+    "checksum": "d5972d3d5b543c9453172b2de00e62b4f93274224fa78d435e3bc9013d0bca47",
+    "synonyms": [
+      "уборка чистота домашние дела"
+    ]
+  },
+  {
+    "id": "lucide:faucet",
+    "name": "Кран",
+    "category": "Дом и уборка",
+    "kind": "builtin",
+    "checksum": "79ca5c56165e26fc781742343b9437a774d3aafb0777f5800eee49cca8d41aee",
+    "synonyms": [
+      "уборка чистота домашние дела"
+    ]
+  },
+  {
+    "id": "lucide:trash-2",
+    "name": "Вынести мусор",
+    "category": "Дом и уборка",
+    "kind": "builtin",
+    "checksum": "ece19f1ef7edb006b6f5a068fdd8cf11388bd5421dbbe2f81dcbb0e7638f26f3",
+    "synonyms": [
+      "уборка чистота домашние дела",
+      "мусор отходы вынести"
+    ]
+  },
+  {
+    "id": "lucide:blinds",
+    "name": "Помыть окна",
+    "category": "Дом и уборка",
+    "kind": "builtin",
+    "checksum": "1eb0d5cefd04db9f8f7113833ef7d1f1cb7a8c60d95af286f01833d93f096a31",
+    "synonyms": [
+      "уборка чистота домашние дела",
+      "окна стекло"
+    ]
+  },
+  {
+    "id": "lucide:shirt",
+    "name": "Постирать одежду",
+    "category": "Дом и уборка",
+    "kind": "builtin",
+    "checksum": "42ddefda7fbdca2f5763c079e92b333b5df4e468ab9d45524eb67aaf1545c351",
+    "synonyms": [
+      "уборка чистота домашние дела"
+    ]
+  },
+  {
+    "id": "lucide:door-closed",
+    "name": "Разобрать шкаф",
+    "category": "Дом и уборка",
+    "kind": "builtin",
+    "checksum": "032d0b382fb99e794fde460c3e436609f541dedbac2f7853f6ff90296bdc4559",
+    "synonyms": [
+      "уборка чистота домашние дела"
+    ]
+  },
+  {
+    "id": "lucide:bed-single",
+    "name": "Сменить постельное бельё",
+    "category": "Дом и уборка",
+    "kind": "builtin",
+    "checksum": "4be12113c3890894b4bf2f93a30d8312be2f615cc089d9be6bb7d6018d69419e",
+    "synonyms": [
+      "уборка чистота домашние дела"
+    ]
+  },
+  {
+    "id": "lucide:cooking-pot",
+    "name": "Готовка",
+    "category": "Кухня и еда",
+    "kind": "builtin",
+    "checksum": "b64af5e9e99e91a9eaf861c7a0e5f9fa8d3b6f3e3de8a1e1e3578c4793e339a0",
+    "synonyms": [
+      "еда продукты готовка кухня",
+      "Кастрюля",
+      "убрать кухню приготовить еду"
+    ]
+  },
+  {
+    "id": "lucide:chef-hat",
+    "name": "Повар",
+    "category": "Кухня и еда",
+    "kind": "builtin",
+    "checksum": "1d7f80abdbc6f53725367ecd76604c2a19a3877ec012cede2508f5f43f20da80",
+    "synonyms": [
+      "еда продукты готовка кухня"
+    ]
+  },
+  {
+    "id": "lucide:utensils",
+    "name": "Ресторан",
+    "category": "Кухня и еда",
+    "kind": "builtin",
+    "checksum": "d7e4f1b0f71e952af78a1f26584ade7167076df791a5b00f41383be2324ce212",
+    "synonyms": [
+      "еда продукты готовка кухня"
+    ]
+  },
+  {
+    "id": "lucide:coffee",
+    "name": "Перерыв",
+    "category": "Кухня и еда",
+    "kind": "builtin",
+    "checksum": "e920d9dbbaaaf46de5375ba0a4519906b99ff9ae36d0537c5d260dc19e98c42a",
+    "synonyms": [
+      "еда продукты готовка кухня",
+      "Кофе"
+    ]
+  },
+  {
+    "id": "lucide:cup-soda",
+    "name": "Напиток",
+    "category": "Кухня и еда",
+    "kind": "builtin",
+    "checksum": "0b31eded3138d92cf0800738890e1f56094353d5f9a4833aedd2125523ac7fb3",
+    "synonyms": [
+      "еда продукты готовка кухня"
+    ]
+  },
+  {
+    "id": "lucide:glass-water",
+    "name": "Вода",
+    "category": "Кухня и еда",
+    "kind": "builtin",
+    "checksum": "7977df36995fb18749e3eea4f6e64e7fcb3dc99e296eda2cab1391a3d477f5d9",
+    "synonyms": [
+      "еда продукты готовка кухня"
+    ]
+  },
+  {
+    "id": "lucide:apple",
+    "name": "Яблоко",
+    "category": "Кухня и еда",
+    "kind": "builtin",
+    "checksum": "92116039b632e205713307e06cf071224dff1bd3f4a9fcc0f052304b1e8c603f",
+    "synonyms": [
+      "еда продукты готовка кухня"
+    ]
+  },
+  {
+    "id": "lucide:carrot",
+    "name": "Морковь",
+    "category": "Кухня и еда",
+    "kind": "builtin",
+    "checksum": "0177424d5314b6d18bdd302fc4c3b67a6ff5f867b252cc370bbed18ad21edc34",
+    "synonyms": [
+      "еда продукты готовка кухня"
+    ]
+  },
+  {
+    "id": "lucide:cherry",
+    "name": "Вишня",
+    "category": "Кухня и еда",
+    "kind": "builtin",
+    "checksum": "2ede6d663bfe35a5244892686b53d3d39cd415a015398b9610a16fdc2531db2e",
+    "synonyms": [
+      "еда продукты готовка кухня"
+    ]
+  },
+  {
+    "id": "lucide:citrus",
+    "name": "Цитрус",
+    "category": "Кухня и еда",
+    "kind": "builtin",
+    "checksum": "8de854efb791e19761af1106b0d33c29ebc26eca91cb655594712570c6b56ac1",
+    "synonyms": [
+      "еда продукты готовка кухня"
+    ]
+  },
+  {
+    "id": "lucide:banana",
+    "name": "Банан",
+    "category": "Кухня и еда",
+    "kind": "builtin",
+    "checksum": "785098a232cfe4592107b130596288d1618c299d612d7ffdac4e2a437af70aa2",
+    "synonyms": [
+      "еда продукты готовка кухня"
+    ]
+  },
+  {
+    "id": "lucide:grape",
+    "name": "Виноград",
+    "category": "Кухня и еда",
+    "kind": "builtin",
+    "checksum": "b958f5b7ea4eeb0c70b3a7d363cdfa1b0100685257c0196bc403273ca3d2310b",
+    "synonyms": [
+      "еда продукты готовка кухня"
+    ]
+  },
+  {
+    "id": "lucide:beef",
+    "name": "Мясо",
+    "category": "Кухня и еда",
+    "kind": "builtin",
+    "checksum": "d1eb8795d8660a57beef3e6b75a96223f5d5cf8eda71a08ceeff09b0db100d2a",
+    "synonyms": [
+      "еда продукты готовка кухня"
+    ]
+  },
+  {
+    "id": "lucide:fish",
+    "name": "Рыба",
+    "category": "Кухня и еда",
+    "kind": "builtin",
+    "checksum": "124cf24b2bf07f4ed272ffc154aaf9b7452af617e207280f7522bf6b81dc10e1",
+    "synonyms": [
+      "еда продукты готовка кухня"
+    ]
+  },
+  {
+    "id": "lucide:egg",
+    "name": "Яйцо",
+    "category": "Кухня и еда",
+    "kind": "builtin",
+    "checksum": "198ed1bb1f2985dd5ceeff2abf0b6ee93ba1de52c00120ad01ad592f5922b094",
+    "synonyms": [
+      "еда продукты готовка кухня"
+    ]
+  },
+  {
+    "id": "lucide:sandwich",
+    "name": "Бутерброд",
+    "category": "Кухня и еда",
+    "kind": "builtin",
+    "checksum": "e92bdfb2753207337925e75806f056fba8502c0d1ea5ebfe24b15fdd070122e3",
+    "synonyms": [
+      "еда продукты готовка кухня"
+    ]
+  },
+  {
+    "id": "lucide:pizza",
+    "name": "Пицца",
+    "category": "Кухня и еда",
+    "kind": "builtin",
+    "checksum": "d9a6d4633b8630e332b066285708536af3fc33c2e888ced79a74bdfdc91c511f",
+    "synonyms": [
+      "еда продукты готовка кухня"
+    ]
+  },
+  {
+    "id": "lucide:croissant",
+    "name": "Выпечка",
+    "category": "Кухня и еда",
+    "kind": "builtin",
+    "checksum": "20d2f154b4bd3d5a1154c01f0dbb44fa0055b8afedc9cb6383435325bd03fff5",
+    "synonyms": [
+      "еда продукты готовка кухня"
+    ]
+  },
+  {
+    "id": "lucide:soup",
+    "name": "Суп",
+    "category": "Кухня и еда",
+    "kind": "builtin",
+    "checksum": "87329766752493db2f7baf971b4c6a05ad412a0ba1f38d5a796501b808af6bac",
+    "synonyms": [
+      "еда продукты готовка кухня"
+    ]
+  },
+  {
+    "id": "lucide:salad",
+    "name": "Салат",
+    "category": "Кухня и еда",
+    "kind": "builtin",
+    "checksum": "53168ed1e727164eefe181df859f1a6887f54c2ba8bb9788f036acde44a626d9",
+    "synonyms": [
+      "еда продукты готовка кухня"
+    ]
+  },
+  {
+    "id": "lucide:microwave",
+    "name": "Микроволновка",
+    "category": "Кухня и еда",
+    "kind": "builtin",
+    "checksum": "26b6bcf2c500be187f88836d10949dda7647dd7977da1531779b126ff3120f5b",
+    "synonyms": [
+      "еда продукты готовка кухня"
+    ]
+  },
+  {
+    "id": "lucide:refrigerator",
+    "name": "Холодильник",
+    "category": "Кухня и еда",
+    "kind": "builtin",
+    "checksum": "454554871d9d85293414c58f8a228ad73164b24a552d9b34bc52e50696893044",
+    "synonyms": [
+      "еда продукты готовка кухня"
+    ]
+  },
+  {
+    "id": "lucide:shopping-cart",
+    "name": "Покупки",
+    "category": "Покупки и доставка",
+    "kind": "builtin",
+    "checksum": "d15001ee243eeba5af63709a5f3cd2c7f0973170c86527a45b20e4eb1c45823b",
+    "synonyms": [
+      "покупки продукты доставка заказ",
+      "Тележка"
+    ]
+  },
+  {
+    "id": "lucide:shopping-basket",
+    "name": "Корзина",
+    "category": "Покупки и доставка",
+    "kind": "builtin",
+    "checksum": "feaba9583ac12f8cca3054879c20adbdc5231d0bf28dfbded0a0b99b87c9ccf2",
+    "synonyms": [
+      "покупки продукты доставка заказ"
+    ]
+  },
+  {
+    "id": "lucide:shopping-bag",
+    "name": "Сумка",
+    "category": "Покупки и доставка",
+    "kind": "builtin",
+    "checksum": "65c8153cf4b231dcc9b03187c87fa27cc811c049c6dba5db7b88b7e2cd33f1c2",
+    "synonyms": [
+      "покупки продукты доставка заказ",
+      "Пакет"
+    ]
+  },
+  {
+    "id": "lucide:store",
+    "name": "Магазин",
+    "category": "Покупки и доставка",
+    "kind": "builtin",
+    "checksum": "f657c652057edd2888a34308ab046d4e7e718d2a9e36eab52ed32faa4b4e543b",
+    "synonyms": [
+      "покупки продукты доставка заказ"
+    ]
+  },
+  {
+    "id": "lucide:package",
+    "name": "Посылка",
+    "category": "Покупки и доставка",
+    "kind": "builtin",
+    "checksum": "d2bb2edb3e9acc1d00535af3596837558b761b24d8933070d5565b71eeaac74f",
+    "synonyms": [
+      "покупки продукты доставка заказ"
+    ]
+  },
+  {
+    "id": "lucide:package-check",
+    "name": "Получить посылку",
+    "category": "Покупки и доставка",
+    "kind": "builtin",
+    "checksum": "5cbb50f792cf53b1d6daaf71fce9a5b74d2c6871d14bf031004923bcbf0f1a96",
+    "synonyms": [
+      "покупки продукты доставка заказ"
+    ]
+  },
+  {
+    "id": "lucide:package-open",
+    "name": "Распаковать",
+    "category": "Покупки и доставка",
+    "kind": "builtin",
+    "checksum": "13d0710cf34d2773dfcd29ab74682ae9184f10fa0f58a758c806b6ecad6cfbc5",
+    "synonyms": [
+      "покупки продукты доставка заказ"
+    ]
+  },
+  {
+    "id": "lucide:truck",
+    "name": "Доставка",
+    "category": "Покупки и доставка",
+    "kind": "builtin",
+    "checksum": "41e8172792025bc12b3e08ba71ded8bd34c9e8174490363812f3626dd45bdf68",
+    "synonyms": [
+      "покупки продукты доставка заказ"
+    ]
+  },
+  {
+    "id": "lucide:barcode",
+    "name": "Штрихкод",
+    "category": "Покупки и доставка",
+    "kind": "builtin",
+    "checksum": "9a7efc85b49767516ca397947973d11d8d12f7e7687c4d1b1f1291e32bdfcf83",
+    "synonyms": [
+      "покупки продукты доставка заказ"
+    ]
+  },
+  {
+    "id": "lucide:scan-barcode",
+    "name": "Сканировать товар",
+    "category": "Покупки и доставка",
+    "kind": "builtin",
+    "checksum": "595d6160432ba3df94a1ca18f4529d3a50cddb27b3f87e226f07044badef3e39",
+    "synonyms": [
+      "покупки продукты доставка заказ"
+    ]
+  },
+  {
+    "id": "lucide:tag",
+    "name": "Покупка",
+    "category": "Покупки и доставка",
+    "kind": "builtin",
+    "checksum": "96b1bc84e7fcfdfd2839e9057b76327f8ad80854fb96ef11a4f120b49cec4e1c",
+    "synonyms": [
+      "покупки продукты доставка заказ",
+      "Ценник"
+    ]
+  },
+  {
+    "id": "lucide:tags",
+    "name": "Скидки",
+    "category": "Покупки и доставка",
+    "kind": "builtin",
+    "checksum": "ceb4c8da9864b9849a3f691fc6a9370e952db7293c826dd0769f3c9c9d324518",
+    "synonyms": [
+      "покупки продукты доставка заказ"
+    ]
+  },
+  {
+    "id": "lucide:receipt",
+    "name": "Счёт",
+    "category": "Покупки и доставка",
+    "kind": "builtin",
+    "checksum": "89876d495a585a37c1dd49304e231201ed59455a240596dcff0d06ded7354342",
+    "synonyms": [
+      "покупки продукты доставка заказ",
+      "Чек"
+    ]
+  },
+  {
+    "id": "lucide:gift",
+    "name": "Подарок",
+    "category": "Покупки и доставка",
+    "kind": "builtin",
+    "checksum": "fdf9245646ea6b715c0a738d2e79bf9578495d07604015a3b5f826ac85aa882c",
+    "synonyms": [
+      "покупки продукты доставка заказ"
+    ]
+  },
+  {
+    "id": "lucide:heart-pulse",
+    "name": "Здоровье",
+    "category": "Здоровье и медицина",
+    "kind": "builtin",
+    "checksum": "0c868fd631022ca8e0a802cdc75db2e0daca279b5a4a0d831d7a469b15b2cd94",
+    "synonyms": [
+      "врач здоровье медицина приём"
+    ]
+  },
+  {
+    "id": "lucide:stethoscope",
+    "name": "Врач",
+    "category": "Здоровье и медицина",
+    "kind": "builtin",
+    "checksum": "ba52ad92e84d55bb40823babaa3039eb1e6ff2f7da5ff4546a8a3962d386fd87",
+    "synonyms": [
+      "врач здоровье медицина приём",
+      "доктор терапевт",
+      "стоматолог зубы доктор приём"
+    ]
+  },
+  {
+    "id": "lucide:pill",
+    "name": "Лекарства",
+    "category": "Здоровье и медицина",
+    "kind": "builtin",
+    "checksum": "4d9313dc12586b63901f8f7a8396edbe3e2d195183066a3aa8ebd09477515259",
+    "synonyms": [
+      "врач здоровье медицина приём"
+    ]
+  },
+  {
+    "id": "lucide:pill-bottle",
+    "name": "Витамины",
+    "category": "Здоровье и медицина",
+    "kind": "builtin",
+    "checksum": "75501472ace41e6348ffd84ec73e36568328c100804af814f886f93a4c3fef57",
+    "synonyms": [
+      "врач здоровье медицина приём"
+    ]
+  },
+  {
+    "id": "lucide:hospital",
+    "name": "Больница",
+    "category": "Здоровье и медицина",
+    "kind": "builtin",
+    "checksum": "cea598de10081d0caa3ebfec6b9c9ffae50d4c6f192d85dc8cfade7365cf9f6e",
+    "synonyms": [
+      "врач здоровье медицина приём"
+    ]
+  },
+  {
+    "id": "lucide:ambulance",
+    "name": "Скорая помощь",
+    "category": "Здоровье и медицина",
+    "kind": "builtin",
+    "checksum": "fe872ececf3493a47a7b12356ac439767315fc849473d9523ee6790602647c25",
+    "synonyms": [
+      "врач здоровье медицина приём"
+    ]
+  },
+  {
+    "id": "lucide:syringe",
+    "name": "Прививка",
+    "category": "Здоровье и медицина",
+    "kind": "builtin",
+    "checksum": "05e1673dbd319c1e9d62eae09abb92ee6a0fa52d65c7cee4349578b667de2d29",
+    "synonyms": [
+      "врач здоровье медицина приём"
+    ]
+  },
+  {
+    "id": "lucide:test-tube",
+    "name": "Анализы",
+    "category": "Здоровье и медицина",
+    "kind": "builtin",
+    "checksum": "3928e3afb095289554a83f852290418f4fa130b38037320dabf2792f87dbf2f8",
+    "synonyms": [
+      "врач здоровье медицина приём"
+    ]
+  },
+  {
+    "id": "lucide:test-tubes",
+    "name": "Лаборатория",
+    "category": "Здоровье и медицина",
+    "kind": "builtin",
+    "checksum": "82d3f149c64923ff2eb4228e86b34833f36007ba0265192681d8c1154799ffd2",
+    "synonyms": [
+      "врач здоровье медицина приём"
+    ]
+  },
+  {
+    "id": "lucide:thermometer",
+    "name": "Температура",
+    "category": "Здоровье и медицина",
+    "kind": "builtin",
+    "checksum": "1594caf2a7a30324131f6529c24d4b9c61c2e0c303ea76da41f68acda875dbf3",
+    "synonyms": [
+      "врач здоровье медицина приём"
+    ]
+  },
+  {
+    "id": "lucide:bandage",
+    "name": "Перевязка",
+    "category": "Здоровье и медицина",
+    "kind": "builtin",
+    "checksum": "c78061317fbf67b860dfe8848bf3a68b5f25a2b6ba5f0a9e21db9c18e3adf3a8",
+    "synonyms": [
+      "врач здоровье медицина приём"
+    ]
+  },
+  {
+    "id": "lucide:activity",
+    "name": "Активность",
+    "category": "Здоровье и медицина",
+    "kind": "builtin",
+    "checksum": "df8e413c714521cc3d424bd7af3c1644d63409f7e0a7dec75ff0fa48aa6daedb",
+    "synonyms": [
+      "врач здоровье медицина приём",
+      "Измерения"
+    ]
+  },
+  {
+    "id": "lucide:eye",
+    "name": "Зрение",
+    "category": "Здоровье и медицина",
+    "kind": "builtin",
+    "checksum": "64f057f9c91b41ced35e5802e951ff1e90dcac4bbfc6258f4863581aedbaf620",
+    "synonyms": [
+      "врач здоровье медицина приём"
+    ]
+  },
+  {
+    "id": "lucide:ear",
+    "name": "Слух",
+    "category": "Здоровье и медицина",
+    "kind": "builtin",
+    "checksum": "b70dd7e43450dd3f2614b0949d2c07cd0d0359ad4a5817dd0980b9ce98c52c86",
+    "synonyms": [
+      "врач здоровье медицина приём"
+    ]
+  },
+  {
+    "id": "lucide:brain",
+    "name": "Мозг",
+    "category": "Здоровье и медицина",
+    "kind": "builtin",
+    "checksum": "ef2cf133c82adef249b29ce19a498c47cc85a48d41cc2e8bff9cdaeedfdd6ab8",
+    "synonyms": [
+      "врач здоровье медицина приём"
+    ]
+  },
+  {
+    "id": "lucide:bone",
+    "name": "Кости",
+    "category": "Здоровье и медицина",
+    "kind": "builtin",
+    "checksum": "c9204ff0d698258a46f073cb0b04e311f1a97f829c443819d07999b8ac67c481",
+    "synonyms": [
+      "врач здоровье медицина приём"
+    ]
+  },
+  {
+    "id": "lucide:calendar-check",
+    "name": "Запись на приём",
+    "category": "Здоровье и медицина",
+    "kind": "builtin",
+    "checksum": "5c5a1f3d187cd8bde37222ab8b1673b069efe7928a37dcd8f3bc7d3f43ea83bd",
+    "synonyms": [
+      "врач здоровье медицина приём"
+    ]
+  },
+  {
+    "id": "lucide:scissors",
+    "name": "Стрижка",
+    "category": "Красота и личный уход",
+    "kind": "builtin",
+    "checksum": "6c16715b71365245a93f65d34954c541165262f221b0e978fc84d9d05057b225",
+    "synonyms": [
+      "уход красота гигиена",
+      "парикмахер волосы стрижка",
+      "бритьё бритва борода"
+    ]
+  },
+  {
+    "id": "lucide:scissors-line-dashed",
+    "name": "Подстричь волосы",
+    "category": "Красота и личный уход",
+    "kind": "builtin",
+    "checksum": "cf45af137ec8acaaf2644fc3d96a0b238a77a6377df8d548df57d6660e6170a9",
+    "synonyms": [
+      "уход красота гигиена",
+      "стрижка ножницы парикмахер волосы"
+    ]
+  },
+  {
+    "id": "lucide:spray-can",
+    "name": "Косметика",
+    "category": "Красота и личный уход",
+    "kind": "builtin",
+    "checksum": "ddd491202888de564f811918de75221c462db05ba33c7806a138eca9da7fbdf4",
+    "synonyms": [
+      "уход красота гигиена"
+    ]
+  },
+  {
+    "id": "lucide:brush",
+    "name": "Кисть",
+    "category": "Красота и личный уход",
+    "kind": "builtin",
+    "checksum": "af8774cd01e7ed70d262dec9ba95771c4b40cef0032e00fa948b1f35dc0e60d4",
+    "synonyms": [
+      "уход красота гигиена"
+    ]
+  },
+  {
+    "id": "lucide:hand",
+    "name": "Уход за руками",
+    "category": "Красота и личный уход",
+    "kind": "builtin",
+    "checksum": "989492b21110e39f074200e6854ed67007363e01a97fe74f15707147b48abad9",
+    "synonyms": [
+      "уход красота гигиена"
+    ]
+  },
+  {
+    "id": "lucide:droplet",
+    "name": "Уход за кожей",
+    "category": "Красота и личный уход",
+    "kind": "builtin",
+    "checksum": "61be4309510b4c5546744844a9959a1024e4fb135a810a253fcbf1a6d08015bb",
+    "synonyms": [
+      "уход красота гигиена"
+    ]
+  },
+  {
+    "id": "lucide:sparkles",
+    "name": "Красота",
+    "category": "Красота и личный уход",
+    "kind": "builtin",
+    "checksum": "ec56e82a61174d92e35550428a041d070332bc56951f1cdbb317820fbe14a9f5",
+    "synonyms": [
+      "уход красота гигиена"
+    ]
+  },
+  {
+    "id": "lucide:smile",
+    "name": "Улыбка",
+    "category": "Красота и личный уход",
+    "kind": "builtin",
+    "checksum": "dcb6fb35fcf22c1a4bd6b908b89df6da2ceeadb429082506385da85724150adc",
+    "synonyms": [
+      "уход красота гигиена"
+    ]
+  },
+  {
+    "id": "lucide:mirror-round",
+    "name": "Зеркало",
+    "category": "Красота и личный уход",
+    "kind": "builtin",
+    "checksum": "88380faf098b5c7e179a6dca1ffee8b08945eb5f1a2aa60c2e15f4bddb190faa",
+    "synonyms": [
+      "уход красота гигиена"
+    ]
+  },
+  {
+    "id": "lucide:dumbbell",
+    "name": "Тренировка",
+    "category": "Спорт и физическая активность",
+    "kind": "builtin",
+    "checksum": "65f3d4eb53bd90c8e3e1aec3d6a0136b94f239b9d4662b207f23efaafd532d29",
+    "synonyms": [
+      "спорт тренировка физкультура",
+      "Гантели"
+    ]
+  },
+  {
+    "id": "lucide:bike",
+    "name": "Велосипед",
+    "category": "Спорт и физическая активность",
+    "kind": "builtin",
+    "checksum": "d155420a779b54c532e939d2e19bb0331489784d8bd1af8b0020cef1c9e55741",
+    "synonyms": [
+      "спорт тренировка физкультура"
+    ]
+  },
+  {
+    "id": "lucide:footprints",
+    "name": "Прогулка",
+    "category": "Спорт и физическая активность",
+    "kind": "builtin",
+    "checksum": "2589611ed687f4785f894b70fbc1416a876eb3f3916f2c63f53e8f29a200558f",
+    "synonyms": [
+      "спорт тренировка физкультура",
+      "бег пробежка прогулка",
+      "Ходьба"
+    ]
+  },
+  {
+    "id": "lucide:person-standing",
+    "name": "Разминка",
+    "category": "Спорт и физическая активность",
+    "kind": "builtin",
+    "checksum": "be5f9c9dff610f17e0901a6f744fa29c3206e0be1b1818aa98f295f517221a6f",
+    "synonyms": [
+      "спорт тренировка физкультура"
+    ]
+  },
+  {
+    "id": "lucide:trophy",
+    "name": "Достижение",
+    "category": "Спорт и физическая активность",
+    "kind": "builtin",
+    "checksum": "d0f59aedc581b89f9d389b6b64d89be486d523c07c57134ea557f4da4e62e671",
+    "synonyms": [
+      "спорт тренировка физкультура",
+      "Соревнования"
+    ]
+  },
+  {
+    "id": "lucide:medal",
+    "name": "Медаль",
+    "category": "Спорт и физическая активность",
+    "kind": "builtin",
+    "checksum": "752a36e9d5ecb58e917f5b9d708eb8b4dedf778dba707216a0376aebf6077501",
+    "synonyms": [
+      "спорт тренировка физкультура"
+    ]
+  },
+  {
+    "id": "lucide:timer",
+    "name": "Таймер",
+    "category": "Спорт и физическая активность",
+    "kind": "builtin",
+    "checksum": "05ef0be35f3b298f6845bb6f96f2405422ed88ea41d72b55ebb9f5e6875d4a00",
+    "synonyms": [
+      "спорт тренировка физкультура",
+      "Тренировка по времени"
+    ]
+  },
+  {
+    "id": "lucide:heart",
+    "name": "Пульс",
+    "category": "Спорт и физическая активность",
+    "kind": "builtin",
+    "checksum": "bafdc578da3dd5546cf1e9564b7e9af24f0b71b09f298602eda7f42345644af0",
+    "synonyms": [
+      "спорт тренировка физкультура"
+    ]
+  },
+  {
+    "id": "lucide:flame",
+    "name": "Активность",
+    "category": "Спорт и физическая активность",
+    "kind": "builtin",
+    "checksum": "30ecf75d4fc56eaccf7d876afc5953d328b6c26c7b9c964b4ccf20f8a1511480",
+    "synonyms": [
+      "спорт тренировка физкультура"
+    ]
+  },
+  {
+    "id": "lucide:mountain",
+    "name": "Горы",
+    "category": "Спорт и физическая активность",
+    "kind": "builtin",
+    "checksum": "7ab61c537ceaad37db7cbc142ed8aafbaafdd6a47fc4e651e911151e88013f7c",
+    "synonyms": [
+      "спорт тренировка физкультура",
+      "Восхождение"
+    ]
+  },
+  {
+    "id": "lucide:volleyball",
+    "name": "Волейбол",
+    "category": "Спорт и физическая активность",
+    "kind": "builtin",
+    "checksum": "25d4fbac138e386795238236b5486ba61f664de8b1091311eb5867ce48569afc",
+    "synonyms": [
+      "спорт тренировка физкультура"
+    ]
+  },
+  {
+    "id": "lucide:goal",
+    "name": "Футбол",
+    "category": "Спорт и физическая активность",
+    "kind": "builtin",
+    "checksum": "ea099a81695fad23229f568e62263b495ae7250699f473c37baa605907b8da50",
+    "synonyms": [
+      "спорт тренировка физкультура"
+    ]
+  },
+  {
+    "id": "lucide:briefcase",
+    "name": "Работа",
+    "category": "Работа и бизнес",
+    "kind": "builtin",
+    "checksum": "dbfcaa63668f01caf21364dcab276471aeb8709608907fc8d41f437e339bc79b",
+    "synonyms": [
+      "работа бизнес офис",
+      "встреча совещание работа"
+    ]
+  },
+  {
+    "id": "lucide:briefcase-business",
+    "name": "Бизнес",
+    "category": "Работа и бизнес",
+    "kind": "builtin",
+    "checksum": "eed932e2a24daf891a2a2c36b740a1b4e2030dfb76f3bddde1e9dfd99cba73fa",
+    "synonyms": [
+      "работа бизнес офис"
+    ]
+  },
+  {
+    "id": "lucide:clipboard-list",
+    "name": "Список",
+    "category": "Работа и бизнес",
+    "kind": "builtin",
+    "checksum": "f86193e1009afb66198e9dc01f408691387482454cb1232017d5057367f28231",
+    "synonyms": [
+      "работа бизнес офис"
+    ]
+  },
+  {
+    "id": "lucide:clipboard-check",
+    "name": "Выполнить задачу",
+    "category": "Работа и бизнес",
+    "kind": "builtin",
+    "checksum": "aa13627d34c43e97ad6315a20503e74f6a89f3108e1041e7d505e25285a0261e",
+    "synonyms": [
+      "работа бизнес офис"
+    ]
+  },
+  {
+    "id": "lucide:presentation",
+    "name": "Презентация",
+    "category": "Работа и бизнес",
+    "kind": "builtin",
+    "checksum": "e229ecc31e782fe90e89f470d72f3f4bd3ca1cb7d6879b2c8a1d946800fba342",
+    "synonyms": [
+      "работа бизнес офис"
+    ]
+  },
+  {
+    "id": "lucide:users",
+    "name": "Команда",
+    "category": "Работа и бизнес",
+    "kind": "builtin",
+    "checksum": "b3ed379df6aea1aa451ff4bbf8b2884c210849ed30fc220484eced85f5d53c2c",
+    "synonyms": [
+      "работа бизнес офис"
+    ]
+  },
+  {
+    "id": "lucide:mail",
+    "name": "Почта",
+    "category": "Работа и бизнес",
+    "kind": "builtin",
+    "checksum": "8a4e4461fb1db38072eb90fa532c6b17bcd4d774951f65b6fc02c63aab547dee",
+    "synonyms": [
+      "работа бизнес офис"
+    ]
+  },
+  {
+    "id": "lucide:calendar",
+    "name": "Календарь",
+    "category": "Работа и бизнес",
+    "kind": "builtin",
+    "checksum": "2e2a7df92c2cca71dd6de34bb3f7187e276e8e8e003abe2e80b2ffd13347af60",
+    "synonyms": [
+      "работа бизнес офис"
+    ]
+  },
+  {
+    "id": "lucide:calendar-clock",
+    "name": "Дедлайн",
+    "category": "Работа и бизнес",
+    "kind": "builtin",
+    "checksum": "a987cb42f95bab2849f18975005e5f7eb1652eb1ec09cb504608e6a3afa11ce8",
+    "synonyms": [
+      "работа бизнес офис"
+    ]
+  },
+  {
+    "id": "lucide:chart-no-axes-combined",
+    "name": "Отчёт",
+    "category": "Работа и бизнес",
+    "kind": "builtin",
+    "checksum": "584df2d2a526e5d0ae6c98dba06d7658ea95e14832171f2a89daadb8b6e3733d",
+    "synonyms": [
+      "работа бизнес офис"
+    ]
+  },
+  {
+    "id": "lucide:chart-pie",
+    "name": "Диаграмма",
+    "category": "Работа и бизнес",
+    "kind": "builtin",
+    "checksum": "ec6445306164e8ac6661d19afa9d85aacd3dc7af98d1f1031bf1a2096cd4b38d",
+    "synonyms": [
+      "работа бизнес офис"
+    ]
+  },
+  {
+    "id": "lucide:notebook-pen",
+    "name": "Заметки",
+    "category": "Работа и бизнес",
+    "kind": "builtin",
+    "checksum": "4723725b43bd649181f37fd32669650ccd8babacd3a7fae698a0e1bfbc92fe33",
+    "synonyms": [
+      "работа бизнес офис"
+    ]
+  },
+  {
+    "id": "lucide:building-2",
+    "name": "Офис",
+    "category": "Работа и бизнес",
+    "kind": "builtin",
+    "checksum": "2274a093efe0204c58c17cfa883db512cc2c75266a9d3c23bec6955e551b9739",
+    "synonyms": [
+      "работа бизнес офис"
+    ]
+  },
+  {
+    "id": "lucide:network",
+    "name": "Организация",
+    "category": "Работа и бизнес",
+    "kind": "builtin",
+    "checksum": "9028152f8db3d12444cc9321eba84c4ebaf082d37c16c93c9965c004f4610bb4",
+    "synonyms": [
+      "работа бизнес офис"
+    ]
+  },
+  {
+    "id": "lucide:workflow",
+    "name": "Процесс",
+    "category": "Работа и бизнес",
+    "kind": "builtin",
+    "checksum": "ca579033d5464f163fcce135d5c6dca2095df2f721330656f2ecb12cf71250be",
+    "synonyms": [
+      "работа бизнес офис"
+    ]
+  },
+  {
+    "id": "lucide:kanban",
+    "name": "Доска задач",
+    "category": "Работа и бизнес",
+    "kind": "builtin",
+    "checksum": "2ffb458c07860102bc89b2b2bb5505602e15b9d9b826fa91b071f8dfa050c3d2",
+    "synonyms": [
+      "работа бизнес офис"
+    ]
+  },
+  {
+    "id": "lucide:handshake",
+    "name": "Соглашение",
+    "category": "Работа и бизнес",
+    "kind": "builtin",
+    "checksum": "cebc3bdab16123db8398c7858d6b0819cc88d31a410d733477a508e5c8dddb68",
+    "synonyms": [
+      "работа бизнес офис"
+    ]
+  },
+  {
+    "id": "lucide:contact",
+    "name": "Контакты",
+    "category": "Работа и бизнес",
+    "kind": "builtin",
+    "checksum": "aba87f4e3d967cc3bc3133effa27f559783bd1da3b485c5bb5535ee778287fe3",
+    "synonyms": [
+      "работа бизнес офис"
+    ]
+  },
+  {
+    "id": "lucide:code",
+    "name": "Код",
+    "category": "Программирование и технологии",
+    "kind": "builtin",
+    "checksum": "101ff95a60663459a7f08ffcd7b1fd0233fc0543ac94c527fdf3b42e25f56c63",
+    "synonyms": [
+      "разработка программирование компьютер работа"
+    ]
+  },
+  {
+    "id": "lucide:code-xml",
+    "name": "Программирование",
+    "category": "Программирование и технологии",
+    "kind": "builtin",
+    "checksum": "49247117a9c540de23f6543af9463809c1a53998d009c9df03eb62594a6689e2",
+    "synonyms": [
+      "разработка программирование компьютер работа"
+    ]
+  },
+  {
+    "id": "lucide:terminal",
+    "name": "Терминал",
+    "category": "Программирование и технологии",
+    "kind": "builtin",
+    "checksum": "602c43bbe4e672a866fd4d828d96e3b100db3bb1938e8c05a0e0a00b300019d4",
+    "synonyms": [
+      "разработка программирование компьютер работа"
+    ]
+  },
+  {
+    "id": "lucide:git-branch",
+    "name": "Ветка Git",
+    "category": "Программирование и технологии",
+    "kind": "builtin",
+    "checksum": "2b79d39e8d9ce2506d733be439c655cb8b3a3b1e2b298f14c3dbfefc3b7bf626",
+    "synonyms": [
+      "разработка программирование компьютер работа"
+    ]
+  },
+  {
+    "id": "lucide:git-commit-horizontal",
+    "name": "Коммит",
+    "category": "Программирование и технологии",
+    "kind": "builtin",
+    "checksum": "9b1d296df5430471fcc91b059890c39c630dabb6110d0c38670b623b12b86613",
+    "synonyms": [
+      "разработка программирование компьютер работа"
+    ]
+  },
+  {
+    "id": "lucide:git-pull-request",
+    "name": "Проверка кода",
+    "category": "Программирование и технологии",
+    "kind": "builtin",
+    "checksum": "8f78e1eb22c22afcd4e3427e974a073a50be0656c02c82100d302dc67ba059a5",
+    "synonyms": [
+      "разработка программирование компьютер работа"
+    ]
+  },
+  {
+    "id": "lucide:git-merge",
+    "name": "Слияние веток",
+    "category": "Программирование и технологии",
+    "kind": "builtin",
+    "checksum": "60794aceca7270a11b55e76fa722366f6f7ff08f997db1debc73060b84e232bc",
+    "synonyms": [
+      "разработка программирование компьютер работа"
+    ]
+  },
+  {
+    "id": "lucide:server",
+    "name": "Сервер",
+    "category": "Программирование и технологии",
+    "kind": "builtin",
+    "checksum": "bc982426371106cd4df981cf9492c0f0b4eb58376552bf42f996bcbce21b6019",
+    "synonyms": [
+      "разработка программирование компьютер работа"
+    ]
+  },
+  {
+    "id": "lucide:database",
+    "name": "База данных",
+    "category": "Программирование и технологии",
+    "kind": "builtin",
+    "checksum": "b83ed29b97f3fa5bc3ef9e5d555fa7574c8a243a16e67bf1d2bc39c63cd154d8",
+    "synonyms": [
+      "разработка программирование компьютер работа"
+    ]
+  },
+  {
+    "id": "lucide:bug",
+    "name": "Ошибка",
+    "category": "Программирование и технологии",
+    "kind": "builtin",
+    "checksum": "c33e5ec94f8708e562be33f566c9b335e1ba57ad4130da5141deab605848ec94",
+    "synonyms": [
+      "разработка программирование компьютер работа"
+    ]
+  },
+  {
+    "id": "lucide:bug-off",
+    "name": "Исправление ошибки",
+    "category": "Программирование и технологии",
+    "kind": "builtin",
+    "checksum": "1198bdccceaf706fd574c3416b0b364dc047864d418f2b2caf9bcbf95a7bfc16",
+    "synonyms": [
+      "разработка программирование компьютер работа"
+    ]
+  },
+  {
+    "id": "lucide:flask-conical",
+    "name": "Тестирование",
+    "category": "Программирование и технологии",
+    "kind": "builtin",
+    "checksum": "d5a890a56566d4f4779c0a72bcc958065be84f7e69504d49e648801b2d86bf7d",
+    "synonyms": [
+      "разработка программирование компьютер работа"
+    ]
+  },
+  {
+    "id": "lucide:laptop",
+    "name": "Компьютер",
+    "category": "Программирование и технологии",
+    "kind": "builtin",
+    "checksum": "76082a476fdd7c6762dc750d75c51c15952e08bb4bad75bebce87403bfea9e77",
+    "synonyms": [
+      "разработка программирование компьютер работа",
+      "Ноутбук"
+    ]
+  },
+  {
+    "id": "lucide:monitor",
+    "name": "Монитор",
+    "category": "Программирование и технологии",
+    "kind": "builtin",
+    "checksum": "3ef31ab3ab45c174485e0c1dfc3bd3b54ae51cb74df8230a0e136d78ca580efd",
+    "synonyms": [
+      "разработка программирование компьютер работа"
+    ]
+  },
+  {
+    "id": "lucide:keyboard",
+    "name": "Клавиатура",
+    "category": "Программирование и технологии",
+    "kind": "builtin",
+    "checksum": "d5a128e1f6d40921dd4d75c280c6782d85b57aa561ba36e9acd8ce3102d0bf2f",
+    "synonyms": [
+      "разработка программирование компьютер работа"
+    ]
+  },
+  {
+    "id": "lucide:mouse",
+    "name": "Мышь",
+    "category": "Программирование и технологии",
+    "kind": "builtin",
+    "checksum": "300bf5f895e73e7cba06f765a267d5a7a68940dda1ac699667e35724d96e2e04",
+    "synonyms": [
+      "разработка программирование компьютер работа"
+    ]
+  },
+  {
+    "id": "lucide:cpu",
+    "name": "Процессор",
+    "category": "Программирование и технологии",
+    "kind": "builtin",
+    "checksum": "a5c8e368b1f102081077818fb46fce1e0f4e5c2dd40fbc6d8b748d32ce696590",
+    "synonyms": [
+      "разработка программирование компьютер работа"
+    ]
+  },
+  {
+    "id": "lucide:hard-drive",
+    "name": "Диск",
+    "category": "Программирование и технологии",
+    "kind": "builtin",
+    "checksum": "e4d2c5c37c9c2285576c5c30bf585d3402efcda255f32d3070595c6713335674",
+    "synonyms": [
+      "разработка программирование компьютер работа"
+    ]
+  },
+  {
+    "id": "lucide:usb",
+    "name": "USB",
+    "category": "Программирование и технологии",
+    "kind": "builtin",
+    "checksum": "639f241311426ec5514d748921da99b883902e4e4360e8fde674ad7e0f252ca6",
+    "synonyms": [
+      "разработка программирование компьютер работа"
+    ]
+  },
+  {
+    "id": "lucide:wifi",
+    "name": "Связь",
+    "category": "Программирование и технологии",
+    "kind": "builtin",
+    "checksum": "133817fce3f8f7decbf6a38965242c35a372445c8afd8f10e30c75a913520347",
+    "synonyms": [
+      "разработка программирование компьютер работа",
+      "Wi-Fi"
+    ]
+  },
+  {
+    "id": "lucide:router",
+    "name": "Роутер",
+    "category": "Программирование и технологии",
+    "kind": "builtin",
+    "checksum": "a52fb32d72fe21de611a53e6288198379e0221d9dc15029e384ea77410d61582",
+    "synonyms": [
+      "разработка программирование компьютер работа"
+    ]
+  },
+  {
+    "id": "lucide:smartphone",
+    "name": "Телефон",
+    "category": "Программирование и технологии",
+    "kind": "builtin",
+    "checksum": "c65bc8668adc7fecfc12c808858afbfb9ec1b244972b4c6d32d7ae7ec0de1869",
+    "synonyms": [
+      "разработка программирование компьютер работа",
+      "Смартфон"
+    ]
+  },
+  {
+    "id": "lucide:cloud",
+    "name": "Облако",
+    "category": "Программирование и технологии",
+    "kind": "builtin",
+    "checksum": "e82bccbfc25a76ec6a5fe99d7d2a7d595f8a8d7941665678a8a93ff3e0e8b3e1",
+    "synonyms": [
+      "разработка программирование компьютер работа"
+    ]
+  },
+  {
+    "id": "lucide:container",
+    "name": "Контейнер",
+    "category": "Программирование и технологии",
+    "kind": "builtin",
+    "checksum": "497a714e02754a4875bea0bc2d5b37f713681ee24d68d6549be5b6694c998f1c",
+    "synonyms": [
+      "разработка программирование компьютер работа"
+    ]
+  },
+  {
+    "id": "lucide:braces",
+    "name": "Программа",
+    "category": "Программирование и технологии",
+    "kind": "builtin",
+    "checksum": "a73630fd5178e3e220f3875f54a6ecf9f3ef3476dfef7c06d26d28c693352b75",
+    "synonyms": [
+      "разработка программирование компьютер работа"
+    ]
+  },
+  {
+    "id": "lucide:shield-check",
+    "name": "Безопасность",
+    "category": "Программирование и технологии",
+    "kind": "builtin",
+    "checksum": "f95924dbabaa6fe9f5be326a530a2bbdf2a105d36b054acc928c8a81fbe865ba",
+    "synonyms": [
+      "разработка программирование компьютер работа"
+    ]
+  },
+  {
+    "id": "lucide:book-open",
+    "name": "Чтение",
+    "category": "Учёба и образование",
+    "kind": "builtin",
+    "checksum": "510affae1044e8637c7a85972bd192df3c762f69a38c8c7dd2097387d7fe91d2",
+    "synonyms": [
+      "учёба обучение образование школа",
+      "чтение книги",
+      "Читать"
+    ]
+  },
+  {
+    "id": "lucide:book",
+    "name": "Книга",
+    "category": "Учёба и образование",
+    "kind": "builtin",
+    "checksum": "927d8bfc6c02a963fcd9c32b001901eff49931f29b7f4db7c936d0a63b30c34d",
+    "synonyms": [
+      "учёба обучение образование школа"
+    ]
+  },
+  {
+    "id": "lucide:graduation-cap",
+    "name": "Учёба",
+    "category": "Учёба и образование",
+    "kind": "builtin",
+    "checksum": "334449ffe064e5cfdc2746ad45a8a4674949b15827e72ad7944d9e88cabefdb5",
+    "synonyms": [
+      "учёба обучение образование школа"
+    ]
+  },
+  {
+    "id": "lucide:school",
+    "name": "Школа",
+    "category": "Учёба и образование",
+    "kind": "builtin",
+    "checksum": "5a612305b1addd7298f209a5d74fbf48e5b78f9eb7229f52f269c9e4e75838cf",
+    "synonyms": [
+      "учёба обучение образование школа"
+    ]
+  },
+  {
+    "id": "lucide:library",
+    "name": "Библиотека",
+    "category": "Учёба и образование",
+    "kind": "builtin",
+    "checksum": "ef4cee225938d86f862a374d2efdfc29d57e99d80c34ab0eaaeac85f0de916ae",
+    "synonyms": [
+      "учёба обучение образование школа"
+    ]
+  },
+  {
+    "id": "lucide:notebook",
+    "name": "Тетрадь",
+    "category": "Учёба и образование",
+    "kind": "builtin",
+    "checksum": "e0d93df1791654bcbcfa50d5ef5539a93da39deb169c737ecd6439cdb1414255",
+    "synonyms": [
+      "учёба обучение образование школа"
+    ]
+  },
+  {
+    "id": "lucide:pencil",
+    "name": "Карандаш",
+    "category": "Учёба и образование",
+    "kind": "builtin",
+    "checksum": "e3313d074419f2a659c54ea4d7ba7f5878d1272e7c692d23bf9bc91e38ad93e7",
+    "synonyms": [
+      "учёба обучение образование школа"
+    ]
+  },
+  {
+    "id": "lucide:pen-tool",
+    "name": "Черчение",
+    "category": "Учёба и образование",
+    "kind": "builtin",
+    "checksum": "47b2583cea94e9ef7390c71c2ad2dd46d3763e6508bf39c9ef537cf07bd30176",
+    "synonyms": [
+      "учёба обучение образование школа"
+    ]
+  },
+  {
+    "id": "lucide:ruler",
+    "name": "Линейка",
+    "category": "Учёба и образование",
+    "kind": "builtin",
+    "checksum": "d25f042b68ec8da4f0b314dd531ad93675224ce5ebc2927d122849688fc19157",
+    "synonyms": [
+      "учёба обучение образование школа"
+    ]
+  },
+  {
+    "id": "lucide:calculator",
+    "name": "Вычисления",
+    "category": "Учёба и образование",
+    "kind": "builtin",
+    "checksum": "a066df35c8491542eeee08c79ca345854b28430285f57c6834c07aa71f7ecb0e",
+    "synonyms": [
+      "учёба обучение образование школа"
+    ]
+  },
+  {
+    "id": "lucide:atom",
+    "name": "Физика",
+    "category": "Учёба и образование",
+    "kind": "builtin",
+    "checksum": "d50cce602388b11df23a4a0b9fe45abc579d4ea24a7b76a310d56120a8b6ad6d",
+    "synonyms": [
+      "учёба обучение образование школа"
+    ]
+  },
+  {
+    "id": "lucide:languages",
+    "name": "Языки",
+    "category": "Учёба и образование",
+    "kind": "builtin",
+    "checksum": "a33a7bd34876dde0c5a470914dac09fca77f97da75e93e1b1687de2294874c65",
+    "synonyms": [
+      "учёба обучение образование школа"
+    ]
+  },
+  {
+    "id": "lucide:globe",
+    "name": "География",
+    "category": "Учёба и образование",
+    "kind": "builtin",
+    "checksum": "7a750a807d582bf6fc378a925e4804e23198e030150ea4ac6b33d0a7a12d9740",
+    "synonyms": [
+      "учёба обучение образование школа"
+    ]
+  },
+  {
+    "id": "lucide:microscope",
+    "name": "Исследование",
+    "category": "Учёба и образование",
+    "kind": "builtin",
+    "checksum": "dc5d63f1ff71dc309f8066177d12227f68d622cb0e5652338af979b203647e35",
+    "synonyms": [
+      "учёба обучение образование школа"
+    ]
+  },
+  {
+    "id": "lucide:lightbulb",
+    "name": "Идея",
+    "category": "Учёба и образование",
+    "kind": "builtin",
+    "checksum": "31124a7d64a9f2639dbfa0441aeae845717d2fcc3e259fa6feab4b2562c969f8",
+    "synonyms": [
+      "учёба обучение образование школа"
+    ]
+  },
+  {
+    "id": "lucide:spell-check",
+    "name": "Правописание",
+    "category": "Учёба и образование",
+    "kind": "builtin",
+    "checksum": "7a088d4824be4df36094b645b2524c5de0acc00843923bca9b6c6866e938ec56",
+    "synonyms": [
+      "учёба обучение образование школа"
+    ]
+  },
+  {
+    "id": "lucide:wallet",
+    "name": "Кошелёк",
+    "category": "Финансы и платежи",
+    "kind": "builtin",
+    "checksum": "100d8d0773d3f5d3b8c5076e32c16a829daff5211642f6cc48b9d1d6be771142",
+    "synonyms": [
+      "финансы деньги оплата платежи"
+    ]
+  },
+  {
+    "id": "lucide:banknote",
+    "name": "Деньги",
+    "category": "Финансы и платежи",
+    "kind": "builtin",
+    "checksum": "b2590b69f44ce69c5b476ce3168e7160ab40a55d114a0341d11f93bb1c202b79",
+    "synonyms": [
+      "финансы деньги оплата платежи",
+      "Зарплата"
+    ]
+  },
+  {
+    "id": "lucide:credit-card",
+    "name": "Карта",
+    "category": "Финансы и платежи",
+    "kind": "builtin",
+    "checksum": "4d0394710733a8ca0db566208b0281708ebde7b167b6903491fde0be060bded1",
+    "synonyms": [
+      "финансы деньги оплата платежи"
+    ]
+  },
+  {
+    "id": "lucide:landmark",
+    "name": "Банк",
+    "category": "Финансы и платежи",
+    "kind": "builtin",
+    "checksum": "7205e6f7c9eb22e526668fd47726d5904bf58bce5f5a1f7bc2f9ee18757200dc",
+    "synonyms": [
+      "финансы деньги оплата платежи"
+    ]
+  },
+  {
+    "id": "lucide:piggy-bank",
+    "name": "Накопления",
+    "category": "Финансы и платежи",
+    "kind": "builtin",
+    "checksum": "f27cec342f6d4bdde9b04e76e220c8c8028da55ae59549ee30762ac3f359632e",
+    "synonyms": [
+      "финансы деньги оплата платежи"
+    ]
+  },
+  {
+    "id": "lucide:coins",
+    "name": "Монеты",
+    "category": "Финансы и платежи",
+    "kind": "builtin",
+    "checksum": "228c6feb3960e99ac7206a0401b94e8d3e87b6c80ec2004f5fedb67d2707836b",
+    "synonyms": [
+      "финансы деньги оплата платежи"
+    ]
+  },
+  {
+    "id": "lucide:trending-up",
+    "name": "Инвестиции",
+    "category": "Финансы и платежи",
+    "kind": "builtin",
+    "checksum": "ba6334d209fd28ab68095329cbb3a2cc13dbdca09f8cbbbc277efb847935afc5",
+    "synonyms": [
+      "финансы деньги оплата платежи"
+    ]
+  },
+  {
+    "id": "lucide:percent",
+    "name": "Проценты",
+    "category": "Финансы и платежи",
+    "kind": "builtin",
+    "checksum": "d2d00c3bb3b5e179869e173a0f483825adf8e1e7070a741b1276c21fedb21dbf",
+    "synonyms": [
+      "финансы деньги оплата платежи"
+    ]
+  },
+  {
+    "id": "lucide:receipt-text",
+    "name": "Счета",
+    "category": "Финансы и платежи",
+    "kind": "builtin",
+    "checksum": "0eb8dd2087e439d991f09c8af1642e911f0a46a64b503b0f698e7b69d7566ea7",
+    "synonyms": [
+      "финансы деньги оплата платежи"
+    ]
+  },
+  {
+    "id": "lucide:hand-coins",
+    "name": "Платёж",
+    "category": "Финансы и платежи",
+    "kind": "builtin",
+    "checksum": "7261860e10e45ca3a8af8b5b58d39e67dfe6eb7a1dff11d1203cd252387b05a1",
+    "synonyms": [
+      "финансы деньги оплата платежи"
+    ]
+  },
+  {
+    "id": "lucide:circle-dollar-sign",
+    "name": "Доллары",
+    "category": "Финансы и платежи",
+    "kind": "builtin",
+    "checksum": "f19ca52e8356a0ac98283e8eee3b870ab02dee49101b1383d5df1f70d51ad13f",
+    "synonyms": [
+      "финансы деньги оплата платежи"
+    ]
+  },
+  {
+    "id": "lucide:circle-euro",
+    "name": "Евро",
+    "category": "Финансы и платежи",
+    "kind": "builtin",
+    "checksum": "419d895cdac76c6f07f7ccdd9075e0972ac6cb9916d90df68c3a0e562d002f41",
+    "synonyms": [
+      "финансы деньги оплата платежи"
+    ]
+  },
+  {
+    "id": "lucide:badge-percent",
+    "name": "Налоги",
+    "category": "Финансы и платежи",
+    "kind": "builtin",
+    "checksum": "ffd412ed2816d0c770e3ae64a578ba0dd0e4010feaca440cdd6a4855aa63dd33",
+    "synonyms": [
+      "финансы деньги оплата платежи"
+    ]
+  },
+  {
+    "id": "lucide:chart-line",
+    "name": "Доходность",
+    "category": "Финансы и платежи",
+    "kind": "builtin",
+    "checksum": "bf8fe6cbed1a8ce4fac89355152618831fd690f73d6d1218917ff061a2931bec",
+    "synonyms": [
+      "финансы деньги оплата платежи"
+    ]
+  },
+  {
+    "id": "lucide:plane",
+    "name": "Самолёт",
+    "category": "Путешествия",
+    "kind": "builtin",
+    "checksum": "b8cd25a168baf165d8d98738a1ef0320f657afdecb785808899c76634742076d",
+    "synonyms": [
+      "путешествия отпуск поездка"
+    ]
+  },
+  {
+    "id": "lucide:plane-takeoff",
+    "name": "Вылет",
+    "category": "Путешествия",
+    "kind": "builtin",
+    "checksum": "a8ca02ab2d553c962d5ad6aa8036c10a39f9b199dac1c1c4730e30a6c465e6af",
+    "synonyms": [
+      "путешествия отпуск поездка"
+    ]
+  },
+  {
+    "id": "lucide:plane-landing",
+    "name": "Прилёт",
+    "category": "Путешествия",
+    "kind": "builtin",
+    "checksum": "644341ef0d88cda0fca817b07cc3a256362a50911fc01d81afc8dc42fd4d61fe",
+    "synonyms": [
+      "путешествия отпуск поездка"
+    ]
+  },
+  {
+    "id": "lucide:luggage",
+    "name": "Багаж",
+    "category": "Путешествия",
+    "kind": "builtin",
+    "checksum": "0840f8631857968c1063f5ffe85778172874210e8792374de89cea7f9e1f7785",
+    "synonyms": [
+      "путешествия отпуск поездка"
+    ]
+  },
+  {
+    "id": "lucide:baggage-claim",
+    "name": "Получить багаж",
+    "category": "Путешествия",
+    "kind": "builtin",
+    "checksum": "c70601209d3249a988498f438e8eb1827d0626fa18dea590f9ddf769972f1235",
+    "synonyms": [
+      "путешествия отпуск поездка"
+    ]
+  },
+  {
+    "id": "lucide:hotel",
+    "name": "Отель",
+    "category": "Путешествия",
+    "kind": "builtin",
+    "checksum": "091161d406c01970063832274a0a172634ebc2718cf18ace316c0c157ac268e1",
+    "synonyms": [
+      "путешествия отпуск поездка"
+    ]
+  },
+  {
+    "id": "lucide:map",
+    "name": "Карта",
+    "category": "Путешествия",
+    "kind": "builtin",
+    "checksum": "d816154f3511bda716e38f53837babcb9925812f7ba43d6d264dd7b41564c3d1",
+    "synonyms": [
+      "путешествия отпуск поездка"
+    ]
+  },
+  {
+    "id": "lucide:map-pin",
+    "name": "Место",
+    "category": "Путешествия",
+    "kind": "builtin",
+    "checksum": "b6cd2f9764ae51c61ce2df2197d66677b6d4a79fe6854eea1ce8ea2250b12b09",
+    "synonyms": [
+      "путешествия отпуск поездка"
+    ]
+  },
+  {
+    "id": "lucide:route",
+    "name": "Маршрут",
+    "category": "Путешествия",
+    "kind": "builtin",
+    "checksum": "33950ec0b0306deb4348b0c5f03d4ca7e218187807f52dc9b91871ec36623fe8",
+    "synonyms": [
+      "путешествия отпуск поездка"
+    ]
+  },
+  {
+    "id": "lucide:compass",
+    "name": "Компас",
+    "category": "Путешествия",
+    "kind": "builtin",
+    "checksum": "c949fe2bc1d0b333f3578dcb7c3f3fdabd779b4038ef299a177b236a033779cf",
+    "synonyms": [
+      "путешествия отпуск поездка"
+    ]
+  },
+  {
+    "id": "lucide:tent",
+    "name": "Поход",
+    "category": "Путешествия",
+    "kind": "builtin",
+    "checksum": "4d6f0322be04e67c991ac28267e68f0d6a71bee4af0152d352d9844a46ab23c1",
+    "synonyms": [
+      "путешествия отпуск поездка",
+      "Палатка"
+    ]
+  },
+  {
+    "id": "lucide:umbrella",
+    "name": "Пляж",
+    "category": "Путешествия",
+    "kind": "builtin",
+    "checksum": "5b453b2ed2ceb39d5f116936130dfb90dda269f3a348e217d7df38aa5b2ffae6",
+    "synonyms": [
+      "путешествия отпуск поездка"
+    ]
+  },
+  {
+    "id": "lucide:tickets-plane",
+    "name": "Авиабилеты",
+    "category": "Путешествия",
+    "kind": "builtin",
+    "checksum": "b9f4b0067aa7bfade9d1a874d59b468d1f9b5cb6e9405fa16b190b72a536ece1",
+    "synonyms": [
+      "путешествия отпуск поездка"
+    ]
+  },
+  {
+    "id": "lucide:id-card",
+    "name": "Паспорт",
+    "category": "Путешествия",
+    "kind": "builtin",
+    "checksum": "d8ebfc4bfdbb6f8b63f55ed637e16f9c62e3191817f4ec57a3471d3b742b6848",
+    "synonyms": [
+      "путешествия отпуск поездка"
+    ]
+  },
+  {
+    "id": "lucide:earth",
+    "name": "Мир",
+    "category": "Путешествия",
+    "kind": "builtin",
+    "checksum": "05a02bee14610fc763d1f28cf30aeb5a56d77788bae8a2ee860aa504385e033c",
+    "synonyms": [
+      "путешествия отпуск поездка"
+    ]
+  },
+  {
+    "id": "lucide:car",
+    "name": "Автомобиль",
+    "category": "Автомобили и транспорт",
+    "kind": "builtin",
+    "checksum": "c88a521219c42a1c97d63cf41a7ea240856d724741c39bb56177beca9664f0b5",
+    "synonyms": [
+      "транспорт дорога автомобиль"
+    ]
+  },
+  {
+    "id": "lucide:car-front",
+    "name": "Поездка на машине",
+    "category": "Автомобили и транспорт",
+    "kind": "builtin",
+    "checksum": "930144c352b5cbb037799767493ec99f277e72d224de71eda5554df38c448be4",
+    "synonyms": [
+      "транспорт дорога автомобиль"
+    ]
+  },
+  {
+    "id": "lucide:bus",
+    "name": "Автобус",
+    "category": "Автомобили и транспорт",
+    "kind": "builtin",
+    "checksum": "e63a85532716164e17101cc075e56b9908ccedcc62dc82e36a0d67183e006d5f",
+    "synonyms": [
+      "транспорт дорога автомобиль"
+    ]
+  },
+  {
+    "id": "lucide:train-front",
+    "name": "Поезд",
+    "category": "Автомобили и транспорт",
+    "kind": "builtin",
+    "checksum": "d835782412fc39bb7a60e23762d348ca054daa0f4fcbe9b55ab68670b84075d5",
+    "synonyms": [
+      "транспорт дорога автомобиль"
+    ]
+  },
+  {
+    "id": "lucide:tram-front",
+    "name": "Трамвай",
+    "category": "Автомобили и транспорт",
+    "kind": "builtin",
+    "checksum": "c0b8cfc4c7f04c6e4528f2417639da0ac85162aa9a5d2d91510ad26aeac804d6",
+    "synonyms": [
+      "транспорт дорога автомобиль"
+    ]
+  },
+  {
+    "id": "lucide:train-front-tunnel",
+    "name": "Метро",
+    "category": "Автомобили и транспорт",
+    "kind": "builtin",
+    "checksum": "5d259764b48aceab1b0bf19eed7ea365cb43e90f5d4c4254cc209748e890a14b",
+    "synonyms": [
+      "транспорт дорога автомобиль"
+    ]
+  },
+  {
+    "id": "lucide:fuel",
+    "name": "Заправка",
+    "category": "Автомобили и транспорт",
+    "kind": "builtin",
+    "checksum": "7a3ec7ab6bd338cf6448ac6eb7f1a2c08933d7c95f21f1460844e62a24668cd7",
+    "synonyms": [
+      "транспорт дорога автомобиль"
+    ]
+  },
+  {
+    "id": "lucide:parking-circle",
+    "name": "Парковка",
+    "category": "Автомобили и транспорт",
+    "kind": "builtin",
+    "checksum": "f3cef03a4824ceef1f5eb314e6d2c6e5422a20f564a13add5d872e69874886e7",
+    "synonyms": [
+      "транспорт дорога автомобиль"
+    ]
+  },
+  {
+    "id": "lucide:ship",
+    "name": "Корабль",
+    "category": "Автомобили и транспорт",
+    "kind": "builtin",
+    "checksum": "f4ce13510cca5791f66028d76efb68bda301f4c0d98fb48c9367aeff7a752151",
+    "synonyms": [
+      "транспорт дорога автомобиль"
+    ]
+  },
+  {
+    "id": "lucide:sailboat",
+    "name": "Парусник",
+    "category": "Автомобили и транспорт",
+    "kind": "builtin",
+    "checksum": "6aba104d34393b4f05f84b35ebdc19d00e87fe4d2a3ca0272f79a4efa1e88518",
+    "synonyms": [
+      "транспорт дорога автомобиль"
+    ]
+  },
+  {
+    "id": "lucide:traffic-cone",
+    "name": "Дорожные работы",
+    "category": "Автомобили и транспорт",
+    "kind": "builtin",
+    "checksum": "02d351db0975d24ee2e17f355dadf820f0050bc44d0963caeb16d2e3cb008dfb",
+    "synonyms": [
+      "транспорт дорога автомобиль"
+    ]
+  },
+  {
+    "id": "lucide:cable-car",
+    "name": "Канатная дорога",
+    "category": "Автомобили и транспорт",
+    "kind": "builtin",
+    "checksum": "f424cd4b852eb01853155896642bb6a93ce0a3937cb5fb99f2551314e1500a00",
+    "synonyms": [
+      "транспорт дорога автомобиль"
+    ]
+  },
+  {
+    "id": "lucide:truck-electric",
+    "name": "Электротранспорт",
+    "category": "Автомобили и транспорт",
+    "kind": "builtin",
+    "checksum": "b32f563fe0cfad89916a285a22a818e8078a2757fc1732172bc94e4cacafb7ef",
+    "synonyms": [
+      "транспорт дорога автомобиль"
+    ]
+  },
+  {
+    "id": "lucide:cat",
+    "name": "Кошка",
+    "category": "Домашние животные",
+    "kind": "builtin",
+    "checksum": "80b1ed742a327d26e1b721e856e7238c892831966d32f5675e25ff636d6a9065",
+    "synonyms": [
+      "животные питомцы ветеринар",
+      "кот котёнок кошечка",
+      "кот кошка котёнок"
+    ]
+  },
+  {
+    "id": "lucide:dog",
+    "name": "Собака",
+    "category": "Домашние животные",
+    "kind": "builtin",
+    "checksum": "9faddb8f4059dcbb1835335166a61715ba1d0adf6c2ff6cae2aeb0a18bef8574",
+    "synonyms": [
+      "животные питомцы ветеринар",
+      "собачка щенок прогулка",
+      "выгулять собаку прогулка"
+    ]
+  },
+  {
+    "id": "lucide:paw-print",
+    "name": "Лапа",
+    "category": "Домашние животные",
+    "kind": "builtin",
+    "checksum": "3720fae9b7c2e0a07638b009e9028be7d94f0408a3c39ed429a236a46da40773",
+    "synonyms": [
+      "животные питомцы ветеринар"
+    ]
+  },
+  {
+    "id": "lucide:rabbit",
+    "name": "Кролик",
+    "category": "Домашние животные",
+    "kind": "builtin",
+    "checksum": "99c16757a36131346e09ddf65b1bedcda790afac148253b791cb089e34f891c3",
+    "synonyms": [
+      "животные питомцы ветеринар"
+    ]
+  },
+  {
+    "id": "lucide:bird",
+    "name": "Птица",
+    "category": "Домашние животные",
+    "kind": "builtin",
+    "checksum": "5ed8f9d294545c26c033e915635675ef0f99a8fa326e62dd0c96ac0bf896a3ec",
+    "synonyms": [
+      "животные питомцы ветеринар"
+    ]
+  },
+  {
+    "id": "lucide:fish-symbol",
+    "name": "Аквариум",
+    "category": "Домашние животные",
+    "kind": "builtin",
+    "checksum": "5b8fcc5df29d65098532e372aa29ed2b44fab91683fafcaced90f4a753d3d058",
+    "synonyms": [
+      "животные питомцы ветеринар"
+    ]
+  },
+  {
+    "id": "lucide:turtle",
+    "name": "Черепаха",
+    "category": "Домашние животные",
+    "kind": "builtin",
+    "checksum": "2985f7ff4863a854d1c9a5a1c28596e0cf59158caf6211fa140e22d596ec76a1",
+    "synonyms": [
+      "животные питомцы ветеринар"
+    ]
+  },
+  {
+    "id": "lucide:ham",
+    "name": "Кормление",
+    "category": "Домашние животные",
+    "kind": "builtin",
+    "checksum": "afef0d698d05cd0c885272b678f2b891c7d9f2896bcb1b8407fc56fe3f33d690",
+    "synonyms": [
+      "животные питомцы ветеринар"
+    ]
+  },
+  {
+    "id": "lucide:snail",
+    "name": "Улитка",
+    "category": "Домашние животные",
+    "kind": "builtin",
+    "checksum": "0044d65cabc3b1b62c0b6ad2960291d0f06fe439902de224cc94c6c38d3ccd4e",
+    "synonyms": [
+      "животные питомцы ветеринар"
+    ]
+  },
+  {
+    "id": "lucide:squirrel",
+    "name": "Белка",
+    "category": "Домашние животные",
+    "kind": "builtin",
+    "checksum": "1c103fb270e5e0a2da5de2c7827fed69f6e492ef3d701231f9aafec7a45bb134",
+    "synonyms": [
+      "животные питомцы ветеринар"
+    ]
+  },
+  {
+    "id": "lucide:rat",
+    "name": "Крыса",
+    "category": "Домашние животные",
+    "kind": "builtin",
+    "checksum": "f11ad25611881e596da6e6f9dc6176505b5a4e6335119e8f07865ea37f554456",
+    "synonyms": [
+      "животные питомцы ветеринар"
+    ]
+  },
+  {
+    "id": "lucide:feather",
+    "name": "Уход за питомцем",
+    "category": "Домашние животные",
+    "kind": "builtin",
+    "checksum": "ef9968a84573f3af8d0b3c72e2b8bfc5244e1640eb71e73f92ce296b08feea79",
+    "synonyms": [
+      "животные питомцы ветеринар"
+    ]
+  },
+  {
+    "id": "lucide:gamepad-2",
+    "name": "Игры",
+    "category": "Игры и развлечения",
+    "kind": "builtin",
+    "checksum": "995fa09af952d8fa7a6c1bef4be552483e437e96bde5238b25f06834cc065a84",
+    "synonyms": [
+      "развлечения отдых игры",
+      "Геймпад"
+    ]
+  },
+  {
+    "id": "lucide:joystick",
+    "name": "Джойстик",
+    "category": "Игры и развлечения",
+    "kind": "builtin",
+    "checksum": "595ec8c04b2e4b599560fe65de20cf487fe58d9661d17f0eb02bdb875c5a55a2",
+    "synonyms": [
+      "развлечения отдых игры"
+    ]
+  },
+  {
+    "id": "lucide:dices",
+    "name": "Настольные игры",
+    "category": "Игры и развлечения",
+    "kind": "builtin",
+    "checksum": "86d0c16f5139c3bdcdf1574fdf4fbb3655cbbb78a43e659985a0de1991af6d14",
+    "synonyms": [
+      "развлечения отдых игры"
+    ]
+  },
+  {
+    "id": "lucide:dice-5",
+    "name": "Игральная кость",
+    "category": "Игры и развлечения",
+    "kind": "builtin",
+    "checksum": "c9cc0da73272263864a861e6e49579703d7db15aa4a7906397815c916291c134",
+    "synonyms": [
+      "развлечения отдых игры"
+    ]
+  },
+  {
+    "id": "lucide:clapperboard",
+    "name": "Кино",
+    "category": "Игры и развлечения",
+    "kind": "builtin",
+    "checksum": "481dd7a43a3b0a017223b41198211393a16a2f555a013f246b0fe83a5b94bcb1",
+    "synonyms": [
+      "развлечения отдых игры"
+    ]
+  },
+  {
+    "id": "lucide:film",
+    "name": "Кино",
+    "category": "Игры и развлечения",
+    "kind": "builtin",
+    "checksum": "5585d9f2fa09cda3f686a2119b9f49e0e0b7e1c79131a9a2f781a7b26e5e5b22",
+    "synonyms": [
+      "развлечения отдых игры",
+      "Фильм"
+    ]
+  },
+  {
+    "id": "lucide:tv",
+    "name": "Телевизор",
+    "category": "Игры и развлечения",
+    "kind": "builtin",
+    "checksum": "4c845bcacdbf6d4b28b769d4a8bb2779749499caebc18443acfe453dd0a3513f",
+    "synonyms": [
+      "развлечения отдых игры"
+    ]
+  },
+  {
+    "id": "lucide:music",
+    "name": "Музыка",
+    "category": "Игры и развлечения",
+    "kind": "builtin",
+    "checksum": "5a1d5ba0146ec534bf6187a4ced0b77195ae58b98ced558a7ceb537adb62187c",
+    "synonyms": [
+      "развлечения отдых игры"
+    ]
+  },
+  {
+    "id": "lucide:headphones",
+    "name": "Наушники",
+    "category": "Игры и развлечения",
+    "kind": "builtin",
+    "checksum": "d6d7afb9a29cf52cf10569f3a073e03ce0cac56a1704d7e67cde7c487f6476a4",
+    "synonyms": [
+      "развлечения отдых игры"
+    ]
+  },
+  {
+    "id": "lucide:guitar",
+    "name": "Гитара",
+    "category": "Игры и развлечения",
+    "kind": "builtin",
+    "checksum": "b948dfb8f7a802cd148be676dd4a90cec090269fd1d89d7d6af0f2669dff6702",
+    "synonyms": [
+      "развлечения отдых игры"
+    ]
+  },
+  {
+    "id": "lucide:piano",
+    "name": "Пианино",
+    "category": "Игры и развлечения",
+    "kind": "builtin",
+    "checksum": "74f668aba90efd9962b5809e1cfebce954051ba8ef68a8e5d2fb4c6bb517e79c",
+    "synonyms": [
+      "развлечения отдых игры"
+    ]
+  },
+  {
+    "id": "lucide:drum",
+    "name": "Барабан",
+    "category": "Игры и развлечения",
+    "kind": "builtin",
+    "checksum": "a1b0e25ec8191febcf423c3a060904602dd0a3dd7a69638dc1724ec8a6a0bc0e",
+    "synonyms": [
+      "развлечения отдых игры"
+    ]
+  },
+  {
+    "id": "lucide:mic",
+    "name": "Микрофон",
+    "category": "Игры и развлечения",
+    "kind": "builtin",
+    "checksum": "4470882313f443c5e41d8fa3fec3eb5b467524f8c2d5bf302185b0cd13ea72b6",
+    "synonyms": [
+      "развлечения отдых игры"
+    ]
+  },
+  {
+    "id": "lucide:radio",
+    "name": "Радио",
+    "category": "Игры и развлечения",
+    "kind": "builtin",
+    "checksum": "f538ae9e2d0a329746bf028d4fce15d5d9244073336672c7aaadcb62285f9619",
+    "synonyms": [
+      "развлечения отдых игры"
+    ]
+  },
+  {
+    "id": "lucide:puzzle",
+    "name": "Головоломка",
+    "category": "Игры и развлечения",
+    "kind": "builtin",
+    "checksum": "f1e8454046734d4eaf59744fb9664e35dd44e6639ada82418f5f52295bf90c24",
+    "synonyms": [
+      "развлечения отдых игры"
+    ]
+  },
+  {
+    "id": "lucide:palette",
+    "name": "Творчество",
+    "category": "Игры и развлечения",
+    "kind": "builtin",
+    "checksum": "290ec7c113d3cbb6d62d5d074ff41df3c79420eb287a23d12a0891d299e75776",
+    "synonyms": [
+      "развлечения отдых игры",
+      "Рисование"
+    ]
+  },
+  {
+    "id": "lucide:camera",
+    "name": "Фото",
+    "category": "Игры и развлечения",
+    "kind": "builtin",
+    "checksum": "89b7493fb7f18b3a303184f9dea61e989521eae4a98349bbaa979a586f063cba",
+    "synonyms": [
+      "развлечения отдых игры",
+      "Фотография"
+    ]
+  },
+  {
+    "id": "lucide:popcorn",
+    "name": "Кинотеатр",
+    "category": "Игры и развлечения",
+    "kind": "builtin",
+    "checksum": "0735b9175cf72f93e0564666b9362bc92bd9d9470c225fce196f55856c17798c",
+    "synonyms": [
+      "развлечения отдых игры"
+    ]
+  },
+  {
+    "id": "lucide:phone",
+    "name": "Звонок",
+    "category": "Общение и отношения",
+    "kind": "builtin",
+    "checksum": "de89831807a3bf55a6f09f9ac03c715bf76a0cfd6e0127d4a61502b2adcc6dc8",
+    "synonyms": [
+      "общение встреча отношения семья друзья"
+    ]
+  },
+  {
+    "id": "lucide:phone-call",
+    "name": "Позвонить",
+    "category": "Общение и отношения",
+    "kind": "builtin",
+    "checksum": "78bd3df23094d8c40c4a9c6488ec533d79d17fa3d7bfb41624a058a11b58e49c",
+    "synonyms": [
+      "общение встреча отношения семья друзья"
+    ]
+  },
+  {
+    "id": "lucide:message-circle",
+    "name": "Сообщение",
+    "category": "Общение и отношения",
+    "kind": "builtin",
+    "checksum": "07949db75171fee228d45aeb957827e92df2a348a3869740e354680f82a35247",
+    "synonyms": [
+      "общение встреча отношения семья друзья"
+    ]
+  },
+  {
+    "id": "lucide:messages-square",
+    "name": "Переписка",
+    "category": "Общение и отношения",
+    "kind": "builtin",
+    "checksum": "b92fc318b3e589f00a70b2e35fbf4d29cfa385b391faf18bf23f857841554cef",
+    "synonyms": [
+      "общение встреча отношения семья друзья"
+    ]
+  },
+  {
+    "id": "lucide:video",
+    "name": "Видеозвонок",
+    "category": "Общение и отношения",
+    "kind": "builtin",
+    "checksum": "1a755fbcda59c867b70c04b0976e6a6ca33718534a5d32f21d5e89283f269052",
+    "synonyms": [
+      "общение встреча отношения семья друзья"
+    ]
+  },
+  {
+    "id": "lucide:users-round",
+    "name": "Друзья",
+    "category": "Общение и отношения",
+    "kind": "builtin",
+    "checksum": "fa9ec4ec041fdbe8b99c915db5213f8f66bcbd2463a95e41c576e45c09606214",
+    "synonyms": [
+      "общение встреча отношения семья друзья"
+    ]
+  },
+  {
+    "id": "lucide:user-round",
+    "name": "Человек",
+    "category": "Общение и отношения",
+    "kind": "builtin",
+    "checksum": "a3ca39f5060658cc1457c5bf18b92c147de659affcb70fe0b55a8ec0eb6d585a",
+    "synonyms": [
+      "общение встреча отношения семья друзья"
+    ]
+  },
+  {
+    "id": "lucide:contact-round",
+    "name": "Знакомство",
+    "category": "Общение и отношения",
+    "kind": "builtin",
+    "checksum": "36c73a003534d56e6ff87e49f1250c936b413e72afb2dbbb1f33f682b5ebf641",
+    "synonyms": [
+      "общение встреча отношения семья друзья"
+    ]
+  },
+  {
+    "id": "lucide:heart-handshake",
+    "name": "Поддержка",
+    "category": "Общение и отношения",
+    "kind": "builtin",
+    "checksum": "3a7f5c2a0fb2119d9104b94be93d5b92826d93d289439c435f9845f2b47e1342",
+    "synonyms": [
+      "общение встреча отношения семья друзья"
+    ]
+  },
+  {
+    "id": "lucide:baby",
+    "name": "Ребёнок",
+    "category": "Общение и отношения",
+    "kind": "builtin",
+    "checksum": "c50f268128251af4ae43aa6be4da794c12fde4b59330be85e2781784323d32f2",
+    "synonyms": [
+      "общение встреча отношения семья друзья"
+    ]
+  },
+  {
+    "id": "lucide:send",
+    "name": "Отправить",
+    "category": "Общение и отношения",
+    "kind": "builtin",
+    "checksum": "e3b154e3fa6bbfdc9289a39f92ae495e2d7da36b1f5c979e9dab39706152f0c7",
+    "synonyms": [
+      "общение встреча отношения семья друзья"
+    ]
+  },
+  {
+    "id": "lucide:at-sign",
+    "name": "Обратиться",
+    "category": "Общение и отношения",
+    "kind": "builtin",
+    "checksum": "62efa9f15182a33b36cd53e18d32bb83065a022cb062daeb77410db048035881",
+    "synonyms": [
+      "общение встреча отношения семья друзья"
+    ]
+  },
+  {
+    "id": "lucide:cake",
+    "name": "Торт",
+    "category": "Праздники и подарки",
+    "kind": "builtin",
+    "checksum": "ded24214d0f1857e35c744c16caa98d01b85fe1f6d30394252c3b50b84ed31ee",
+    "synonyms": [
+      "праздник день рождения вечеринка"
+    ]
+  },
+  {
+    "id": "lucide:cake-slice",
+    "name": "Угощение",
+    "category": "Праздники и подарки",
+    "kind": "builtin",
+    "checksum": "cc13274a56b5e4cea41c290fbb07efb065aad9dd3e6d92a586333c16195bc065",
+    "synonyms": [
+      "праздник день рождения вечеринка"
+    ]
+  },
+  {
+    "id": "lucide:party-popper",
+    "name": "Вечеринка",
+    "category": "Праздники и подарки",
+    "kind": "builtin",
+    "checksum": "1c7763e45f82bb5776ad1f9f78438a1d6340db39e3dd1eb5809e8164f89a8767",
+    "synonyms": [
+      "праздник день рождения вечеринка"
+    ]
+  },
+  {
+    "id": "lucide:balloon",
+    "name": "Воздушный шар",
+    "category": "Праздники и подарки",
+    "kind": "builtin",
+    "checksum": "6ba801c4c7b7ad298ad4c461618a76857353d779d5565e2ed3a3dcd0f215b4bd",
+    "synonyms": [
+      "праздник день рождения вечеринка"
+    ]
+  },
+  {
+    "id": "lucide:gem",
+    "name": "Украшение",
+    "category": "Праздники и подарки",
+    "kind": "builtin",
+    "checksum": "894e77e0f4de78f278d07b326e126f33f77e53beb5eda7b6068f1eb4a608c44b",
+    "synonyms": [
+      "праздник день рождения вечеринка"
+    ]
+  },
+  {
+    "id": "lucide:crown",
+    "name": "Торжество",
+    "category": "Праздники и подарки",
+    "kind": "builtin",
+    "checksum": "eae40c6f27e6a42e8517a2ff1f815cc67d1ae9caab574ec9c0deaa90dee452be",
+    "synonyms": [
+      "праздник день рождения вечеринка"
+    ]
+  },
+  {
+    "id": "lucide:ticket",
+    "name": "Билет",
+    "category": "Праздники и подарки",
+    "kind": "builtin",
+    "checksum": "86a441959146635a4313a6274ae5a6a17389d946dc41aa2c8e874a4a53e6a6fe",
+    "synonyms": [
+      "праздник день рождения вечеринка"
+    ]
+  },
+  {
+    "id": "lucide:tickets",
+    "name": "Билеты",
+    "category": "Праздники и подарки",
+    "kind": "builtin",
+    "checksum": "ce19f17c4dafea9acbe1a3a3833a1b59c45fedebe3b215f0270042f136baf6cf",
+    "synonyms": [
+      "праздник день рождения вечеринка"
+    ]
+  },
+  {
+    "id": "lucide:wine",
+    "name": "Вино",
+    "category": "Праздники и подарки",
+    "kind": "builtin",
+    "checksum": "4bd0aba4ab938be68576e5493291a751feac25d77e6557aed71c9303f26b8b21",
+    "synonyms": [
+      "праздник день рождения вечеринка"
+    ]
+  },
+  {
+    "id": "lucide:flower",
+    "name": "Букет",
+    "category": "Праздники и подарки",
+    "kind": "builtin",
+    "checksum": "fdeae4109d108edacc74c8fb0f45ee173567823512681d5e10ceef70154bc9d8",
+    "synonyms": [
+      "праздник день рождения вечеринка"
+    ]
+  },
+  {
+    "id": "lucide:bow-arrow",
+    "name": "Сюрприз",
+    "category": "Праздники и подарки",
+    "kind": "builtin",
+    "checksum": "a30239f43427915d15245b8cb164963c8dbd10feba0b6c6e340c8f1d420d2635",
+    "synonyms": [
+      "праздник день рождения вечеринка"
+    ]
+  },
+  {
+    "id": "lucide:wrench",
+    "name": "Ремонт",
+    "category": "Ремонт, инструменты и обслуживание",
+    "kind": "builtin",
+    "checksum": "995fe76da78e8bbdb5c326a76295e4140dc2857767118525ce42f3654f05cd0f",
+    "synonyms": [
+      "ремонт обслуживание инструменты",
+      "ремонт автомобиля авто сервис"
+    ]
+  },
+  {
+    "id": "lucide:hammer",
+    "name": "Молоток",
+    "category": "Ремонт, инструменты и обслуживание",
+    "kind": "builtin",
+    "checksum": "dd47fd7e459cb6a720dc638852fdda25dc524428c059c3d6b796b731288970bf",
+    "synonyms": [
+      "ремонт обслуживание инструменты"
+    ]
+  },
+  {
+    "id": "lucide:drill",
+    "name": "Дрель",
+    "category": "Ремонт, инструменты и обслуживание",
+    "kind": "builtin",
+    "checksum": "9584b7a71a798f640a63de5ae31aaa6a014a69b250a49593de3bb427dbe818a2",
+    "synonyms": [
+      "ремонт обслуживание инструменты"
+    ]
+  },
+  {
+    "id": "lucide:paint-roller",
+    "name": "Красить стены",
+    "category": "Ремонт, инструменты и обслуживание",
+    "kind": "builtin",
+    "checksum": "2264ae029c5ae0663f86b0d3b08650fd66be2c9631219ebb0bd1d75ceec8bf1c",
+    "synonyms": [
+      "ремонт обслуживание инструменты"
+    ]
+  },
+  {
+    "id": "lucide:paintbrush",
+    "name": "Покраска",
+    "category": "Ремонт, инструменты и обслуживание",
+    "kind": "builtin",
+    "checksum": "aaba3e003ce5326c5be6ec59a7d4b60a81f1c7383ec0cadbdee47ada358c5b41",
+    "synonyms": [
+      "ремонт обслуживание инструменты"
+    ]
+  },
+  {
+    "id": "lucide:axe",
+    "name": "Топор",
+    "category": "Ремонт, инструменты и обслуживание",
+    "kind": "builtin",
+    "checksum": "5efc482e5e58dde3f1010e26eb0c99f8f51e305038cc47ab692f7d2be8d1048d",
+    "synonyms": [
+      "ремонт обслуживание инструменты"
+    ]
+  },
+  {
+    "id": "lucide:pickaxe",
+    "name": "Кирка",
+    "category": "Ремонт, инструменты и обслуживание",
+    "kind": "builtin",
+    "checksum": "88796348ffeb3386e1ca4671b332b284989c338a434411f381c3a906b37fe5bb",
+    "synonyms": [
+      "ремонт обслуживание инструменты"
+    ]
+  },
+  {
+    "id": "lucide:anvil",
+    "name": "Наковальня",
+    "category": "Ремонт, инструменты и обслуживание",
+    "kind": "builtin",
+    "checksum": "ecc1a9c932c365f001fcb7fd961cc9b778e4ee2e1ed3c1a4849735fd9ddc7b5e",
+    "synonyms": [
+      "ремонт обслуживание инструменты"
+    ]
+  },
+  {
+    "id": "lucide:construction",
+    "name": "Стройка",
+    "category": "Ремонт, инструменты и обслуживание",
+    "kind": "builtin",
+    "checksum": "119b17fcb1f17b12d0ed37ebc5cd88d5af2546f4b4b588dce37a53f02c74604a",
+    "synonyms": [
+      "ремонт обслуживание инструменты"
+    ]
+  },
+  {
+    "id": "lucide:plug",
+    "name": "Электричество",
+    "category": "Ремонт, инструменты и обслуживание",
+    "kind": "builtin",
+    "checksum": "492f368294310458d2a9d4c3878d0cce8b186266b9cd518d45558216a47da488",
+    "synonyms": [
+      "ремонт обслуживание инструменты"
+    ]
+  },
+  {
+    "id": "lucide:cable",
+    "name": "Кабель",
+    "category": "Ремонт, инструменты и обслуживание",
+    "kind": "builtin",
+    "checksum": "e19c30d777ff289cbea13c15090377a77c325d24094e9b775f2934be154131b0",
+    "synonyms": [
+      "ремонт обслуживание инструменты"
+    ]
+  },
+  {
+    "id": "lucide:lightbulb-off",
+    "name": "Сменить лампочку",
+    "category": "Ремонт, инструменты и обслуживание",
+    "kind": "builtin",
+    "checksum": "5c86dc93fba86813003b5b9410fdc19775ac9d921d34fbcb06655b29562d5e91",
+    "synonyms": [
+      "ремонт обслуживание инструменты"
+    ]
+  },
+  {
+    "id": "lucide:unplug",
+    "name": "Отключить прибор",
+    "category": "Ремонт, инструменты и обслуживание",
+    "kind": "builtin",
+    "checksum": "74209e9f129249bf6a857858be3fda2fb9ed117c263a8a959730adc736b38c72",
+    "synonyms": [
+      "ремонт обслуживание инструменты"
+    ]
+  },
+  {
+    "id": "lucide:settings",
+    "name": "Обслуживание",
+    "category": "Ремонт, инструменты и обслуживание",
+    "kind": "builtin",
+    "checksum": "68419c051bd797935030ed17b956b33d155e5b7ab64e3de2fc9c941922e614c6",
+    "synonyms": [
+      "ремонт обслуживание инструменты"
+    ]
+  },
+  {
+    "id": "lucide:tool-case",
+    "name": "Ящик инструментов",
+    "category": "Ремонт, инструменты и обслуживание",
+    "kind": "builtin",
+    "checksum": "b18aad854e0cc7e07fa9affd2e88df0b1671d70cd006d1363539168c25f24275",
+    "synonyms": [
+      "ремонт обслуживание инструменты"
+    ]
+  },
+  {
+    "id": "lucide:leaf",
+    "name": "Природа",
+    "category": "Природа, отдых и прогулки",
+    "kind": "builtin",
+    "checksum": "f4f71bf38cef3b33ae5be20bed7557075601f1aaa44159d150895221c83175b8",
+    "synonyms": [
+      "природа прогулки сад отдых",
+      "Лист"
+    ]
+  },
+  {
+    "id": "lucide:sprout",
+    "name": "Растение",
+    "category": "Природа, отдых и прогулки",
+    "kind": "builtin",
+    "checksum": "19ba915583e199a6afadc3c7b454f7a7ebfbabd9e569d133f166a809f5d7497d",
+    "synonyms": [
+      "природа прогулки сад отдых"
+    ]
+  },
+  {
+    "id": "lucide:flower-2",
+    "name": "Цветок",
+    "category": "Природа, отдых и прогулки",
+    "kind": "builtin",
+    "checksum": "2e9c0c853626f12dd77b03ad93fff0335724d73df203cdb56d318c9a47e106a2",
+    "synonyms": [
+      "природа прогулки сад отдых"
+    ]
+  },
+  {
+    "id": "lucide:trees",
+    "name": "Лес",
+    "category": "Природа, отдых и прогулки",
+    "kind": "builtin",
+    "checksum": "5d1d69cca03311f0a65bfc0ae967b681e82caf72227dc149c12ebfc99b28bfe0",
+    "synonyms": [
+      "природа прогулки сад отдых"
+    ]
+  },
+  {
+    "id": "lucide:tree-pine",
+    "name": "Ель",
+    "category": "Природа, отдых и прогулки",
+    "kind": "builtin",
+    "checksum": "8a4e030029cb6c2774f59e9837232516a8e88ce6777e8127350bc3eb493069e5",
+    "synonyms": [
+      "природа прогулки сад отдых"
+    ]
+  },
+  {
+    "id": "lucide:tree-deciduous",
+    "name": "Дерево",
+    "category": "Природа, отдых и прогулки",
+    "kind": "builtin",
+    "checksum": "7af4c553eaca34480eb39afebe0dc6e1dca0cb30208f531d8313d5cbc5de58f3",
+    "synonyms": [
+      "природа прогулки сад отдых"
+    ]
+  },
+  {
+    "id": "lucide:sun",
+    "name": "Солнце",
+    "category": "Природа, отдых и прогулки",
+    "kind": "builtin",
+    "checksum": "24c0386b384ed80a938e7f14bcc041132dbf64f0301410ba55c7cec48351d231",
+    "synonyms": [
+      "природа прогулки сад отдых"
+    ]
+  },
+  {
+    "id": "lucide:cloud-rain",
+    "name": "Дождь",
+    "category": "Природа, отдых и прогулки",
+    "kind": "builtin",
+    "checksum": "30943e4be4f05996828756e28022bf2fb8662f3978d60930a4e644e753eaed9d",
+    "synonyms": [
+      "природа прогулки сад отдых"
+    ]
+  },
+  {
+    "id": "lucide:snowflake",
+    "name": "Снег",
+    "category": "Природа, отдых и прогулки",
+    "kind": "builtin",
+    "checksum": "906aa163670425c0e515d4d8dbbdd1be8a84da23de424a37a67019b4cfd1ecff",
+    "synonyms": [
+      "природа прогулки сад отдых"
+    ]
+  },
+  {
+    "id": "lucide:wind",
+    "name": "Ветер",
+    "category": "Природа, отдых и прогулки",
+    "kind": "builtin",
+    "checksum": "86d95c8916feba11abc95b9d8ab33e1ef0e69a72b5e3ab8c46fd596d1bb860eb",
+    "synonyms": [
+      "природа прогулки сад отдых"
+    ]
+  },
+  {
+    "id": "lucide:moon",
+    "name": "Сон",
+    "category": "Природа, отдых и прогулки",
+    "kind": "builtin",
+    "checksum": "5e5c866dd82fbea5c03e00c778fa283c6efc8c37db3b7937824fe0b8ad5382f7",
+    "synonyms": [
+      "природа прогулки сад отдых",
+      "Луна"
+    ]
+  },
+  {
+    "id": "lucide:sunrise",
+    "name": "Рассвет",
+    "category": "Природа, отдых и прогулки",
+    "kind": "builtin",
+    "checksum": "98d5674cee2a9d0a350d04a981e4f020824938528f695bd27f1f5d0b87adccee",
+    "synonyms": [
+      "природа прогулки сад отдых"
+    ]
+  },
+  {
+    "id": "lucide:sunset",
+    "name": "Закат",
+    "category": "Природа, отдых и прогулки",
+    "kind": "builtin",
+    "checksum": "e433f0010af5638961bb96a0ab8e8727701a90b9f72ecd86385316043750acfa",
+    "synonyms": [
+      "природа прогулки сад отдых"
+    ]
+  },
+  {
+    "id": "lucide:waves",
+    "name": "Море",
+    "category": "Природа, отдых и прогулки",
+    "kind": "builtin",
+    "checksum": "fedf89d57944ad5c5cf1397e330231fcac2e4c4638920165bd82f96447f41119",
+    "synonyms": [
+      "природа прогулки сад отдых",
+      "плавание бассейн пляж"
+    ]
+  },
+  {
+    "id": "lucide:mountain-snow",
+    "name": "Горы",
+    "category": "Природа, отдых и прогулки",
+    "kind": "builtin",
+    "checksum": "2938ff663c400ec2871285db3c3e6d925e101fd8cf8cb08ea4bc6a2497f06a84",
+    "synonyms": [
+      "природа прогулки сад отдых"
+    ]
+  },
+  {
+    "id": "lucide:binoculars",
+    "name": "Наблюдение",
+    "category": "Природа, отдых и прогулки",
+    "kind": "builtin",
+    "checksum": "6d79107e0117d9795c77a5ac4af1c888490b1dfa227a6a720c487bcd1f9f1d56",
+    "synonyms": [
+      "природа прогулки сад отдых"
+    ]
+  },
+  {
+    "id": "lucide:shovel",
+    "name": "Садовые работы",
+    "category": "Природа, отдых и прогулки",
+    "kind": "builtin",
+    "checksum": "252dc303503efc385418e222500016be9090ab0b019d06ef694185bc6e3d332d",
+    "synonyms": [
+      "природа прогулки сад отдых"
+    ]
+  },
+  {
+    "id": "lucide:file-text",
+    "name": "Документ",
+    "category": "Документы и бытовые обязательства",
+    "kind": "builtin",
+    "checksum": "24565355a366854c35346d46f27529831e62818da443f7d838dbfbc941ee2aeb",
+    "synonyms": [
+      "документы заявление договор справка напоминание"
+    ]
+  },
+  {
+    "id": "lucide:files",
+    "name": "Документы",
+    "category": "Документы и бытовые обязательства",
+    "kind": "builtin",
+    "checksum": "66cda002263b1662d4cf2ea3a4f58186ba491b0c878fe7df44cb9785f4f21265",
+    "synonyms": [
+      "документы заявление договор справка напоминание"
+    ]
+  },
+  {
+    "id": "lucide:folder",
+    "name": "Проект",
+    "category": "Документы и бытовые обязательства",
+    "kind": "builtin",
+    "checksum": "d2708a4727b3d2e5640bce703b3362994e482a3080bbcbca7940efe0b88b7167",
+    "synonyms": [
+      "документы заявление договор справка напоминание",
+      "Папка"
+    ]
+  },
+  {
+    "id": "lucide:folder-open",
+    "name": "Открыть папку",
+    "category": "Документы и бытовые обязательства",
+    "kind": "builtin",
+    "checksum": "512398d60fe613d6502a52da6b648d62bec84c72b36651f48bd60227f57acd4c",
+    "synonyms": [
+      "документы заявление договор справка напоминание"
+    ]
+  },
+  {
+    "id": "lucide:file-check",
+    "name": "Справка",
+    "category": "Документы и бытовые обязательства",
+    "kind": "builtin",
+    "checksum": "e08d0440d7878ee2f7dfe89f13eae372ef31822f2b5d86355a644d74c9a2098d",
+    "synonyms": [
+      "документы заявление договор справка напоминание"
+    ]
+  },
+  {
+    "id": "lucide:file-signature",
+    "name": "Подписать договор",
+    "category": "Документы и бытовые обязательства",
+    "kind": "builtin",
+    "checksum": "a14f9200be67baa031c77611014eeea76025d51ce44ff3af070d90ed8bfad649",
+    "synonyms": [
+      "документы заявление договор справка напоминание"
+    ]
+  },
+  {
+    "id": "lucide:file-pen",
+    "name": "Заполнить заявление",
+    "category": "Документы и бытовые обязательства",
+    "kind": "builtin",
+    "checksum": "3494e1cee35aba4d80a8555f5a58f3df206ffed6a930ac3b95efcd02828dc01a",
+    "synonyms": [
+      "документы заявление договор справка напоминание"
+    ]
+  },
+  {
+    "id": "lucide:printer",
+    "name": "Печать",
+    "category": "Документы и бытовые обязательства",
+    "kind": "builtin",
+    "checksum": "b3aa8dacd9a4a704e0917b4198538d844bcb2a6bfb7c4af3225f2e9acd1c5a77",
+    "synonyms": [
+      "документы заявление договор справка напоминание"
+    ]
+  },
+  {
+    "id": "lucide:scan",
+    "name": "Сканировать",
+    "category": "Документы и бытовые обязательства",
+    "kind": "builtin",
+    "checksum": "37b287ab6398ac991a16098a09ddc171fe4627930234d66f0067d47ce5e536f6",
+    "synonyms": [
+      "документы заявление договор справка напоминание"
+    ]
+  },
+  {
+    "id": "lucide:stamp",
+    "name": "Печать документа",
+    "category": "Документы и бытовые обязательства",
+    "kind": "builtin",
+    "checksum": "417bc919554391ca8bf30d992577be59b8fb190ec4507917597e0c4ef83eb784",
+    "synonyms": [
+      "документы заявление договор справка напоминание"
+    ]
+  },
+  {
+    "id": "lucide:clipboard",
+    "name": "Записи",
+    "category": "Документы и бытовые обязательства",
+    "kind": "builtin",
+    "checksum": "4cff1e236e241707c644d0ac08175ead5215a81e8a9d993c7ec7f25885b4e0af",
+    "synonyms": [
+      "документы заявление договор справка напоминание"
+    ]
+  },
+  {
+    "id": "lucide:bell",
+    "name": "Напоминание",
+    "category": "Документы и бытовые обязательства",
+    "kind": "builtin",
+    "checksum": "75670d30118ce3c5eec96c11bbc65f07ad7ece78f3cf32f5f1def7878fec8176",
+    "synonyms": [
+      "документы заявление договор справка напоминание"
+    ]
+  },
+  {
+    "id": "lucide:alarm-clock",
+    "name": "Будильник",
+    "category": "Документы и бытовые обязательства",
+    "kind": "builtin",
+    "checksum": "1f962eddf20b7b53f1c96264ab4282672d6c712558cd2136533cda943c9edce1",
+    "synonyms": [
+      "документы заявление договор справка напоминание"
+    ]
+  },
+  {
+    "id": "lucide:key-round",
+    "name": "Ключ",
+    "category": "Документы и бытовые обязательства",
+    "kind": "builtin",
+    "checksum": "b35a8750097f2bd5d462ab1bd9564c70c2eb4c4e00ab84d6e4f03eb2a37907cb",
+    "synonyms": [
+      "документы заявление договор справка напоминание"
+    ]
+  },
+  {
+    "id": "lucide:house-plug",
+    "name": "Коммунальные услуги",
+    "category": "Документы и бытовые обязательства",
+    "kind": "builtin",
+    "checksum": "b93c6e714d2381263559329ecb0607a4559bb276a5860c2c07958011e4472672",
+    "synonyms": [
+      "документы заявление договор справка напоминание"
+    ]
+  },
+  {
+    "id": "lucide:archive",
+    "name": "Архив",
+    "category": "Документы и бытовые обязательства",
+    "kind": "builtin",
+    "checksum": "41e77c384e436414df6afbc6585c10e02d3439668056c343dd27055dd1d905fd",
+    "synonyms": [
+      "документы заявление договор справка напоминание"
+    ]
+  },
+  {
+    "id": "lucide:circle-check",
+    "name": "Задача",
+    "category": "Прочее",
+    "kind": "builtin",
+    "checksum": "d48c0901de2262e9f7c0566b5ad3893eafeab509715be6ac4e3b449f15d9260b",
+    "synonyms": [
+      "разное личное"
+    ]
+  },
+  {
+    "id": "lucide:check",
+    "name": "Готово",
+    "category": "Прочее",
+    "kind": "builtin",
+    "checksum": "ee6b88b8c5b91c3ddee5fec843b8e6ec12122cad557470fea382afb59ccbbc88",
+    "synonyms": [
+      "разное личное"
+    ]
+  },
+  {
+    "id": "lucide:star",
+    "name": "Избранное",
+    "category": "Прочее",
+    "kind": "builtin",
+    "checksum": "8169933b68b55d52313fd768386a435038f77dcc49acd198fb5afa965b26ce8b",
+    "synonyms": [
+      "разное личное",
+      "Важное"
+    ]
+  },
+  {
+    "id": "lucide:flag",
+    "name": "Цель",
+    "category": "Прочее",
+    "kind": "builtin",
+    "checksum": "6375a99e38ebdf6acbf91652626d080e457de0888a414ef9bab91abf6cc3e449",
+    "synonyms": [
+      "разное личное"
+    ]
+  },
+  {
+    "id": "lucide:bookmark",
+    "name": "Закладка",
+    "category": "Прочее",
+    "kind": "builtin",
+    "checksum": "9242b2c2a7cfdee03d4e3d7cfcf5a9b9c734e1ec9f6ad4576673df20662d4338",
+    "synonyms": [
+      "разное личное"
+    ]
+  },
+  {
+    "id": "lucide:clock",
+    "name": "Время",
+    "category": "Прочее",
+    "kind": "builtin",
+    "checksum": "46ec6a837f867c9780355a62ac706e226496373db39929bcff1bc9991423008d",
+    "synonyms": [
+      "разное личное"
+    ]
+  },
+  {
+    "id": "lucide:hourglass",
+    "name": "Ожидание",
+    "category": "Прочее",
+    "kind": "builtin",
+    "checksum": "6d2403411fa177484afa0478734f15c2cef207d7a23337ba55c69c35dc9af45f",
+    "synonyms": [
+      "разное личное"
+    ]
+  },
+  {
+    "id": "lucide:search",
+    "name": "Поиск",
+    "category": "Прочее",
+    "kind": "builtin",
+    "checksum": "2241c0c5f7be34375a1f3a464f543fb0625e19bf5f75fffc950ea294d46daa22",
+    "synonyms": [
+      "разное личное"
+    ]
+  },
+  {
+    "id": "lucide:info",
+    "name": "Информация",
+    "category": "Прочее",
+    "kind": "builtin",
+    "checksum": "1457d3113e678091e307b6678fac8576967c9e98e81fec7653a50267d2a2bd61",
+    "synonyms": [
+      "разное личное"
+    ]
+  },
+  {
+    "id": "lucide:circle-help",
+    "name": "Вопрос",
+    "category": "Прочее",
+    "kind": "builtin",
+    "checksum": "0fe86982752eb6399dd12e19b86702303e10e44dc8bd9cd100a117eff117059b",
+    "synonyms": [
+      "разное личное"
+    ]
+  },
+  {
+    "id": "lucide:lock",
+    "name": "Замок",
+    "category": "Прочее",
+    "kind": "builtin",
+    "checksum": "6e63b90f5031f1b17ef7913a71a7d43718f2c5757ffc46f8777eb11134884dcf",
+    "synonyms": [
+      "разное личное"
+    ]
+  },
+  {
+    "id": "lucide:unlock",
+    "name": "Открыть",
+    "category": "Прочее",
+    "kind": "builtin",
+    "checksum": "9022f396acf4b47e5fcfee83fc9fcf19e616ecaec34f2b4b0f029c94d0251091",
+    "synonyms": [
+      "разное личное"
+    ]
+  },
+  {
+    "id": "lucide:repeat",
+    "name": "Повторение",
+    "category": "Прочее",
+    "kind": "builtin",
+    "checksum": "02c4dc6af9143a15570c6766f8b435fbfe005c78c9f0a6be08db05d6ebb59162",
+    "synonyms": [
+      "разное личное"
+    ]
+  },
+  {
+    "id": "lucide:refresh-cw",
+    "name": "Обновление",
+    "category": "Прочее",
+    "kind": "builtin",
+    "checksum": "1b1b992f76cdca580a2deb90d0bf6ea842f5f25744ad586d040008adc6a9da3e",
+    "synonyms": [
+      "разное личное"
+    ]
+  },
+  {
+    "id": "lucide:zap",
+    "name": "Энергия",
+    "category": "Прочее",
+    "kind": "builtin",
+    "checksum": "973d903d1edfc103f646f4b05b975a8c5c34685c49dbd714b3a92981ccf7dd9b",
+    "synonyms": [
+      "разное личное"
+    ]
+  },
+  {
+    "id": "lucide:target",
+    "name": "Мишень",
+    "category": "Прочее",
+    "kind": "builtin",
+    "checksum": "ba1c36b767a9ddd9777b21bf45ce6a8a3ee5ef42fc1bc137130c44d9ff5deed9",
+    "synonyms": [
+      "разное личное"
+    ]
+  },
+  {
+    "id": "lucide:inbox",
+    "name": "Входящие",
+    "category": "Прочее",
+    "kind": "builtin",
+    "checksum": "b66d783b11b776a78abbf709cb54f1dc10dde771fd9bdf149f27e4d333400bb5",
+    "synonyms": [
+      "разное личное"
+    ]
+  },
+  {
+    "id": "lucide:ellipsis",
+    "name": "Другое",
+    "category": "Прочее",
+    "kind": "builtin",
+    "checksum": "1347b14c96484e2aa02d4b3f71ef312a28bab284fc25356383aa0dc5062815fe",
+    "synonyms": [
+      "разное личное"
+    ]
+  },
+  {
+    "id": "lucide:cross",
+    "name": "Помощь",
+    "category": "Прочее",
+    "kind": "builtin",
+    "checksum": "330b0e811e4f43f8fe7613ffb6ff78ee394b5270ff66f8ba31973fcfc6020ffb",
+    "synonyms": [
+      "Помощь",
+      "разное"
+    ]
+  }
+]

@@ -16,6 +16,7 @@
   function parseHash() {
     const hash = (window.location.hash || '#/').slice(1);
     const parts = hash.split('/').filter(Boolean);
+    if (parts[0] === 'plans' || (parts[0] || '').startsWith('plans?')) return { page: 'plans' };
     if (parts[0] === 'month' && parts[1]) return { page: 'month', monthId: parts[1] };
     if (parts[0] === 'year') return { page: 'year', year: parts[1] ? parseInt(parts[1], 10) : new Date().getFullYear() };
     if (parts[0] === 'categories') return { page: 'categories' };
@@ -27,13 +28,11 @@
   }
 
   function api(path, opts) {
-    return fetch(API + path, {
-      headers: { 'Content-Type': 'application/json' },
-      ...opts
-    }).then(function (r) {
-      if (r.status === 204) return null;
-      return r.json();
-    });
+    return window.budgetAPI(API + path, opts);
+  }
+
+  function showAPIError(error) {
+    alert(error.message || 'Не удалось выполнить запрос. Проверь соединение с приложением.');
   }
 
   function totalIncome(month) {
@@ -44,8 +43,10 @@
 
   // ——— Home ———
   function renderHome() {
+    if (parseHash().page !== 'home') return;
     root.innerHTML = '<div class="home"><p class="muted">Загрузка...</p></div>';
     Promise.all([api('/now'), api('/months')]).then(function (results) {
+      if (parseHash().page !== 'home') return;
       var now = results[0] || {};
       var months = results[1] || [];
       var newMonthCreated = null;
@@ -67,10 +68,11 @@
         }
       }
       renderHomeContent(months, newMonthCreated);
-    });
+    }).catch(showAPIError);
   }
 
   function renderHomeContent(months, newMonthCreated, selectedYear) {
+      if (parseHash().page !== 'home') return;
       // Сортировка: сначала самый свежий год, в нём самый свежий месяц
       months = months.slice().sort(function (a, b) {
         return a.year !== b.year ? b.year - a.year : b.month - a.month;
@@ -141,7 +143,7 @@
         api('/months', { method: 'POST', body: JSON.stringify({ month: month, year: year }) })
           .then(function (created) {
             if (created) navigateTo('#/month/' + created.id);
-          });
+          }).catch(showAPIError);
       };
 
       root.querySelectorAll('.btn-delete-month').forEach(function (btn) {
@@ -150,7 +152,7 @@
           e.stopPropagation();
           var id = btn.getAttribute('data-month-id');
           if (!id || !confirm('Удалить весь месяц и все данные в нём? Это нельзя отменить.')) return;
-          api('/months/' + id, { method: 'DELETE' }).then(function () { renderHome(); });
+          api('/months/' + id, { method: 'DELETE' }).then(function () { renderHome(); }).catch(showAPIError);
         };
       });
 
@@ -170,11 +172,13 @@
   }
 
   function renderMonthPage(monthId) {
+    if (parseHash().page !== 'month') return;
     root.innerHTML = '<div class="month-page"><p class="muted">Загрузка...</p></div>';
     Promise.all([
       api('/months/' + monthId),
       api('/categories')
     ]).then(function (results) {
+      if (parseHash().page !== 'month' || parseHash().monthId !== monthId) return;
       var month = results[0];
       var cats = results[1] || {};
       var expenseCats = cats.expense || [];
@@ -361,7 +365,7 @@
 
       document.getElementById('btn-delete-month').onclick = function () {
         if (!confirm('Удалить весь месяц и все данные? Это нельзя отменить.')) return;
-        api('/months/' + monthId, { method: 'DELETE' }).then(function () { navigateTo('#/'); });
+        api('/months/' + monthId, { method: 'DELETE' }).then(function () { navigateTo('#/'); }).catch(showAPIError);
       };
 
       var incomeVal = document.getElementById('income-value');
@@ -376,7 +380,7 @@
       document.getElementById('income-save').onclick = function () {
         var v = parseFloat(incomeInput.value) || 0;
         api('/months/' + monthId + '/income', { method: 'PATCH', body: JSON.stringify({ income: v }) })
-          .then(function () { renderMonthPage(monthId); });
+          .then(function () { renderMonthPage(monthId); }).catch(showAPIError);
       };
       document.getElementById('income-cancel').onclick = function () {
         incomeEdit.style.display = 'none';
@@ -389,7 +393,7 @@
           var expId = row && row.dataset.expenseId;
           if (!expId || !confirm('Удалить запись?')) return;
           api('/months/' + monthId + '/expenses/' + expId, { method: 'DELETE' })
-            .then(function () { renderMonthPage(monthId); });
+            .then(function () { renderMonthPage(monthId); }).catch(showAPIError);
         };
       });
       root.querySelectorAll('tr[data-expense-id] .btn-edit').forEach(function (btn) {
@@ -407,7 +411,7 @@
           var incId = row && row.dataset.incomeId;
           if (!incId || !confirm('Удалить запись?')) return;
           api('/months/' + monthId + '/incomes/' + incId, { method: 'DELETE' })
-            .then(function () { renderMonthPage(monthId); });
+            .then(function () { renderMonthPage(monthId); }).catch(showAPIError);
         };
       });
       root.querySelectorAll('tr[data-income-id] .btn-edit').forEach(function (btn) {
@@ -527,7 +531,7 @@
           }));
         }
       }
-    });
+    }).catch(showAPIError);
   }
 
   function openAddExpenseModal(monthId, month, categories, onAdded, existingExpense) {
@@ -600,7 +604,7 @@
           description: (modalEl.querySelector('#exp-desc').value || '').trim(),
           day: day
         })
-      }).then(function () { closeModal(); if (onAdded) onAdded(); });
+      }).then(function () { closeModal(); if (onAdded) onAdded(); }).catch(showAPIError);
     };
     modalEl.onclick = function (e) { if (e.target === modalEl) closeModal(); };
     modalEl.querySelector('.modal').onclick = function (e) { e.stopPropagation(); };
@@ -654,16 +658,18 @@
           description: (modalEl.querySelector('#inc-desc').value || '').trim(),
           day: day
         })
-      }).then(function () { closeModal(); if (onAdded) onAdded(); });
+      }).then(function () { closeModal(); if (onAdded) onAdded(); }).catch(showAPIError);
     };
     modalEl.onclick = function (e) { if (e.target === modalEl) closeModal(); };
     modalEl.querySelector('.modal').onclick = function (e) { e.stopPropagation(); };
   }
 
   function renderYearPage(year) {
+    if (parseHash().page !== 'year') return;
     if (!year) year = new Date().getFullYear();
     root.innerHTML = '<div class="year-page"><p class="muted">Загрузка...</p></div>';
     api('/years/' + year).then(function (data) {
+      if (parseHash().page !== 'year' || parseHash().year !== year) return;
       if (!data) {
         root.innerHTML = '<div class="year-page"><p class="muted">Нет данных за этот год.</p><a href="#/">На главную</a></div>';
         return;
@@ -772,12 +778,14 @@
           }
         }
       }
-    });
+    }).catch(showAPIError);
   }
 
   function renderCategoriesPage() {
+    if (parseHash().page !== 'categories') return;
     root.innerHTML = '<div class="categories-page"><p class="muted">Загрузка...</p></div>';
     api('/categories').then(function (data) {
+      if (parseHash().page !== 'categories') return;
       var expense = (data && data.expense) ? data.expense.slice() : [];
       var income = (data && data.income) ? data.income.slice() : [];
 
@@ -871,7 +879,7 @@
             root.querySelector('.categories-saved').classList.add('visible');
             setTimeout(function () { root.querySelector('.categories-saved').classList.remove('visible'); }, 2000);
           })
-          .catch(function () { alert('Не удалось сохранить.'); });
+          .catch(showAPIError);
       }
 
       function render() {
@@ -941,11 +949,18 @@
       }
 
       render();
-    });
+    }).catch(showAPIError);
   }
 
   function render() {
+    if (window.Planner?.deferNavigation?.(render)) return;
     var route = parseHash();
+    if (route.page === 'plans') {
+      destroyCharts();
+      window.Planner.mount(root);
+      return;
+    }
+    if (window.Planner) window.Planner.unmount();
     if (route.page === 'month') {
       renderMonthPage(route.monthId);
     } else if (route.page === 'year') {
@@ -1050,11 +1065,4 @@
   }
   initHeaderActions();
 
-  // При закрытии вкладки — сохраняем данные и завершаем сервер (без открытия новой вкладки/перехода)
-  var shutdownUrl = window.location.origin + API + '/shutdown';
-  function sendShutdown() {
-    navigator.sendBeacon(shutdownUrl);
-  }
-  window.addEventListener('pagehide', sendShutdown);
-  window.addEventListener('beforeunload', sendShutdown);
 })();

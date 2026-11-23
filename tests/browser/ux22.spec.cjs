@@ -1,0 +1,57 @@
+const {test,expect}=require('../browser-fixtures.cjs');const {randomUUID}=require('node:crypto');
+async function api(r,path,data,method=data?'post':'get'){const a=await r[method]('/api/planner/'+path,data?{data}:{});expect(a.ok(),await a.text()).toBeTruthy();return a.json()}
+const day=new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Moscow'}).format(new Date());
+const next=(()=>{const d=new Date(day+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+1);return d.toISOString().slice(0,10)})();
+const ed=p=>p.getByRole('dialog',{name:'Редактор задачи',exact:true});
+test('UX22: width-aware day/week overlap groups preserve all objects and move only selected session',async({page,request})=>{
+ await page.setViewportSize({width:1440,height:900});
+ for(const n of [1,2,3,5,10]){
+  const p=await api(request,'projects',{title:'Встречи '+n+' '+randomUUID(),color_id:'teal'}),sessions=[];let task;
+  for(let i=0;i<n;i++){task=await api(request,'tasks',{title:'Обсудить документы '+i,project_id:p.id,icon_id:'lucide:briefcase'});sessions.push(await api(request,'sessions',{task_id:task.id,date:day,start_time:i===n-1&&n>2?'10:30':'10:00',end_time:'11:30'}));}
+  await page.goto('/#/plans/calendar?mode=day&date='+day+'&project='+p.id);await expect(page.locator('.pc-time-grid')).toBeVisible();
+  if(n<=3){await expect(page.locator('.pc-timed')).toHaveCount(n);await expect(page.locator('.pc-dense-group')).toHaveCount(0);}else{
+   const group=page.locator('.pc-dense-group');await expect(group).toHaveText('10:00 · '+n+' дел');await group.focus();await page.keyboard.press('Enter');
+   const dlg=page.getByRole('dialog',{name:/Одновременные события/});await expect(dlg.locator('.pc-event')).toHaveCount(n);const ids=await dlg.locator('.pc-event').evaluateAll(xs=>xs.map(x=>x.dataset.eventId));expect(new Set(ids).size).toBe(n);
+   await dlg.locator('.pc-event').filter({hasText:task.title}).getByRole('button',{name:'Перенести',exact:true}).click();const move=page.getByRole('dialog',{name:'Перенос периода работы',exact:true});await move.getByLabel('Новая дата').fill(next);await move.getByRole('button',{name:'Перенести на выбранную дату'}).click();await expect(move).toHaveCount(0);
+   for(let i=0;i<n;i++){const actual=await api(request,'sessions/'+sessions[i].id);expect(actual.date).toBe(i===n-1?next:day);expect(actual.start_time).toBe(sessions[i].start_time);expect(actual.end_time).toBe(sessions[i].end_time);}
+   expect((await api(request,'tasks/'+task.id)).planned_date).toBeNull();
+  }
+  await page.goto('/#/plans/calendar?mode=week&date='+day+'&project='+p.id);await expect(page.locator('.pc-time-grid')).toBeVisible();
+  if(n===2){await expect(page.locator('.pc-dense-group')).toHaveText('10:00 · 2 дела');await page.locator('.pc-dense-group').click();await page.locator('.pc-dense-list .pc-event-title').first().click();await expect(ed(page)).toBeVisible();}
+ }
+});
+test('UX22: all-day count and explicit expansion retain visible schedule for 1, 5, 20 tasks',async({page,request})=>{
+ for(const width of [1440,390])for(const n of [1,5,20]){
+  await page.setViewportSize({width,height:width===1440?900:844});const p=await api(request,'projects',{title:'Дела без времени '+randomUUID()});
+  for(let i=0;i<n;i++)await api(request,'tasks',{title:'Купить продукты '+i,project_id:p.id,planned_date:day});await api(request,'tasks',{title:'Встреча',project_id:p.id,planned_date:day,scheduled_time:'15:00'});
+  for(const mode of ['day','week']){await page.goto('/#/plans/calendar?mode='+mode+'&date='+day+'&project='+p.id);const cell=page.locator('[data-allday="'+day+'"]');await expect(cell.locator('.pc-event')).toHaveCount(Math.min(4,n));await expect(cell.locator('.pc-allday-count')).toContainText(n+' задач');
+   expect(await cell.locator('.pc-allday-items').evaluate(e=>e.scrollHeight<=e.clientHeight+1)).toBeTruthy();
+   if(n>4){await expect(cell.locator('.pc-allday-count')).toContainText('скрыто '+(n-4));await cell.getByRole('button',{name:'Показать ещё '+(n-4)}).click();await expect(cell.locator('.pc-event')).toHaveCount(n);await expect(cell.getByText('Все задачи ниже · прокрутите список')).toBeVisible();expect((await page.locator('.pc-time-controls').boundingBox()).y).toBeLessThan(width===1440?820:800);await cell.getByRole('button',{name:'Свернуть список'}).click();await expect(cell.locator('.pc-event')).toHaveCount(4);}
+   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
+  }
+ }
+});
+test('UX22: an expanded date does not reserve empty space after changing project',async({page,request})=>{
+ await page.setViewportSize({width:390,height:844});const p=await api(request,'projects',{title:'День дома '+randomUUID()}),empty=await api(request,'projects',{title:'Только встреча '+randomUUID()});
+ for(let i=0;i<5;i++)await api(request,'tasks',{title:'Домашнее дело '+i,project_id:p.id,planned_date:day});await api(request,'tasks',{title:'Встреча',project_id:empty.id,planned_date:day,scheduled_time:'10:00'});
+ await page.goto('/#/plans/calendar?mode=day&date='+day+'&project='+p.id);await page.getByRole('button',{name:'Показать ещё 1',exact:true}).click();await page.goto('/#/plans/calendar?mode=day&date='+day+'&project='+empty.id);await expect(page.locator('.pc-allday-count')).toHaveText('Без времени · 0 задач');expect((await page.locator('.pc-allday-items').boundingBox()).height).toBeLessThan(10);await expect(page.locator('.pc-timed')).toHaveCount(1);
+});
+test('UX22: project header, long description, mixed progress and unchanged tasks',async({page,request})=>{
+ await page.setViewportSize({width:1440,height:900});const p=await api(request,'projects',{title:'Уборка '+randomUUID(),description:'Спокойно привести квартиру в порядок.',start_date:day,due_date:next,color_id:'teal'});const tasks=[];
+ for(let i=0;i<5;i++)tasks.push(await api(request,'tasks',{title:'Комната '+i,project_id:p.id}));await api(request,'tasks/'+tasks[0].id+'/complete',{expected_revision:tasks[0].revision,completed_date:day});await api(request,'tasks/'+tasks[1].id+'/cancel',{expected_revision:tasks[1].revision});
+ await page.goto('/#/plans/projects/'+p.id);await expect(page.locator('.pl-progress-label')).toContainText('20%');await expect(page.getByText('Отменено: 1',{exact:true})).toBeVisible();expect((await page.locator('.pl-task').first().boundingBox()).y).toBeLessThanOrEqual(500);
+ const actual=await api(request,'projects/'+p.id);await api(request,'projects/'+p.id,{expected_revision:actual.revision,description:'Подготовить документы и договориться с командой. '.repeat(30)},'patch');await page.reload();await expect(page.locator('.pl-project-description summary')).toBeVisible();expect((await page.locator('.pl-task').first().boundingBox()).y).toBeLessThanOrEqual(500);await page.locator('.pl-project-description summary').click();await expect(page.locator('.pl-project-description p')).toContainText('Подготовить документы');expect((await api(request,'projects/'+p.id)).tasks).toHaveLength(5);
+});
+test('UX22: editor tabs preserve draft, lazy paginated history, keyboard and real 409',async({page,request})=>{
+ const p=await api(request,'projects',{title:'Дом '+randomUUID()});let t=await api(request,'tasks',{title:'Разобрать шкаф',project_id:p.id});await api(request,'tasks',{title:'Протереть полки',project_id:p.id,parent_task_id:t.id});await api(request,'sessions',{task_id:t.id,date:day});
+ for(let i=0;i<11;i++)t=await api(request,'tasks/'+t.id,{expected_revision:t.revision,description:'Подготовка '+i},'patch');let calls=0;page.on('request',r=>{if(r.url().includes('/history?object_type=task'))calls++});
+ await page.goto('/#/plans/tasks?task='+t.id);await expect(ed(page)).toBeVisible();expect(calls).toBe(0);await ed(page).getByLabel('Название',{exact:true}).fill('Разобрать шкаф вечером');await ed(page).getByRole('tab',{name:'Периоды работы',exact:true}).click();await expect(ed(page).locator('.pl-session')).toHaveCount(1);await ed(page).getByRole('tab',{name:'История',exact:true}).click();await expect(ed(page).locator('.pl-history details')).toHaveCount(10);expect(calls).toBe(1);await ed(page).getByRole('button',{name:'Показать ещё',exact:true}).click();await expect(ed(page).locator('.pl-history details')).toHaveCount(12);await ed(page).getByRole('tab',{name:'История',exact:true}).focus();await page.keyboard.press('Home');await expect(ed(page).getByLabel('Название',{exact:true})).toHaveValue('Разобрать шкаф вечером');await expect(ed(page).getByRole('button',{name:'Протереть полки',exact:true})).toBeVisible();
+ await api(request,'tasks/'+t.id,{expected_revision:t.revision,description:'Другое устройство'},'patch');await ed(page).getByRole('tab',{name:'История',exact:true}).click();await ed(page).getByRole('button',{name:'Сохранить',exact:true}).click();await expect(ed(page).getByRole('alert')).toContainText('Черновик сохранён');await expect(ed(page).getByLabel('Название',{exact:true})).toHaveValue('Разобрать шкаф вечером');await ed(page).getByRole('button',{name:'Закрыть редактор'}).click();await expect(page.getByRole('dialog',{name:'Несохранённые изменения'})).toBeVisible();await page.getByRole('button',{name:'Продолжить редактирование'}).click();await expect(ed(page).getByLabel('Название',{exact:true})).toHaveValue('Разобрать шкаф вечером');
+});
+test('UX22: appearance modal draft, Escape, explicit cancel, custom icons and inheritance',async({page,request})=>{
+ const p=await api(request,'projects',{title:'Оформление '+randomUUID(),color_id:'teal',icon_id:'lucide:house'});const t=await api(request,'tasks',{title:'Купить продукты',project_id:p.id});await page.goto('/#/plans/tasks?task='+t.id);
+ const data=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=c.height=24;c.getContext('2d').fillRect(0,0,24,24);return c.toDataURL('image/png').split(',')[1]});const custom=await api(request,'icons',{name:'Моя корзина',data});
+ const picker=()=>page.getByRole('dialog',{name:'Оформление',exact:true});await ed(page).getByRole('button',{name:'Оформление',exact:true}).click();await picker().getByLabel('Поиск иконки').fill('УБОРКА');await picker().getByRole('button',{name:'Метла',exact:true}).click();await picker().getByRole('button',{name:'Розовый',exact:true}).click();expect((await api(request,'tasks/'+t.id)).icon_id).toBe(t.icon_id);await page.keyboard.press('Escape');await expect(ed(page).getByRole('button',{name:'Оформление',exact:true})).toBeFocused();await expect(ed(page).locator('[name=icon_id]')).toHaveValue('lucide:broom');
+ await ed(page).getByRole('button',{name:'Оформление',exact:true}).click();await picker().getByRole('button',{name:'Синий',exact:true}).click();await picker().getByRole('button',{name:'Отменить выбор'}).click();await expect(ed(page).locator('[name=color_id]')).toHaveValue('rose');
+ await ed(page).getByRole('button',{name:'Оформление',exact:true}).click();await picker().getByLabel('Поиск иконки').fill('Моя корзина');await picker().getByRole('button',{name:'Моя корзина',exact:true}).click();await picker().getByRole('button',{name:'Наследовать цвет'}).click();await picker().getByRole('button',{name:'Готово'}).click();await ed(page).getByRole('button',{name:'Сохранить',exact:true}).click();await expect.poll(async()=>(await api(request,'tasks/'+t.id)).icon_id).toBe(custom.id);expect((await api(request,'tasks/'+t.id)).effective_color_id).toBe('teal');
+});

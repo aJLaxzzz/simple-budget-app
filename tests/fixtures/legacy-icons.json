@@ -1,0 +1,464 @@
+[
+  {
+    "id": "lucide:house",
+    "name": "Дом",
+    "category": "Дом и быт",
+    "kind": "builtin",
+    "checksum": "2c13f570d9b9727c9b6c23400c95acfa9737e91884ed926332edb18fd47a2a76"
+  },
+  {
+    "id": "lucide:sofa",
+    "name": "Диван",
+    "category": "Дом и быт",
+    "kind": "builtin",
+    "checksum": "a80afdb349cb05b63f16172d65c2a74df3d9def07c622614128147a3c81b6221"
+  },
+  {
+    "id": "lucide:bed",
+    "name": "Кровать",
+    "category": "Дом и быт",
+    "kind": "builtin",
+    "checksum": "4baafee2f66b7d91447c68b418e1713c240266417a0884051483c1c83a978ecf"
+  },
+  {
+    "id": "lucide:bath",
+    "name": "Ванная",
+    "category": "Дом и быт",
+    "kind": "builtin",
+    "checksum": "ed48aefa07ce66fcba115df07a57349da16a2b8aaa9115c946db1d92321a1054"
+  },
+  {
+    "id": "lucide:cooking-pot",
+    "name": "Готовка",
+    "category": "Дом и быт",
+    "kind": "builtin",
+    "checksum": "b64af5e9e99e91a9eaf861c7a0e5f9fa8d3b6f3e3de8a1e1e3578c4793e339a0"
+  },
+  {
+    "id": "lucide:washing-machine",
+    "name": "Стирка",
+    "category": "Дом и быт",
+    "kind": "builtin",
+    "checksum": "3eb0e6177010e2f83c6d33b9ba40a7f3a1e247404eae76f35ae283e3760575dd"
+  },
+  {
+    "id": "lucide:briefcase",
+    "name": "Работа",
+    "category": "Работа",
+    "kind": "builtin",
+    "checksum": "dbfcaa63668f01caf21364dcab276471aeb8709608907fc8d41f437e339bc79b"
+  },
+  {
+    "id": "lucide:clipboard-list",
+    "name": "Список",
+    "category": "Работа",
+    "kind": "builtin",
+    "checksum": "f86193e1009afb66198e9dc01f408691387482454cb1232017d5057367f28231"
+  },
+  {
+    "id": "lucide:calendar",
+    "name": "Календарь",
+    "category": "Работа",
+    "kind": "builtin",
+    "checksum": "2e2a7df92c2cca71dd6de34bb3f7187e276e8e8e003abe2e80b2ffd13347af60"
+  },
+  {
+    "id": "lucide:presentation",
+    "name": "Презентация",
+    "category": "Работа",
+    "kind": "builtin",
+    "checksum": "e229ecc31e782fe90e89f470d72f3f4bd3ca1cb7d6879b2c8a1d946800fba342"
+  },
+  {
+    "id": "lucide:users",
+    "name": "Команда",
+    "category": "Работа",
+    "kind": "builtin",
+    "checksum": "b3ed379df6aea1aa451ff4bbf8b2884c210849ed30fc220484eced85f5d53c2c"
+  },
+  {
+    "id": "lucide:mail",
+    "name": "Почта",
+    "category": "Работа",
+    "kind": "builtin",
+    "checksum": "8a4e4461fb1db38072eb90fa532c6b17bcd4d774951f65b6fc02c63aab547dee"
+  },
+  {
+    "id": "lucide:heart-pulse",
+    "name": "Здоровье",
+    "category": "Здоровье",
+    "kind": "builtin",
+    "checksum": "0c868fd631022ca8e0a802cdc75db2e0daca279b5a4a0d831d7a469b15b2cd94"
+  },
+  {
+    "id": "lucide:pill",
+    "name": "Лекарства",
+    "category": "Здоровье",
+    "kind": "builtin",
+    "checksum": "4d9313dc12586b63901f8f7a8396edbe3e2d195183066a3aa8ebd09477515259"
+  },
+  {
+    "id": "lucide:stethoscope",
+    "name": "Врач",
+    "category": "Здоровье",
+    "kind": "builtin",
+    "checksum": "ba52ad92e84d55bb40823babaa3039eb1e6ff2f7da5ff4546a8a3962d386fd87"
+  },
+  {
+    "id": "lucide:cross",
+    "name": "Помощь",
+    "category": "Здоровье",
+    "kind": "builtin",
+    "checksum": "330b0e811e4f43f8fe7613ffb6ff78ee394b5270ff66f8ba31973fcfc6020ffb"
+  },
+  {
+    "id": "lucide:activity",
+    "name": "Активность",
+    "category": "Здоровье",
+    "kind": "builtin",
+    "checksum": "df8e413c714521cc3d424bd7af3c1644d63409f7e0a7dec75ff0fa48aa6daedb"
+  },
+  {
+    "id": "lucide:moon",
+    "name": "Сон",
+    "category": "Здоровье",
+    "kind": "builtin",
+    "checksum": "5e5c866dd82fbea5c03e00c778fa283c6efc8c37db3b7937824fe0b8ad5382f7"
+  },
+  {
+    "id": "lucide:dumbbell",
+    "name": "Тренировка",
+    "category": "Спорт",
+    "kind": "builtin",
+    "checksum": "65f3d4eb53bd90c8e3e1aec3d6a0136b94f239b9d4662b207f23efaafd532d29"
+  },
+  {
+    "id": "lucide:bike",
+    "name": "Велосипед",
+    "category": "Спорт",
+    "kind": "builtin",
+    "checksum": "d155420a779b54c532e939d2e19bb0331489784d8bd1af8b0020cef1c9e55741"
+  },
+  {
+    "id": "lucide:footprints",
+    "name": "Прогулка",
+    "category": "Спорт",
+    "kind": "builtin",
+    "checksum": "2589611ed687f4785f894b70fbc1416a876eb3f3916f2c63f53e8f29a200558f"
+  },
+  {
+    "id": "lucide:trophy",
+    "name": "Достижение",
+    "category": "Спорт",
+    "kind": "builtin",
+    "checksum": "d0f59aedc581b89f9d389b6b64d89be486d523c07c57134ea557f4da4e62e671"
+  },
+  {
+    "id": "lucide:timer",
+    "name": "Таймер",
+    "category": "Спорт",
+    "kind": "builtin",
+    "checksum": "05ef0be35f3b298f6845bb6f96f2405422ed88ea41d72b55ebb9f5e6875d4a00"
+  },
+  {
+    "id": "lucide:mountain",
+    "name": "Горы",
+    "category": "Спорт",
+    "kind": "builtin",
+    "checksum": "7ab61c537ceaad37db7cbc142ed8aafbaafdd6a47fc4e651e911151e88013f7c"
+  },
+  {
+    "id": "lucide:shopping-cart",
+    "name": "Покупки",
+    "category": "Покупки",
+    "kind": "builtin",
+    "checksum": "d15001ee243eeba5af63709a5f3cd2c7f0973170c86527a45b20e4eb1c45823b"
+  },
+  {
+    "id": "lucide:shopping-bag",
+    "name": "Сумка",
+    "category": "Покупки",
+    "kind": "builtin",
+    "checksum": "65c8153cf4b231dcc9b03187c87fa27cc811c049c6dba5db7b88b7e2cd33f1c2"
+  },
+  {
+    "id": "lucide:store",
+    "name": "Магазин",
+    "category": "Покупки",
+    "kind": "builtin",
+    "checksum": "f657c652057edd2888a34308ab046d4e7e718d2a9e36eab52ed32faa4b4e543b"
+  },
+  {
+    "id": "lucide:gift",
+    "name": "Подарок",
+    "category": "Покупки",
+    "kind": "builtin",
+    "checksum": "fdf9245646ea6b715c0a738d2e79bf9578495d07604015a3b5f826ac85aa882c"
+  },
+  {
+    "id": "lucide:package",
+    "name": "Посылка",
+    "category": "Покупки",
+    "kind": "builtin",
+    "checksum": "d2bb2edb3e9acc1d00535af3596837558b761b24d8933070d5565b71eeaac74f"
+  },
+  {
+    "id": "lucide:tag",
+    "name": "Покупка",
+    "category": "Покупки",
+    "kind": "builtin",
+    "checksum": "96b1bc84e7fcfdfd2839e9057b76327f8ad80854fb96ef11a4f120b49cec4e1c"
+  },
+  {
+    "id": "lucide:plane",
+    "name": "Самолёт",
+    "category": "Путешествия",
+    "kind": "builtin",
+    "checksum": "b8cd25a168baf165d8d98738a1ef0320f657afdecb785808899c76634742076d"
+  },
+  {
+    "id": "lucide:train-front",
+    "name": "Поезд",
+    "category": "Путешествия",
+    "kind": "builtin",
+    "checksum": "d835782412fc39bb7a60e23762d348ca054daa0f4fcbe9b55ab68670b84075d5"
+  },
+  {
+    "id": "lucide:car",
+    "name": "Автомобиль",
+    "category": "Путешествия",
+    "kind": "builtin",
+    "checksum": "c88a521219c42a1c97d63cf41a7ea240856d724741c39bb56177beca9664f0b5"
+  },
+  {
+    "id": "lucide:map",
+    "name": "Карта",
+    "category": "Путешествия",
+    "kind": "builtin",
+    "checksum": "d816154f3511bda716e38f53837babcb9925812f7ba43d6d264dd7b41564c3d1"
+  },
+  {
+    "id": "lucide:compass",
+    "name": "Компас",
+    "category": "Путешествия",
+    "kind": "builtin",
+    "checksum": "c949fe2bc1d0b333f3578dcb7c3f3fdabd779b4038ef299a177b236a033779cf"
+  },
+  {
+    "id": "lucide:tent",
+    "name": "Поход",
+    "category": "Путешествия",
+    "kind": "builtin",
+    "checksum": "4d6f0322be04e67c991ac28267e68f0d6a71bee4af0152d352d9844a46ab23c1"
+  },
+  {
+    "id": "lucide:book-open",
+    "name": "Чтение",
+    "category": "Обучение",
+    "kind": "builtin",
+    "checksum": "510affae1044e8637c7a85972bd192df3c762f69a38c8c7dd2097387d7fe91d2"
+  },
+  {
+    "id": "lucide:graduation-cap",
+    "name": "Учёба",
+    "category": "Обучение",
+    "kind": "builtin",
+    "checksum": "334449ffe064e5cfdc2746ad45a8a4674949b15827e72ad7944d9e88cabefdb5"
+  },
+  {
+    "id": "lucide:notebook-pen",
+    "name": "Заметки",
+    "category": "Обучение",
+    "kind": "builtin",
+    "checksum": "4723725b43bd649181f37fd32669650ccd8babacd3a7fae698a0e1bfbc92fe33"
+  },
+  {
+    "id": "lucide:languages",
+    "name": "Языки",
+    "category": "Обучение",
+    "kind": "builtin",
+    "checksum": "a33a7bd34876dde0c5a470914dac09fca77f97da75e93e1b1687de2294874c65"
+  },
+  {
+    "id": "lucide:microscope",
+    "name": "Исследование",
+    "category": "Обучение",
+    "kind": "builtin",
+    "checksum": "dc5d63f1ff71dc309f8066177d12227f68d622cb0e5652338af979b203647e35"
+  },
+  {
+    "id": "lucide:lightbulb",
+    "name": "Идея",
+    "category": "Обучение",
+    "kind": "builtin",
+    "checksum": "31124a7d64a9f2639dbfa0441aeae845717d2fcc3e259fa6feab4b2562c969f8"
+  },
+  {
+    "id": "lucide:music",
+    "name": "Музыка",
+    "category": "Развлечения",
+    "kind": "builtin",
+    "checksum": "5a1d5ba0146ec534bf6187a4ced0b77195ae58b98ced558a7ceb537adb62187c"
+  },
+  {
+    "id": "lucide:headphones",
+    "name": "Наушники",
+    "category": "Развлечения",
+    "kind": "builtin",
+    "checksum": "d6d7afb9a29cf52cf10569f3a073e03ce0cac56a1704d7e67cde7c487f6476a4"
+  },
+  {
+    "id": "lucide:gamepad-2",
+    "name": "Игры",
+    "category": "Развлечения",
+    "kind": "builtin",
+    "checksum": "995fa09af952d8fa7a6c1bef4be552483e437e96bde5238b25f06834cc065a84"
+  },
+  {
+    "id": "lucide:film",
+    "name": "Кино",
+    "category": "Развлечения",
+    "kind": "builtin",
+    "checksum": "5585d9f2fa09cda3f686a2119b9f49e0e0b7e1c79131a9a2f781a7b26e5e5b22"
+  },
+  {
+    "id": "lucide:palette",
+    "name": "Творчество",
+    "category": "Развлечения",
+    "kind": "builtin",
+    "checksum": "290ec7c113d3cbb6d62d5d074ff41df3c79420eb287a23d12a0891d299e75776"
+  },
+  {
+    "id": "lucide:camera",
+    "name": "Фото",
+    "category": "Развлечения",
+    "kind": "builtin",
+    "checksum": "89b7493fb7f18b3a303184f9dea61e989521eae4a98349bbaa979a586f063cba"
+  },
+  {
+    "id": "lucide:laptop",
+    "name": "Компьютер",
+    "category": "Техника",
+    "kind": "builtin",
+    "checksum": "76082a476fdd7c6762dc750d75c51c15952e08bb4bad75bebce87403bfea9e77"
+  },
+  {
+    "id": "lucide:smartphone",
+    "name": "Телефон",
+    "category": "Техника",
+    "kind": "builtin",
+    "checksum": "c65bc8668adc7fecfc12c808858afbfb9ec1b244972b4c6d32d7ae7ec0de1869"
+  },
+  {
+    "id": "lucide:monitor",
+    "name": "Монитор",
+    "category": "Техника",
+    "kind": "builtin",
+    "checksum": "3ef31ab3ab45c174485e0c1dfc3bd3b54ae51cb74df8230a0e136d78ca580efd"
+  },
+  {
+    "id": "lucide:printer",
+    "name": "Печать",
+    "category": "Техника",
+    "kind": "builtin",
+    "checksum": "b3aa8dacd9a4a704e0917b4198538d844bcb2a6bfb7c4af3225f2e9acd1c5a77"
+  },
+  {
+    "id": "lucide:wifi",
+    "name": "Связь",
+    "category": "Техника",
+    "kind": "builtin",
+    "checksum": "133817fce3f8f7decbf6a38965242c35a372445c8afd8f10e30c75a913520347"
+  },
+  {
+    "id": "lucide:wrench",
+    "name": "Ремонт",
+    "category": "Техника",
+    "kind": "builtin",
+    "checksum": "995fe76da78e8bbdb5c326a76295e4140dc2857767118525ce42f3654f05cd0f"
+  },
+  {
+    "id": "lucide:wallet",
+    "name": "Кошелёк",
+    "category": "Финансы",
+    "kind": "builtin",
+    "checksum": "100d8d0773d3f5d3b8c5076e32c16a829daff5211642f6cc48b9d1d6be771142"
+  },
+  {
+    "id": "lucide:credit-card",
+    "name": "Карта",
+    "category": "Финансы",
+    "kind": "builtin",
+    "checksum": "4d0394710733a8ca0db566208b0281708ebde7b167b6903491fde0be060bded1"
+  },
+  {
+    "id": "lucide:banknote",
+    "name": "Деньги",
+    "category": "Финансы",
+    "kind": "builtin",
+    "checksum": "b2590b69f44ce69c5b476ce3168e7160ab40a55d114a0341d11f93bb1c202b79"
+  },
+  {
+    "id": "lucide:piggy-bank",
+    "name": "Накопления",
+    "category": "Финансы",
+    "kind": "builtin",
+    "checksum": "f27cec342f6d4bdde9b04e76e220c8c8028da55ae59549ee30762ac3f359632e"
+  },
+  {
+    "id": "lucide:receipt",
+    "name": "Счёт",
+    "category": "Финансы",
+    "kind": "builtin",
+    "checksum": "89876d495a585a37c1dd49304e231201ed59455a240596dcff0d06ded7354342"
+  },
+  {
+    "id": "lucide:landmark",
+    "name": "Банк",
+    "category": "Финансы",
+    "kind": "builtin",
+    "checksum": "7205e6f7c9eb22e526668fd47726d5904bf58bce5f5a1f7bc2f9ee18757200dc"
+  },
+  {
+    "id": "lucide:circle-check",
+    "name": "Задача",
+    "category": "Разное",
+    "kind": "builtin",
+    "checksum": "d48c0901de2262e9f7c0566b5ad3893eafeab509715be6ac4e3b449f15d9260b"
+  },
+  {
+    "id": "lucide:folder",
+    "name": "Проект",
+    "category": "Разное",
+    "kind": "builtin",
+    "checksum": "d2708a4727b3d2e5640bce703b3362994e482a3080bbcbca7940efe0b88b7167"
+  },
+  {
+    "id": "lucide:star",
+    "name": "Избранное",
+    "category": "Разное",
+    "kind": "builtin",
+    "checksum": "8169933b68b55d52313fd768386a435038f77dcc49acd198fb5afa965b26ce8b"
+  },
+  {
+    "id": "lucide:flag",
+    "name": "Цель",
+    "category": "Разное",
+    "kind": "builtin",
+    "checksum": "6375a99e38ebdf6acbf91652626d080e457de0888a414ef9bab91abf6cc3e449"
+  },
+  {
+    "id": "lucide:leaf",
+    "name": "Природа",
+    "category": "Разное",
+    "kind": "builtin",
+    "checksum": "f4f71bf38cef3b33ae5be20bed7557075601f1aaa44159d150895221c83175b8"
+  },
+  {
+    "id": "lucide:coffee",
+    "name": "Перерыв",
+    "category": "Разное",
+    "kind": "builtin",
+    "checksum": "e920d9dbbaaaf46de5375ba0a4519906b99ff9ae36d0537c5d260dc19e98c42a"
+  }
+]

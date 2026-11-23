@@ -1,0 +1,4 @@
+icon.webp: original blue-purple-pink.lossless.webp test fixture from golang.org/x/image v0.32.0/testdata.
+Source: https://cs.opensource.google/go/x/image/+/refs/tags/v0.32.0:testdata/blue-purple-pink.lossless.webp
+License: WEBP-LICENSE (Go Authors, BSD-3-Clause).
+Used only for decoder validation; contains no user data.

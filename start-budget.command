@@ -1,20 +1,49 @@
 #!/bin/bash
-# Если при двойном клике появляется ошибка прав доступа, один раз в Терминале выполни:
-#   chmod +x start-budget.command
-# Чтобы окно Терминала закрывалось само после закрытия вкладки в браузере:
-#   Терминал → Настройки → Профили → Оболочка → «Закрывать окно при корректном завершении команды»
-cd "$(dirname "$0")"
+# Локальный запуск. Закрытие браузера не останавливает сервер.
+cd "$(dirname "$0")" || exit 1
 
-if lsof -i :3001 -sTCP:LISTEN -t >/dev/null 2>&1; then
-  open "http://localhost:3001"
+listen_addr="${BUDGET_ADDR:-127.0.0.1:3001}"
+browser_addr="$listen_addr"
+case "$listen_addr" in
+  0.0.0.0:*|\[::\]:*) browser_addr="${BUDGET_ALLOWED_HOSTS%%,*}" ;;
+esac
+scheme=http
+if [ -n "$BUDGET_TLS_CERT" ]; then scheme=https; fi
+url="$scheme://$browser_addr"
+
+is_budget_running() {
+  curl --silent --show-error --head --connect-timeout 1 --max-time 2 "$url/" 2>/dev/null |
+    grep -qi '^X-Budget-App: simple-budget-app'
+}
+
+if is_budget_running; then
+  open "$url"
   exit 0
 fi
 
-# Запускаем сервер в фоне и ждём его завершения (при закрытии вкладки сервер завершится)
 ./budget &
 BID=$!
-sleep 1
-open "http://localhost:3001"
-wait $BID
-# Окно закроется само, если в Терминале включено: Настройки → Профили → Оболочка → «Закрывать окно при корректном завершении команды»
-exit 0
+stop_budget() {
+  kill -TERM "$BID" 2>/dev/null
+  wait "$BID"
+  exit 0
+}
+trap stop_budget INT TERM
+
+for attempt in {1..50}; do
+  if ! kill -0 "$BID" 2>/dev/null; then
+    wait "$BID"
+    exit $?
+  fi
+  if is_budget_running; then
+    open "$url"
+    printf 'Сервер работает. Для остановки нажми Ctrl+C в этом окне.\n'
+    wait "$BID"
+    exit $?
+  fi
+  sleep 0.1
+done
+printf 'Не удалось подтвердить запуск. Проверь настройки и журнал сервера выше.\n' >&2
+kill -TERM "$BID" 2>/dev/null
+wait "$BID"
+exit 1

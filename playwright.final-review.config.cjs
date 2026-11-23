@@ -1,0 +1,3 @@
+const {defineConfig}=require('@playwright/test');const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
+process.env.PLANNER_TEST_DIR ||= fs.mkdtempSync(path.join(os.tmpdir(),'budget-planner-ui-final-'));
+module.exports=defineConfig({testDir:'./tests/final-review',testMatch:'*.spec.cjs',workers:1,timeout:1800000,reporter:[['list']],outputDir:'artifacts/final-ux-review/checks/playwright',use:{baseURL:'http://127.0.0.1:31372',channel:'chrome',viewport:{width:1440,height:900},timezoneId:'Europe/Moscow',locale:'ru-RU',colorScheme:'dark',actionTimeout:5000,screenshot:'only-on-failure'},webServer:{command:'node tests/final-review/server.cjs',url:'http://127.0.0.1:31372',reuseExistingServer:false,timeout:120000}});
