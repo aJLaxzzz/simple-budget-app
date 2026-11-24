@@ -47,7 +47,7 @@ func projectSourceRoute(s *Service, w http.ResponseWriter, r *http.Request, id, 
 		return 0, nil, methodError(w, "POST")
 	}
 	var in ProjectSourceInput
-	if e := strictPlannerInput(w, r, &in, "request_id expected_revision preview_token snapshot anchor_date first_date rule end_date"); e != nil {
+	if e := strictPlannerInput(w, r, &in, "request_id expected_revision preview_token snapshot anchor_date first_date rule end_date independent_decision"); e != nil {
 		return 0, nil, e
 	}
 	if action == "template-preview" {

@@ -40,7 +40,19 @@ var appearanceSQL string
 //go:embed migrations/009_entity_templates.sql
 var entityTemplatesSQL string
 
-var migrations = []migration{{1, initialSQL}, {2, archiveSQL}, {3, sessionSQL}, {4, taskSeriesSQL}, {5, recurrenceManagementSQL}, {6, projectTemplatesSQL}, {7, calendarImportsSQL}, {8, appearanceSQL}, {9, entityTemplatesSQL}}
+//go:embed migrations/010_removed_cycles.sql
+var removedCyclesSQL string
+
+//go:embed migrations/011_series_appearance.sql
+var seriesAppearanceSQL string
+
+//go:embed migrations/012_dynamic_completion.sql
+var dynamicCompletionSQL string
+
+//go:embed migrations/013_disable_recurrence.sql
+var disableRecurrenceSQL string
+
+var migrations = []migration{{1, initialSQL}, {2, archiveSQL}, {3, sessionSQL}, {4, taskSeriesSQL}, {5, recurrenceManagementSQL}, {6, projectTemplatesSQL}, {7, calendarImportsSQL}, {8, appearanceSQL}, {9, entityTemplatesSQL}, {10, removedCyclesSQL}, {11, seriesAppearanceSQL}, {12, dynamicCompletionSQL}, {13, disableRecurrenceSQL}}
 
 const applicationID = 1396853840
 

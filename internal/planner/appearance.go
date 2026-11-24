@@ -2,6 +2,7 @@ package planner
 
 import (
 	"database/sql"
+	"regexp"
 )
 
 // Appearance contains only owned overrides. Nil means live inheritance, never a copy.
@@ -14,12 +15,16 @@ type EffectiveAppearance struct {
 	EffectiveIconID  string `json:"effective_icon_id,omitempty"`
 }
 
+var hexColor = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
+
 func validateAppearance(tx *sql.Tx, a Appearance) error {
 	if a.ColorID != nil {
 		switch *a.ColorID {
-		case "slate", "blue", "cyan", "teal", "green", "lime", "yellow", "orange", "coral", "rose", "purple", "indigo":
+		case "red", "burgundy", "pink", "magenta", "amber", "emerald", "mint", "aqua", "sky", "navy", "violet", "brown", "sand", "silver", "slate", "blue", "cyan", "teal", "green", "lime", "yellow", "orange", "coral", "rose", "purple", "indigo":
 		default:
-			return invalid("Неизвестный цвет; для наследования используйте null")
+			if !hexColor.MatchString(*a.ColorID) {
+				return invalid("Цвет: выберите оттенок или HEX в формате #RRGGBB")
+			}
 		}
 	}
 	if a.IconID != nil {

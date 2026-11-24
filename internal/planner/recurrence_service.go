@@ -11,7 +11,7 @@ func (s *Service) PreviewRecurrence(ctx context.Context, in recurrence.PreviewRe
 		return recurrence.PreviewResult{}, recurrenceAPIError(e)
 	}
 	// Simple civil rules do not access SQLite at all.
-	if in.Rule.AllowedDays.Mode != recurrence.RussianWorkdays || in.Anchor.Kind == recurrence.UnconfirmedAnchor {
+	if (in.Rule.AllowedDays.Mode != recurrence.RussianWorkdays && in.Rule.AllowedDays.Mode != recurrence.RussianWeekdays) || in.Anchor.Kind == recurrence.UnconfirmedAnchor {
 		result, e := recurrence.Preview(ctx, in, nil)
 		return result, recurrenceAPIError(e)
 	}

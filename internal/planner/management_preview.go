@@ -36,7 +36,7 @@ func validateSeriesCommand(v SeriesDTO, in SeriesCommand) error {
 	if e := checkRevision(in.ExpectedRevision, v.RecordMeta); e != nil {
 		return e
 	}
-	if v.State == "archived" {
+	if v.State == "archived" || v.State == "disabled" {
 		return invalid("Серия архивирована")
 	}
 	if len(in.Reason) > 5000 {
@@ -163,6 +163,7 @@ func (s *Service) previewSeriesTx(ctx context.Context, tx *sql.Tx, v SeriesDTO, 
 	}
 	p.UnchangedOutsideScope = outside
 	calendar := &recurrenceCalendarSnapshot{tx: tx, years: map[int]productionYearSnapshot{}}
+	var previousDate *string
 	for _, o := range occurrences {
 		row := SeriesChangeRow{OccurrenceID: o.ID, TaskID: o.Task.ID, CycleIndex: o.CycleIndex, OccurrenceRevision: o.Revision, TaskRevision: o.Task.Revision, BeforeDate: o.Task.PlannedDate, AfterDate: o.Task.PlannedDate, BaseDate: o.BaseDate, AdjustedDate: o.AdjustedDate, Disposition: "unchanged", Manual: o.ManualOverride || o.ManualDate != nil}
 		row.Sessions, e = listSessions(tx, "WHERE task_id=?", o.Task.ID)
@@ -183,7 +184,7 @@ func (s *Service) previewSeriesTx(ctx context.Context, tx *sql.Tx, v SeriesDTO, 
 		if e = taskChildCount(tx, o.Task.ID, &children); e != nil {
 			return p, e
 		}
-		if in.Action == "change_rule" && o.CycleIndex >= *in.FromCycle {
+		if (in.Action == "change_rule" && o.CycleIndex >= *in.FromCycle) || (in.Action == "reanchor" && o.Task.Dynamic && active(o.Task.Status)) {
 			switch {
 			case !active(o.Task.Status):
 				row.Disposition = "protected_closed"
@@ -191,12 +192,27 @@ func (s *Service) previewSeriesTx(ctx context.Context, tx *sql.Tx, v SeriesDTO, 
 				row.Disposition = "protected_started"
 			case row.Manual:
 				row.Disposition = "manual_exception"
-			case o.Task.PlannedDate != nil && *o.Task.PlannedDate < s.today():
+			case !o.Task.Dynamic && o.Task.PlannedDate != nil && *o.Task.PlannedDate < s.today():
 				row.Disposition = "protected_past"
-			case v.AnchorMode == "completion" && (v.WaitingOccurrenceID == nil || *v.WaitingOccurrenceID != o.ID):
+			case v.AnchorMode == "completion" && !o.Task.Dynamic && (v.WaitingOccurrenceID == nil || *v.WaitingOccurrenceID != o.ID):
 				row.Disposition = "protected_history"
 			default:
-				c, calendars, err := calculateStoredCycle(ctx, tx, proposed, o.CycleIndex, calendar)
+				candidateSeries := proposed
+				if o.Task.Dynamic {
+					anchor := previousDate
+					if anchor == nil && in.Action == "reanchor" {
+						anchor = &in.AnchorDate
+					}
+					if anchor == nil {
+						if e = tx.QueryRow("SELECT t.planned_date FROM tasks t JOIN occurrences prev ON prev.id=t.occurrence_id WHERE prev.series_id=? AND prev.cycle_index<? AND t.status IN ('planned','in_progress') ORDER BY prev.cycle_index DESC LIMIT 1", v.ID, o.CycleIndex).Scan(&anchor); e != nil {
+							return p, e
+						}
+					}
+					candidateSeries.AnchorDate = anchor
+					candidateSeries.AnchorCycle = o.CycleIndex - 1
+					candidateSeries.AnchorKind = recurrence.CompletedAnchor
+				}
+				c, calendars, err := calculateStoredCycle(ctx, tx, candidateSeries, o.CycleIndex, calendar)
 				if err != nil {
 					var api *APIError
 					if !errors.As(recurrenceAPIError(err), &api) {
@@ -268,6 +284,9 @@ func (s *Service) previewSeriesTx(ctx context.Context, tx *sql.Tx, v SeriesDTO, 
 			p.Conflicts = append(p.Conflicts, o.ID+": "+row.Disposition)
 		}
 		p.Rows = append(p.Rows, row)
+		if active(o.Task.Status) {
+			previousDate = row.AfterDate
+		}
 	}
 	// Read-only sample of not-yet-created cycles. Completion has only one confirmed next cycle.
 	if in.Action == "change_rule" || in.Action == "pause" || in.Action == "reanchor" {
@@ -281,6 +300,9 @@ func (s *Service) previewSeriesTx(ctx context.Context, tx *sql.Tx, v SeriesDTO, 
 		n := 10
 		if sample.AnchorMode == "completion" {
 			n = 1
+			if in.Action == "reanchor" && len(occurrences) > 0 {
+				n = 0
+			}
 			if sample.WaitingOccurrenceID != nil || sample.AnchorDate == nil {
 				n = 0
 			}

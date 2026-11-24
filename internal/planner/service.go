@@ -256,7 +256,7 @@ func (s *Service) ChangeProject(ctx context.Context, id, action string, in Proje
 		}
 		if (p.Status != before.Status && !active(p.Status)) || p.ArchivedAt != nil {
 			var linked int
-			if e = tx.QueryRow(`SELECT count(*) FROM series s JOIN series_versions v ON v.series_id=s.id WHERE s.source_type='task' AND s.state!='archived' AND v.version=(SELECT max(v2.version) FROM series_versions v2 WHERE v2.series_id=s.id) AND (json_extract(v.source_snapshot_json,'$.project_id')=? OR EXISTS(SELECT 1 FROM tasks t JOIN occurrences o ON o.id=t.occurrence_id WHERE t.project_id=? AND o.series_id=s.id))`, id, id).Scan(&linked); e != nil {
+			if e = tx.QueryRow(`SELECT count(*) FROM series s JOIN series_versions v ON v.series_id=s.id WHERE s.source_type='task' AND s.state!='archived' AND s.disabled_at IS NULL AND v.version=(SELECT max(v2.version) FROM series_versions v2 WHERE v2.series_id=s.id) AND (json_extract(v.source_snapshot_json,'$.project_id')=? OR EXISTS(SELECT 1 FROM tasks t JOIN occurrences o ON o.id=t.occurrence_id WHERE t.project_id=? AND o.series_id=s.id))`, id, id).Scan(&linked); e != nil {
 				return e
 			}
 			if linked > 0 {
@@ -397,17 +397,28 @@ func (s *Service) ChangeTask(ctx context.Context, id, action string, in TaskInpu
 		return result, e
 	}
 	e = s.store.Transaction(ctx, func(tx *sql.Tx) error {
-		return s.changeTaskTx(ctx, tx, id, action, in, op, now, instant, &result, taskChangeOptions{})
+		if in.RequestID == "" {
+			return s.changeTaskTx(ctx, tx, id, action, in, op, now, instant, &result, taskChangeOptions{})
+		}
+		cmd, e := commandOnce(tx, in.RequestID, "task/"+id, action, now, in, func() (CommandResult, error) {
+			e := s.changeTaskTx(ctx, tx, id, action, in, op, now, instant, &result, taskChangeOptions{})
+			return CommandResult{Task: &result}, e
+		})
+		if e == nil && cmd.Task != nil {
+			result = *cmd.Task
+		}
+		return e
 	})
 	return result, e
 }
 
 type taskChangeOptions struct {
-	ProjectSkip    bool
-	AllowRestore   bool
-	HistoricalOnly bool
-	Reason         string
-	PauseID        *string
+	DynamicDecision string
+	ProjectSkip     bool
+	AllowRestore    bool
+	HistoricalOnly  bool
+	Reason          string
+	PauseID         *string
 }
 
 func (s *Service) changeTaskTx(ctx context.Context, tx *sql.Tx, id, action string, in TaskInput, op, now string, instant time.Time, result *TaskDTO, options taskChangeOptions) error {
@@ -490,6 +501,17 @@ func (s *Service) changeTaskTx(ctx context.Context, tx *sql.Tx, id, action strin
 		return e
 	}
 	moving := !reflect.DeepEqual(t.ProjectID, before.ProjectID)
+	if moving && t.ProjectID != nil {
+		regular := t.SeriesID != nil
+		for _, c := range children {
+			regular = regular || c.SeriesID != nil
+		}
+		if regular {
+			if e = independentTaskProject(tx, *t.ProjectID); e != nil {
+				return e
+			}
+		}
+	}
 	if moving && len(children) > 0 && t.ProjectID == nil {
 		return invalid("Дерево с подзадачами должно принадлежать проекту")
 	}
@@ -506,7 +528,7 @@ func (s *Service) changeTaskTx(ctx context.Context, tx *sql.Tx, id, action strin
 		return invalid("Неизвестное решение по детям")
 	}
 	for _, c := range children {
-		if moving || (completing && active(c.Status)) {
+		if moving || (completing && active(c.Status) && !c.Dynamic) {
 			if e = checkRevision(in.RelatedRevisions[c.ID], c.RecordMeta); e != nil {
 				return e
 			}
@@ -520,7 +542,7 @@ func (s *Service) changeTaskTx(ctx context.Context, tx *sql.Tx, id, action strin
 		closingIDs := []string{id}
 		if completing && in.ChildrenDecision == "complete" {
 			for _, c := range children {
-				if active(c.Status) {
+				if active(c.Status) && !c.Dynamic {
 					closingIDs = append(closingIDs, c.ID)
 				}
 			}
@@ -569,7 +591,7 @@ func (s *Service) changeTaskTx(ctx context.Context, tx *sql.Tx, id, action strin
 				return e
 			}
 		}
-		if completing && in.ChildrenDecision == "complete" && active(c.Status) {
+		if completing && in.ChildrenDecision == "complete" && active(c.Status) && !c.Dynamic {
 			old := current
 			current.Status = "completed"
 			current.CompletedDate = t.CompletedDate

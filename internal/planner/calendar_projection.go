@@ -8,6 +8,7 @@ import (
 // CalendarItem is a read-only projection, never a new task or occurrence.
 // ID/revision identify the object mutated by the corresponding action API.
 type CalendarItem struct {
+	Dynamic bool `json:"dynamic"`
 	EffectiveAppearance
 	OccurrenceID    *string `json:"occurrence_id,omitempty"`
 	SeriesID        *string `json:"series_id,omitempty"`

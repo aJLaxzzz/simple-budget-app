@@ -16,7 +16,7 @@
    if(action==='complete'){const date=P.field(form,'completed_date','Фактическая дата выполнения','date',P.today());date.required=true;date.max=P.today();}
    if(action==='reschedule'){
      const date=P.field(form,'planned_date','Новая дата','date',options.targetDate||occurrence.manual_date||occurrence.adjusted_date);date.required=true;P.datePresets(form,date);
-     if(!project){P.field(form,'scheduled_time','Время · Москва','time',options.targetTime===undefined?occurrence.task.scheduled_time:options.targetTime);form.append(meta('Переносится только это выполнение. Крайний срок и расписание следующих повторений сохранятся.'),button('Изменить будущие повторения',()=>{close(true);P.seriesChange(series,'change_rule',{from_cycle:occurrence.cycle_index});}));}
+     if(!project){P.field(form,'scheduled_time','Время · Москва','time',options.targetTime===undefined?occurrence.task.scheduled_time:options.targetTime);form.append(meta(series.anchor_mode==='completion'?'Крайний срок сохраняется. Даты зависимых выполнений будут пересчитаны; ручные исключения требуют решения.':'Переносится только это выполнение. Крайний срок и расписание следующих повторений сохранятся.'),button('Изменить будущие повторения',()=>{close(true);P.seriesChange(series,'change_rule',{from_cycle:occurrence.cycle_index});}));}
    }
    if(['skip','cancel'].includes(action))P.field(form,'reason','Причина (необязательно)','text','');
    if(action==='review')form.append(meta('Пропуск останется пропуском и сохранится в истории. Активное напоминание будет снято.'));
@@ -32,6 +32,10 @@
    if(!project && series.anchor_mode==='completion' && !P.active(occurrence.task) && ['complete','restore'].includes(action)) {
      P.field(form,'branch_decision','Если повторение уже продолжено','select','',[['','Проверить возможность продолжения'],...(action==='complete'?[['historical_only','Записать выполнение только в историю, без новых повторений']]:[['replace_anchor','Вернуться к этому выполнению, если после новой даты ещё нет выполнений']])]);
      form.append(meta('Существующие следующие выполнения не удаляются. Если уже есть другая активная ветка, сервер остановит восстановление.'));
+   }
+   if(!project&&series.anchor_mode==='completion'&&['complete','reschedule','restore'].includes(action)){
+     P.field(form,'dynamic_decision','Ручные даты будущих выполнений','select','',[['','Остановиться при конфликте'],['keep_manual','Сохранить ручные даты и рассчитать остальные от них']]);
+     if(occurrence.task.dynamic&&P.active(occurrence.task)&&action==='complete'){P.field(form,'branch_decision','Завершение вне очереди','select','',[['','Выберите решение'],['historical_only','Завершить только это выполнение, текущую опору не менять']]).required=true;}
    }
    const closing=['complete','cancel','skip'].includes(action);
    if(sessions.length&&closing){P.field(form,'sessions_decision','Активные периоды работы: '+sessions.length,'select','',[['','Выберите действие'],['cancel','Подтверждаю отмену затронутых периодов работы']]).required=true;form.append(meta('Периоды работы останутся в истории; при восстановлении не возобновляются автоматически.'));}

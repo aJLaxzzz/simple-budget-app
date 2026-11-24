@@ -137,7 +137,12 @@ func (s *Store) Transaction(ctx context.Context, fn func(*sql.Tx) error) error {
 	return transaction(ctx, s.db, fn)
 }
 func transaction(ctx context.Context, db *sql.DB, fn func(*sql.Tx) error) error {
-	tx, e := db.BeginTx(ctx, nil)
+	connection, e := db.Conn(ctx)
+	if e != nil {
+		return e
+	}
+	defer connection.Close()
+	tx, e := connection.BeginTx(ctx, nil)
 	if e != nil {
 		return e
 	}
@@ -145,5 +150,9 @@ func transaction(ctx context.Context, db *sql.DB, fn func(*sql.Tx) error) error 
 	if e = fn(tx); e != nil {
 		return e
 	}
-	return tx.Commit()
+	e = tx.Commit()
+	if e != nil { // SQLite may leave a deferred-FK failed COMMIT open; use the same connection.
+		_, _ = connection.ExecContext(context.Background(), "ROLLBACK")
+	}
+	return e
 }

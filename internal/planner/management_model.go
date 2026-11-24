@@ -75,6 +75,8 @@ type SeriesChangePreview struct {
 	PreviewToken          string                   `json:"preview_token"`
 }
 type OccurrenceCommand struct {
+	CompletionRequestID     string           `json:"completion_request_id,omitempty"`
+	DynamicDecision         string           `json:"dynamic_decision,omitempty"`
 	ScheduledTime           Field[string]    `json:"scheduled_time"`
 	ExpectedProjectRevision int64            `json:"expected_project_revision,omitempty"`
 	TasksDecision           string           `json:"tasks_decision,omitempty"`
@@ -112,6 +114,8 @@ type IncidentDTO struct {
 	ReviewedAt   *string `json:"reviewed_at"`
 }
 type CommandResult struct {
+	Undo          *CompletionUndo     `json:"undo,omitempty"`
+	Deleted       *DeletionPreview    `json:"deleted,omitempty"`
 	Task          *TaskDTO            `json:"task,omitempty"`
 	CreatedRecord json.RawMessage     `json:"created_record,omitempty"`
 	Attention     *AttentionSettings  `json:"attention,omitempty"`

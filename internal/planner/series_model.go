@@ -18,6 +18,8 @@ type TaskTemplate struct {
 	ScheduledTime *string `json:"scheduled_time,omitempty"`
 }
 type CreateSeriesInput struct {
+	FirstDueDate      *string         `json:"first_due_date,omitempty"`
+	FirstStatus       string          `json:"first_status,omitempty"`
 	EndDate           *string         `json:"end_date,omitempty"`
 	SourceType        string          `json:"source_type,omitempty"`
 	TemplateID        string          `json:"template_id,omitempty"`
@@ -37,6 +39,9 @@ type StoredTaskRule struct {
 	FirstCycle int64             `json:"first_cycle"`
 }
 type SeriesDTO struct {
+	SourceProjectID  *string `json:"source_project_id,omitempty"`
+	CalculationError *string `json:"calculation_error,omitempty"`
+	EffectiveAppearance
 	Upcoming          []TaskOccurrenceDTO      `json:"upcoming,omitempty"`
 	EndDate           *string                  `json:"end_date,omitempty"`
 	TemplateID        *string                  `json:"template_id,omitempty"`

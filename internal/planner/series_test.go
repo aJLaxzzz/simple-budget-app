@@ -87,7 +87,7 @@ func TestSeriesFirstCycleScheduleAndIdempotency(t *testing.T) {
 	apiCall(t, h, "POST", "/series", in, 409)
 	in = seriesInput("haircut", "2026-11-16", recurrence.Schedule, 45)
 	hair := createSeries(t, h, in)
-	if len(hair.Occurrences) != 2 || hair.Occurrences[1].BaseDate != "2026-12-31" {
+	if len(hair.Occurrences) != 3 || hair.Occurrences[1].BaseDate != "2026-12-31" {
 		t.Fatal(hair)
 	}
 	var wg sync.WaitGroup
@@ -131,18 +131,18 @@ func TestSeriesAttachExistingAndCompletedSource(t *testing.T) {
 	in.ExistingTaskID = original.ID
 	in.ExpectedRevision = original.Revision
 	v := createSeries(t, h, in)
-	if count(t, db, "tasks") != 1 || v.Occurrences[0].Task.ID != original.ID || *v.Occurrences[0].Task.DueDate != "2026-11-05" {
+	if count(t, db, "tasks") != 3 || v.Occurrences[0].Task.ID != original.ID || *v.Occurrences[0].Task.DueDate != "2026-11-05" {
 		t.Fatal(v)
 	}
 	old := v.Occurrences[0].Task
 	done := completeSeriesTask(t, h, old, "2026-11-10")
 	v = getSeriesTest(t, s, v.ID)
-	if len(v.Occurrences) != 2 || v.Occurrences[1].BaseDate != "2026-12-25" || *v.AnchorDate != "2026-11-10" {
+	if len(v.Occurrences) != 4 || v.Occurrences[1].BaseDate != "2026-12-25" || *v.AnchorDate != "2026-11-10" {
 		t.Fatal(v)
 	}
 	apiCall(t, h, "POST", "/tasks/"+old.ID+"/complete", map[string]any{"expected_revision": old.Revision, "completed_date": "2026-11-10"}, 409)
 	apiCall(t, h, "POST", "/tasks/"+done.ID+"/complete", map[string]any{"expected_revision": done.Revision, "completed_date": "2026-11-10"}, 422)
-	if len(getSeriesTest(t, s, v.ID).Occurrences) != 2 {
+	if len(getSeriesTest(t, s, v.ID).Occurrences) != 4 {
 		t.Fatal("duplicate completion cycle")
 	}
 	// A completed ordinary task is itself cycle zero; actual completion, not its
@@ -154,7 +154,7 @@ func TestSeriesAttachExistingAndCompletedSource(t *testing.T) {
 	in.ExistingTaskID = source.ID
 	in.ExpectedRevision = source.Revision
 	v = createSeries(t, h, in)
-	if len(v.Occurrences) != 2 || v.Occurrences[0].Task.ID != source.ID || v.Occurrences[1].BaseDate != "2026-12-17" {
+	if len(v.Occurrences) != 4 || v.Occurrences[0].Task.ID != source.ID || v.Occurrences[1].BaseDate != "2026-12-17" {
 		t.Fatal(v)
 	}
 	if len(history(t, h, "task", source.ID)) != 3 {
@@ -165,17 +165,17 @@ func TestCompletionHorizonCancellationAndAtomicSuccess(t *testing.T) {
 	db, s, h := seriesFixture(t)
 	v := createSeries(t, h, seriesInput("completion", "2026-11-16", recurrence.Completion, 90))
 	drainSeries(t, s, MaterializeInput{})
-	if len(getSeriesTest(t, s, v.ID).Occurrences) != 1 {
+	if len(getSeriesTest(t, s, v.ID).Occurrences) != 3 {
 		t.Fatal("uncompleted cycle advanced")
 	}
 	done := completeSeriesTask(t, h, v.Occurrences[0].Task, "2026-11-15")
 	v = getSeriesTest(t, s, v.ID)
-	if len(v.Occurrences) != 1 || v.WaitingOccurrenceID != nil || *v.AnchorDate != "2026-11-15" {
+	if len(v.Occurrences) != 4 || v.WaitingOccurrenceID == nil || *v.AnchorDate != "2026-11-15" {
 		t.Fatal(v)
 	}
 	drainSeries(t, s, MaterializeInput{Through: "2027-03-01"})
 	v = getSeriesTest(t, s, v.ID)
-	if len(v.Occurrences) != 2 || v.Occurrences[1].BaseDate != "2027-02-13" {
+	if len(v.Occurrences) != 4 || v.Occurrences[1].BaseDate != "2027-02-13" {
 		t.Fatal(v)
 	}
 	apiCall(t, h, "POST", "/tasks/"+done.ID+"/restore", map[string]any{"expected_revision": done.Revision}, 422)
@@ -245,7 +245,7 @@ func TestSeriesAtomicFailures(t *testing.T) {
 	good := createSeries(t, h, seriesInput("good", "2026-11-16", recurrence.Schedule, 45))
 	bad := createSeries(t, h, seriesInput("bad-extension", "2026-11-16", recurrence.Schedule, 45))
 	exec(t, db, fmt.Sprintf(`CREATE TRIGGER fail_cycle BEFORE INSERT ON occurrences WHEN NEW.series_id='%s' BEGIN SELECT RAISE(ABORT,'injected'); END`, bad.ID))
-	r, e := s.Materialize(ctx, MaterializeInput{Through: "2027-03-01"})
+	r, e := s.Materialize(ctx, MaterializeInput{Through: "2027-05-01"})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -255,7 +255,7 @@ func TestSeriesAtomicFailures(t *testing.T) {
 			errors++
 		}
 	}
-	if errors != 1 || len(getSeriesTest(t, s, good.ID).Occurrences) != 3 || len(getSeriesTest(t, s, bad.ID).Occurrences) != 2 {
+	if errors != 1 || len(getSeriesTest(t, s, good.ID).Occurrences) != 4 || len(getSeriesTest(t, s, bad.ID).Occurrences) != 3 {
 		t.Fatal(r)
 	}
 }
@@ -277,7 +277,18 @@ func TestSeriesProductionCalendarCollisionsAndAdjustments(t *testing.T) {
 	in = seriesInput("rf", "2026-11-16", recurrence.Completion, 45)
 	in.Rule.AllowedDays.Mode = recurrence.RussianWorkdays
 	in.Rule.Adjustment = recurrence.Next
+	before = recurrenceDBSnapshot(t, db)
+	apiCall(t, h, "POST", "/series", in, 422)
+	if recurrenceDBSnapshot(t, db) != before {
+		t.Fatal("dynamic creation partly wrote without calendar")
+	}
+	if e := db.ImportCalendarYear(ctx, syntheticRecurrenceYear(2027)); e != nil {
+		t.Fatal(e)
+	}
 	v := createSeries(t, h, in)
+	// Remove the test import to verify completion/recalculation rollback too.
+	exec(t, db, "DELETE FROM production_calendar_days WHERE year=2027")
+	exec(t, db, "DELETE FROM production_calendar_years WHERE year=2027")
 	if v.Occurrences[0].AdjustedDate != "2026-11-17" {
 		t.Fatal(v)
 	}
@@ -453,7 +464,7 @@ func TestRecurringChildCompletionAndSessionsRollbackTogether(t *testing.T) {
 	}
 	apiCall(t, h, "POST", "/tasks/"+parent.ID+"/complete", body, 200)
 	v = getSeriesTest(t, s, v.ID)
-	if len(v.Occurrences) != 2 || v.Occurrences[0].Task.Status != "completed" {
+	if len(v.Occurrences) != 4 || v.Occurrences[0].Task.Status != "completed" {
 		t.Fatal(v)
 	}
 	histories := [][]HistoryDTO{history(t, h, "task", parent.ID), history(t, h, "task", child.ID), history(t, h, "session", session.ID), history(t, h, "task", v.Occurrences[1].Task.ID)}
@@ -470,7 +481,7 @@ func TestCompletionManualMoveDoesNotBecomeAnchor(t *testing.T) {
 	moved := value[TaskDTO](t, apiCall(t, h, "POST", "/tasks/"+first.ID+"/reschedule", map[string]any{"expected_revision": first.Revision, "planned_date": "2026-12-01"}, 200))
 	drainSeries(t, s, MaterializeInput{Through: "2027-03-01"})
 	current := getSeriesTest(t, s, v.ID)
-	if len(current.Occurrences) != 1 || current.AnchorDate != nil {
+	if len(current.Occurrences) != 3 || current.AnchorDate != nil || !current.Occurrences[1].Task.Dynamic {
 		t.Fatal("manual move confirmed an anchor")
 	}
 	moved = value[TaskDTO](t, apiCall(t, h, "PATCH", "/tasks/"+moved.ID, map[string]any{"expected_revision": moved.Revision, "status": "in_progress"}, 200))
@@ -589,7 +600,7 @@ func TestConcurrentCreateSeriesRequestKey(t *testing.T) {
 		}
 		expected = id
 	}
-	if count(t, db, "series") != 1 || count(t, db, "tasks") != 1 || count(t, db, "occurrences") != 1 {
+	if count(t, db, "series") != 1 || count(t, db, "tasks") != 3 || count(t, db, "occurrences") != 3 {
 		t.Fatal("duplicate concurrent creation")
 	}
 }
@@ -597,7 +608,7 @@ func TestCompletionSQLAllowsOnlyOneWaitingTask(t *testing.T) {
 	db, _, h := seriesFixture(t)
 	v := createSeries(t, h, seriesInput("single-waiting", "2026-11-16", recurrence.Completion, 7))
 	e := db.Transaction(ctx, func(tx *sql.Tx) error {
-		_, e := tx.Exec(`INSERT INTO occurrences(id,series_id,rule_version_id,cycle_index,base_date,adjusted_date,task_link,pending_completion) VALUES('another',?,?,2,'2026-11-23','2026-11-23','another',0)`, v.ID, v.RuleVersionID)
+		_, e := tx.Exec(`INSERT INTO occurrences(id,series_id,rule_version_id,cycle_index,base_date,adjusted_date,task_link,pending_completion) VALUES('another',?,?,3,'2026-11-23','2026-11-23','another',0)`, v.ID, v.RuleVersionID)
 		if e != nil {
 			return e
 		}
@@ -607,7 +618,7 @@ func TestCompletionSQLAllowsOnlyOneWaitingTask(t *testing.T) {
 	if e == nil {
 		t.Fatal("second waiting task allowed")
 	}
-	if count(t, db, "occurrences") != 1 || count(t, db, "tasks") != 1 {
+	if count(t, db, "occurrences") != 3 || count(t, db, "tasks") != 3 {
 		t.Fatal("partial duplicate")
 	}
 }
@@ -617,7 +628,7 @@ func TestEarlyCompletionUsesActualAnchorBeforeFirstPlannedDate(t *testing.T) {
 	v := createSeries(t, h, seriesInput("early-completion", "2026-12-01", recurrence.Completion, 7))
 	completeSeriesTask(t, h, v.Occurrences[0].Task, "2026-11-16")
 	current := getSeriesTest(t, s, v.ID)
-	if len(current.Occurrences) != 2 || current.Occurrences[1].BaseDate != "2026-11-23" {
+	if len(current.Occurrences) != 4 || current.Occurrences[1].BaseDate != "2026-11-23" {
 		t.Fatal(current)
 	}
 	var from string
@@ -643,11 +654,11 @@ func TestSeriesSnapshotRestoresCursorAndWaitingCycle(t *testing.T) {
 	}
 	drainSeries(t, s, MaterializeInput{})
 	current := getSeriesTest(t, s, v.ID)
-	if current.NextCycle != 1 || len(current.Occurrences) != 1 || current.WaitingOccurrenceID == nil {
+	if current.NextCycle != 3 || len(current.Occurrences) != 3 || current.WaitingOccurrenceID == nil {
 		t.Fatal(current)
 	}
 	completeSeriesTask(t, h, current.Occurrences[0].Task, "2026-11-16")
-	if len(getSeriesTest(t, s, v.ID).Occurrences) != 2 {
+	if len(getSeriesTest(t, s, v.ID).Occurrences) != 4 {
 		t.Fatal("restored series did not continue")
 	}
 }

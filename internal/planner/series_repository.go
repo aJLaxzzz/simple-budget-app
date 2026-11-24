@@ -9,9 +9,9 @@ import (
 func getSeries(tx *sql.Tx, id string) (SeriesDTO, error) {
 	var s SeriesDTO
 	var rule, snapshot string
-	e := tx.QueryRow(`SELECT s.id,s.revision,s.created_at,s.updated_at,s.source_type,s.anchor_mode,s.state,v.id,v.rule_json,v.source_snapshot_json,r.next_cycle,r.anchor_date,r.anchor_cycle,r.waiting_occurrence_id,r.horizon_date,r.anchor_kind,v.template_version_id,r.end_date
+	e := tx.QueryRow(`SELECT s.id,s.revision,s.created_at,s.updated_at,s.source_type,s.anchor_mode,CASE WHEN s.disabled_at IS NOT NULL THEN 'disabled' ELSE s.state END,v.id,v.rule_json,v.source_snapshot_json,r.next_cycle,r.anchor_date,r.anchor_cycle,r.waiting_occurrence_id,r.horizon_date,r.anchor_kind,v.template_version_id,r.end_date,s.calculation_error
  FROM series s JOIN series_runtime r ON r.series_id=s.id JOIN series_versions v ON v.series_id=s.id
- WHERE s.id=? ORDER BY v.version DESC LIMIT 1`, id).Scan(&s.ID, &s.Revision, &s.CreatedAt, &s.UpdatedAt, &s.SourceType, &s.AnchorMode, &s.State, &s.RuleVersionID, &rule, &snapshot, &s.NextCycle, &s.AnchorDate, &s.AnchorCycle, &s.WaitingOccurrenceID, &s.HorizonDate, &s.AnchorKind, &s.TemplateVersionID, &s.EndDate)
+ WHERE s.id=? ORDER BY v.version DESC LIMIT 1`, id).Scan(&s.ID, &s.Revision, &s.CreatedAt, &s.UpdatedAt, &s.SourceType, &s.AnchorMode, &s.State, &s.RuleVersionID, &rule, &snapshot, &s.NextCycle, &s.AnchorDate, &s.AnchorCycle, &s.WaitingOccurrenceID, &s.HorizonDate, &s.AnchorKind, &s.TemplateVersionID, &s.EndDate, &s.CalculationError)
 	if errors.Is(e, sql.ErrNoRows) {
 		return s, notFound("Серия задач", id)
 	}
@@ -26,6 +26,40 @@ func getSeries(tx *sql.Tx, id string) (SeriesDTO, error) {
 	} else {
 		e = json.Unmarshal([]byte(snapshot), &s.Template)
 	}
+	if e == nil {
+		if a, ok, err := seriesAppearance(tx, id); err != nil {
+			return s, err
+		} else if ok {
+			if s.ProjectTemplate != nil {
+				s.ProjectTemplate.Appearance = a
+			} else {
+				s.Template.Appearance = a
+			}
+		}
+	}
+	if e == nil && s.SourceType == "task" {
+		if p, ok, err := seriesProject(tx, id); err != nil {
+			return s, err
+		} else if ok {
+			s.Template.ProjectID = p
+		}
+	}
+	if e == nil && s.SourceType == "task" && s.Template.ParentTaskID != nil {
+		parent, err := getTask(tx, *s.Template.ParentTaskID)
+		if err != nil {
+			return s, err
+		}
+		s.Template.ProjectID = parent.ProjectID
+	}
+	if e == nil && s.SourceType == "project" {
+		err := tx.QueryRow("SELECT project_id FROM entity_template_links WHERE series_id=? AND project_id IS NOT NULL AND role='saved' ORDER BY id LIMIT 1", id).Scan(&s.SourceProjectID)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return s, err
+		}
+	}
+	if e == nil {
+		e = effectiveSeriesAppearance(tx, &s)
+	}
 	return s, e
 }
 func saveSeriesRuntime(tx *sql.Tx, s SeriesDTO, now string) error {
@@ -33,7 +67,12 @@ func saveSeriesRuntime(tx *sql.Tx, s SeriesDTO, now string) error {
 	if e != nil {
 		return e
 	}
-	_, e = tx.Exec(`UPDATE series SET state=?,revision=revision+1,updated_at=? WHERE id=?`, s.State, now, s.ID)
+	_, e = tx.Exec(`UPDATE series SET state=?,revision=revision+1,updated_at=? WHERE id=?`, func() string {
+		if s.State == "disabled" {
+			return "archived"
+		}
+		return s.State
+	}(), now, s.ID)
 	return e
 }
 func seriesOccurrences(tx *sql.Tx, id string, limit, offset int) ([]TaskOccurrenceDTO, bool, error) {

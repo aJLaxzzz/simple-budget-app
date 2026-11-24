@@ -42,6 +42,9 @@ func (s *Service) createProjectSeries(ctx context.Context, in CreateSeriesInput)
 
 // Shared by direct creation and the atomic existing-project workflow.
 func (s *Service) createProjectSeriesTx(ctx context.Context, tx *sql.Tx, in CreateSeriesInput, rule recurrence.Rule, op, now string) (CommandResult, error) {
+	if e := checkRetiredSeriesRequest(tx, in.RequestID); e != nil {
+		return CommandResult{}, e
+	}
 	var prior string
 	e := tx.QueryRow("SELECT id FROM series WHERE request_key=?", in.RequestID).Scan(&prior)
 	if e == nil {
@@ -139,7 +142,13 @@ func (s *Service) insertProjectCycle(ctx context.Context, tx *sql.Tx, v *SeriesD
 		return result, e
 	}
 	if pause == nil {
-		if _, e = s.instantiateProjectTx(tx, *v.ProjectTemplate, *v.TemplateVersionID, string(c.AdjustedDate), &id, op, now, "system"); e != nil {
+		snapshot := *v.ProjectTemplate
+		if a, ok, err := seriesAppearance(tx, v.ID); err != nil {
+			return TaskOccurrenceDTO{}, err
+		} else if ok {
+			snapshot.Appearance = a
+		}
+		if _, e = s.instantiateProjectTx(tx, snapshot, *v.TemplateVersionID, string(c.AdjustedDate), &id, op, now, "system"); e != nil {
 			return result, e
 		}
 	}

@@ -29,7 +29,7 @@ func NormalizeRule(rule Rule) (Rule, error) {
 		return bad("Корректировка: next, previous, nearest или none")
 	}
 	switch rule.AllowedDays.Mode {
-	case AnyDay, Weekdays, Weekends, RussianWorkdays:
+	case AnyDay, Weekdays, Weekends, RussianWorkdays, RussianWeekdays:
 		if len(rule.AllowedDays.Weekdays) > 0 {
 			return bad("Список weekdays разрешён только для режима selected")
 		}

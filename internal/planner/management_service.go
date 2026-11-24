@@ -172,6 +172,9 @@ func (s *Service) ApplySeriesCommand(ctx context.Context, id string, in SeriesCo
 				v.State = "active"
 				v.AnchorDate = &in.AnchorDate
 				v.AnchorCycle = v.NextCycle - 1
+				if e = tx.QueryRow("SELECT COALESCE(min(o.cycle_index)-1,?) FROM occurrences o JOIN tasks t ON t.occurrence_id=o.id WHERE o.series_id=? AND o.dynamic=1 AND t.status IN ('planned','in_progress')", v.AnchorCycle, v.ID).Scan(&v.AnchorCycle); e != nil {
+					return CommandResult{}, e
+				}
 				v.AnchorKind = recurrence.ExplicitAnchor
 				v.WaitingOccurrenceID = nil
 			}
@@ -185,7 +188,12 @@ func (s *Service) ApplySeriesCommand(ctx context.Context, id string, in SeriesCo
 			if e = event(tx, "series", id, in.Action, op, now, before, map[string]any{"series": v, "command": in, "preview": p}); e != nil {
 				return CommandResult{}, e
 			}
-			if _, _, e = s.materializeSeriesTx(ctx, tx, &v, op, now); e != nil {
+			if v.AnchorMode == "completion" && in.Action == "reanchor" {
+				_, _, e = s.syncCompletionChain(ctx, tx, &v, op, now, true, "keep_manual")
+			} else {
+				_, _, e = s.materializeSeriesTx(ctx, tx, &v, op, now)
+			}
+			if e != nil {
 				return CommandResult{}, e
 			}
 			v, e = getSeries(tx, id)
@@ -202,7 +210,7 @@ func (s *Service) ApplySeriesCommand(ctx context.Context, id string, in SeriesCo
 	return result, recurrenceAPIError(e)
 }
 func (s *Service) refreshPauseState(tx *sql.Tx, v *SeriesDTO) error {
-	if v.State == "archived" || v.State == "needs_anchor" {
+	if v.State == "archived" || v.State == "disabled" || v.State == "needs_anchor" {
 		return nil
 	}
 	pauses, e := loadPauses(tx, v.ID)
@@ -248,6 +256,13 @@ func (s *Service) OccurrenceCommand(ctx context.Context, id, action string, in O
 			if e != nil {
 				return CommandResult{}, e
 			}
+			var detached int
+			if e = tx.QueryRow("SELECT count(*) FROM detached_occurrences WHERE occurrence_id=?", id).Scan(&detached); e != nil {
+				return CommandResult{}, e
+			}
+			if detached > 0 {
+				return CommandResult{}, conflict("detached_occurrence", "Это выполнение стало самостоятельным. Откройте обычную задачу или проект.", nil)
+			}
 			if in.ScheduledTime.Set && (action != "reschedule" || v.SourceType == "project") {
 				return CommandResult{}, invalid("scheduled_time допустимо только при переносе выполнения задачи")
 			}
@@ -265,6 +280,11 @@ func (s *Service) OccurrenceCommand(ctx context.Context, id, action string, in O
 					return CommandResult{}, e
 				}
 			}
+			if action == "undo-complete" {
+				return s.undoCompletionTx(ctx, tx, o, v, in, op, now)
+			}
+			beforeCompletion := v
+			canUndo := action == "complete" && v.AnchorMode == "completion" && v.WaitingOccurrenceID != nil && *v.WaitingOccurrenceID == o.ID && in.ChildrenDecision == "" && in.SessionsDecision == "" && in.DynamicDecision == ""
 			if len(in.Reason) > 5000 {
 				return CommandResult{}, invalid("Причина слишком длинная")
 			}
@@ -282,16 +302,33 @@ func (s *Service) OccurrenceCommand(ctx context.Context, id, action string, in O
 			if in.BranchDecision != "" && in.BranchDecision != "historical_only" && in.BranchDecision != "replace_anchor" {
 				return CommandResult{}, invalid("Неизвестное решение о продолжении серии")
 			}
-			options := taskChangeOptions{AllowRestore: true, Reason: in.Reason}
+			if in.DynamicDecision != "" && in.DynamicDecision != "keep_manual" {
+				return CommandResult{}, invalid("Неизвестное решение по динамическим датам")
+			}
+			options := taskChangeOptions{AllowRestore: true, Reason: in.Reason, DynamicDecision: in.DynamicDecision}
 			if in.BranchDecision == "historical_only" {
-				if action != "complete" || active(o.Task.Status) || v.AnchorMode != "completion" {
+				if action != "complete" || (active(o.Task.Status) && !o.Task.Dynamic) || v.AnchorMode != "completion" {
 					return CommandResult{}, invalid("historical_only допустимо для завершения закрытого цикла от выполнения")
 				}
 				options.HistoricalOnly = true
 			}
 			restores := action == "restore" || action == "reschedule" && !active(o.Task.Status) || action == "complete" && !active(o.Task.Status)
-			if v.AnchorMode == "completion" && restores && !options.HistoricalOnly {
-				following := v.NextCycle != o.CycleIndex+1 || v.WaitingOccurrenceID != nil && *v.WaitingOccurrenceID != o.ID
+			// A dependent future row can rejoin the same chain without becoming
+			// a new anchor. A historical row behind the current cycle cannot.
+			futureRestore := false
+			if o.Task.Dynamic && restores {
+				boundary := v.AnchorCycle
+				if v.WaitingOccurrenceID != nil {
+					current, err := getOccurrence(tx, *v.WaitingOccurrenceID)
+					if err != nil {
+						return CommandResult{}, err
+					}
+					boundary = current.CycleIndex
+				}
+				futureRestore = o.CycleIndex > boundary
+			}
+			if v.AnchorMode == "completion" && restores && !options.HistoricalOnly && !futureRestore {
+				following := v.WaitingOccurrenceID != nil && *v.WaitingOccurrenceID != o.ID
 				replaced := v.AnchorKind == recurrence.ExplicitAnchor && v.AnchorDate != nil && v.WaitingOccurrenceID == nil
 				if following || replaced && in.BranchDecision != "replace_anchor" {
 					return CommandResult{}, branchConflict(tx, v, o)
@@ -359,6 +396,13 @@ func (s *Service) OccurrenceCommand(ctx context.Context, id, action string, in O
 			if e = event(tx, "series", v.ID, "occurrence_"+action, op, now, nil, map[string]any{"occurrence_id": id, "request": in}); e != nil {
 				return CommandResult{}, e
 			}
+			freshSeries, err := getSeries(tx, v.ID)
+			if err != nil {
+				return CommandResult{}, err
+			}
+			if _, err = s.ensureUpcomingTx(ctx, tx, &freshSeries, op, now); err != nil {
+				return CommandResult{}, err
+			}
 			// Record-level revisions include incident-only decisions as well.
 			if _, e = tx.Exec("UPDATE series SET revision=revision+1,updated_at=? WHERE id=?", now, v.ID); e != nil {
 				return CommandResult{}, e
@@ -367,7 +411,15 @@ func (s *Service) OccurrenceCommand(ctx context.Context, id, action string, in O
 			if e != nil {
 				return CommandResult{}, e
 			}
-			return CommandResult{Occurrence: &o}, nil
+			out := CommandResult{Occurrence: &o}
+			if canUndo {
+				signature, err := completionSignature(tx, v.ID)
+				if err != nil {
+					return CommandResult{}, err
+				}
+				out.Undo = &CompletionUndo{Signature: signature, Before: beforeCompletion}
+			}
+			return out, nil
 		})
 		return e
 	})

@@ -12,12 +12,13 @@
    await load();
  };
  function row(item,projectNames){
-   const card=el('article',{class:'pl-occurrence'},el('div',{},el('h3',{},item.title),meta((['task','project'].includes(item.kind)?(item.reason||'Требует решения'):item.kind==='skipped'?'Пропущено':'Отменено')+' · '+P.date(item.planned_date)),(['task','project'].includes(item.kind)?null:meta(item.reason||'')),item.snoozed_until>P.today()?meta('Напоминание отложено до '+P.date(item.snoozed_until)):null,item.disposition==='processed'?meta('Обработано · история сохранена'):null));
+   const card=el('article',{class:'pl-occurrence'},el('div',{},el('h3',{},item.title),meta((['task','project','series'].includes(item.kind)?(item.reason||'Требует решения'):item.kind==='skipped'?'Пропущено':'Отменено')+' · '+P.date(item.planned_date)),(['task','project'].includes(item.kind)?null:meta(item.reason||'')),item.snoozed_until>P.today()?meta('Напоминание отложено до '+P.date(item.snoozed_until)):null,item.disposition==='processed'?meta('Обработано · история сохранена'):null));
    if(item.project_id&&item.kind!=='project')card.firstChild.append(el('a',{class:'pl-attention-context',href:'#/plans/projects/'+item.project_id},'Проект: '+(projectNames.get(item.project_id)||item.title)));
    if(item.series_id)card.firstChild.append(el('a',{class:'pl-attention-context',href:'#/plans/series/'+item.series_id},'↻ Настройки повторения'));
    const actions=el('div',{class:'pl-actions'}), entries=[];
    const add=(label,run)=>entries.push({label,run});
-   if(item.occurrence_id){
+   if(item.kind==='series'){actions.append(button(item.source==='anchor'?'Выбрать дату продолжения':'Открыть повторение',async()=>{try{if(item.source==='anchor')P.seriesChange(await P.api('/series/'+item.series_id),'reanchor');else P.navigate('#/plans/series/'+item.series_id);}catch(e){P.notify(e.message);}},'pl-primary'));}
+   else if(item.occurrence_id){
      const allowed=P.occurrenceActions(item.status), primary=allowed.includes('reschedule')?'reschedule':allowed.includes('restore')?'restore':allowed[0];
      if(primary)actions.append(button(P.occurrenceLabels[primary],()=>P.openOccurrence(item.occurrence_id,primary),'pl-primary'));
      for(const action of allowed.filter(a=>a!==primary))add(P.occurrenceLabels[action],()=>P.openOccurrence(item.occurrence_id,action));
@@ -30,7 +31,7 @@
    }
    if(item.task_id)add('Открыть задачу',()=>P.openTask(item.task_id));else if(item.project_id)add('Открыть проект',()=>P.navigate('#/plans/projects/'+item.project_id));
    if(item.series_id)add('Настройки повторения',()=>P.navigate('#/plans/series/'+item.series_id));
-   if(item.disposition==='needs_decision')add('Отложить напоминание',()=>snooze(item));
+   if(item.disposition==='needs_decision'&&item.kind!=='series')add('Отложить напоминание',()=>snooze(item));
    const more=button('···',()=>{const {dialog,close}=P.dialog('Действия с проблемой');dialog.classList.add('pl-action-menu');dialog.append(el('p',{class:'pl-menu-title'},item.title),el('div',{class:'pl-menu-items'},entries.map(({label,run})=>button(label,()=>{close(true);run();}))));});more.setAttribute('aria-label','Другие действия');if(entries.length)actions.append(more);
    card.append(actions);return card;
  }

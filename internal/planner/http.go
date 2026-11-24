@@ -97,6 +97,15 @@ func route(s *Service, w http.ResponseWriter, r *http.Request) (int, any, error)
 	if len(parts) > 2 {
 		action = parts[2]
 	}
+	if id != "" && (action == "delete-preview" || action == "delete" || action == "unarchive") {
+		return lifecycleRoute(s, w, r, kind, id, action)
+	}
+	if kind == "batch-recurrence" && len(parts) == 2 {
+		return batchRepeatRoute(s, w, r, id)
+	}
+	if kind == "task-moves" && len(parts) == 2 {
+		return taskMoveRoute(s, w, r, id)
+	}
 	if kind == "occurrences" && len(parts) == 2 {
 		return occurrenceContextRoute(s, w, r, id)
 	}
@@ -117,6 +126,19 @@ func route(s *Service, w http.ResponseWriter, r *http.Request) (int, any, error)
 	}
 	if kind == "templates" {
 		return templateRoute(s, w, r, id, action)
+	}
+	if kind == "series" && (action == "disable" || action == "disable-preview") {
+		return disableRoute(s, w, r, id, action)
+	}
+	if kind == "series" && action == "ensure-upcoming" {
+		if r.Method != "POST" {
+			return 0, nil, methodError(w, "POST")
+		}
+		v, e := s.EnsureUpcoming(ctx, id)
+		return 200, v, e
+	}
+	if kind == "series" && (action == "appearance" || action == "appearance-preview") {
+		return seriesAppearanceRoute(s, w, r, id, action)
 	}
 	if kind == "series" && len(parts) == 3 {
 		return seriesManagementRoute(s, w, r, id, action)
@@ -240,7 +262,7 @@ func route(s *Service, w http.ResponseWriter, r *http.Request) (int, any, error)
 		}
 	}
 	if action != "" {
-		allowed = fields("expected_revision")
+		allowed = fields("expected_revision request_id")
 		if kind == "tasks" {
 			allowed["related_revisions"] = true
 			if action == "complete" {

@@ -17,6 +17,19 @@ func getOccurrence(tx *sql.Tx, id string) (TaskOccurrenceDTO, error) {
 	if e != nil {
 		return o, e
 	}
+	var detached string
+	err := tx.QueryRow("SELECT snapshot_json FROM detached_occurrences WHERE occurrence_id=?", id).Scan(&detached)
+	if err == nil {
+		if o.SourceType == "project" {
+			err = json.Unmarshal([]byte(detached), &o.Project)
+		} else {
+			err = json.Unmarshal([]byte(detached), &o.Task)
+		}
+		return o, err
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return o, err
+	}
 	if o.SourceType == "project" {
 		o.Compact = state.String == "compact"
 		o.ProjectStatus = outcome.String
@@ -182,6 +195,10 @@ func registerOccurrenceIncident(tx *sql.Tx, o TaskOccurrenceDTO, planned *string
 	}
 	disposition, resolution := "needs_decision", "pending"
 	var reviewed *string
+	if kind == "skipped" && source == "user" {
+		disposition, resolution = "processed", "acknowledged"
+		reviewed = &now
+	}
 	if kind == "cancelled" {
 		disposition, resolution = "processed", "cancelled"
 		reviewed = &now
@@ -233,11 +250,13 @@ func managementOccurrences(tx *sql.Tx, v SeriesDTO, in SeriesCommand, today stri
 	args := []any{v.ID}
 	switch in.Action {
 	case "change_rule":
-		where += " AND o.cycle_index>=? AND (t.planned_date IS NULL OR t.planned_date>=? OR t.status='in_progress')"
+		where += " AND o.cycle_index>=? AND (o.dynamic=1 OR t.planned_date IS NULL OR t.planned_date>=? OR t.status='in_progress')"
 		args = append(args, *in.FromCycle, today)
 	case "pause":
 		where += " AND (o.current_adjusted_date BETWEEN ? AND ? OR ((o.manual_override=1 OR o.manual_date IS NOT NULL) AND t.planned_date BETWEEN ? AND ?))"
 		args = append(args, in.StartDate, in.EndDate, in.StartDate, in.EndDate)
+	case "reanchor":
+		where += " AND o.dynamic=1 AND t.status IN ('planned','in_progress')"
 	case "resume":
 		where += " AND o.current_adjusted_date>=? AND EXISTS(SELECT 1 FROM occurrence_incidents i WHERE i.occurrence_id=o.id AND i.pause_id=?)"
 		args = append(args, today, in.PauseID)

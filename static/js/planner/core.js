@@ -23,7 +23,7 @@
   };
   P.date = value => value ? value.split('-').reverse().join('.') : 'Без даты';
   P.status = item => P.el('span', { class: 'pl-status pl-status-' + item.status }, P.labels[item.status] || item.status);
-  P.overdue = item => item.due_date && item.due_date < P.today() && P.active(item);
+  P.overdue = item => !item.dynamic && item.due_date && item.due_date < P.today() && P.active(item);
   P.meta = text => P.el('span', { class: 'pl-muted' }, text);
   P.revisions = items => Object.fromEntries(items.map(item => [item.id, item.revision]));
   P.route = function (hash = window.location.hash) {
@@ -41,8 +41,8 @@
     return P.base() + (query.size ? '?' + query : '');
   };
   P.closeEditor = () => P.navigate(P.panelURL());
-  P.openTask = id => P.navigate(P.panelURL({ task: id }));
-  P.newTask = (project, parent, date) => P.navigate(P.panelURL({ new: 'task', for_project: project, parent, for_date: date }));
+  P.openTask = id => {P.editorOrigin={url:P.panelURL(),scrollY:window.scrollY};P.navigate(P.panelURL({ task: id }));};
+  P.newTask = (project, parent, date) => {P.editorOrigin={url:P.panelURL(),scrollY:window.scrollY};P.navigate(P.panelURL({ new: 'task', for_project: project, parent, for_date: date }));};
   P.clearNotice = () => { clearTimeout(P.toastTimer); document.getElementById('planner-toast')?.remove(); };
   P.notify = function (message, action) {
     let toast = document.getElementById('planner-toast');

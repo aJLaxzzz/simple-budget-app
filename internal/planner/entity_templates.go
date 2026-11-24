@@ -220,6 +220,51 @@ func (s *Service) projectSourcePreviewTx(ctx context.Context, tx *sql.Tx, id str
 	if in.Rule != nil && (p.OccurrenceID != nil || p.RepeatSeriesID != nil || p.ArchivedAt != nil) {
 		return out, conflict("already_repeating", "Проект уже связан с повторением или архивирован. Откройте существующее повторение.", p)
 	}
+
+	if in.IndependentDecision != "" && in.IndependentDecision != "convert" {
+		return out, invalid("Неизвестное решение о независимых повторениях")
+	}
+	seenSeries := map[string]bool{}
+	filtered := []TaskDTO{}
+	excluded := map[string]bool{}
+	for _, t := range p.Tasks {
+		if t.SeriesID == nil {
+			filtered = append(filtered, t)
+			continue
+		}
+		if in.IndependentDecision != "convert" {
+			return out, conflict("double_recurrence", "В проекте есть независимые повторения. Оставьте проект обычным либо явно преобразуйте один выбранный элемент каждого повторения в шаблон.", p)
+		}
+		if seenSeries[*t.SeriesID] {
+			out.Excluded = append(out.Excluded, t)
+			excluded[t.ID] = true
+			continue
+		}
+		seenSeries[*t.SeriesID] = true
+		filtered = append(filtered, t)
+		series, err := getSeries(tx, *t.SeriesID)
+		if err != nil {
+			return out, err
+		}
+		conversion, err := s.disablePreviewTx(tx, series.ID, DisableInput{ExpectedRevision: series.Revision, KeepID: t.ID, Future: "delete"})
+		if err != nil {
+			return out, err
+		}
+		out.Conversions = append(out.Conversions, conversion)
+	}
+	// Descendants of omitted occurrences cannot become orphan template roots.
+	tree := []TaskDTO{}
+	for _, t := range filtered {
+		if t.ParentTaskID != nil && excluded[*t.ParentTaskID] {
+			out.Excluded = append(out.Excluded, t)
+			excluded[t.ID] = true
+		} else {
+			tree = append(tree, t)
+		}
+	}
+	original := p
+	p.Tasks = tree
+
 	snapshot, e := projectSnapshot(p, in.AnchorDate)
 	if e != nil {
 		return out, e
@@ -228,6 +273,11 @@ func (s *Service) projectSourcePreviewTx(ctx context.Context, tx *sql.Tx, id str
 		snapshot, e = normalizeTemplate(*in.Snapshot)
 		if e != nil {
 			return out, e
+		}
+	}
+	for _, t := range snapshot.Tasks {
+		if excluded[t.Key] {
+			return out, invalid("Материализованные копии одного повторения нельзя повторно включить в шаблон")
 		}
 	}
 	out.Snapshot = snapshot
@@ -274,11 +324,12 @@ func (s *Service) projectSourcePreviewTx(ctx context.Context, tx *sql.Tx, id str
 	tokenInput.RequestID = ""
 	tokenInput.PreviewToken = ""
 	out.PreviewToken, e = digest(struct {
-		Input    ProjectSourceInput
-		Source   ProjectDTO
-		Snapshot ProjectTemplateSnapshot
-		Items    []TemplatePreviewCycle
-	}{tokenInput, p, snapshot, out.Items})
+		Input       ProjectSourceInput
+		Source      ProjectDTO
+		Snapshot    ProjectTemplateSnapshot
+		Items       []TemplatePreviewCycle
+		Conversions []DisablePreview
+	}{tokenInput, original, snapshot, out.Items, out.Conversions})
 	return out, e
 }
 func (s *Service) TaskTemplate(ctx context.Context, id string) (ProjectTemplateDTO, error) {
@@ -342,6 +393,25 @@ func (s *Service) SaveProjectTemplate(ctx context.Context, id string, in Project
 			}
 			if in.PreviewToken == "" || in.PreviewToken != preview.PreviewToken {
 				return CommandResult{}, conflict("stale_preview", "Состав проекта или настройки изменились. Повторите предпросмотр.", nil)
+			}
+			for _, conversion := range preview.Conversions {
+				keep := ""
+				for _, row := range conversion.Rows {
+					if row.Decision == "detach" {
+						for _, t := range preview.Snapshot.Tasks {
+							if row.ID == t.Key {
+								keep = row.ID
+							}
+						}
+					}
+				}
+				if keep == "" {
+					return CommandResult{}, invalid("Сохраняемый элемент повторения должен остаться в составе шаблона")
+				}
+				_, e = s.disableTx(ctx, tx, conversion.Series.ID, DisableInput{ExpectedRevision: conversion.Series.Revision, KeepID: keep, Future: "delete", PreviewToken: conversion.PreviewToken, Confirm: true, RequestID: in.RequestID + ":" + conversion.Series.ID})
+				if e != nil {
+					return CommandResult{}, e
+				}
 			}
 			t, e := createTemplateTx(tx, "project", preview.Snapshot, op, now)
 			if e != nil {

@@ -17,17 +17,17 @@ test('future calendar materializes before GET and preserves existing task edits'
   const series = await post(request, 'series', { request_id: randomUUID(), task: { title: 'Haircut', project_id: project.id }, first_date: '2026-11-16', rule: rule('schedule') });
   const first = series.occurrences[0].task;
   await post(request, 'tasks/' + first.id + '/reschedule', { expected_revision: first.revision, planned_date: '2027-02-10' });
-  const before = await (await request.get('/api/planner/calendar?from=2027-02-01&to=2027-02-28')).json();
-  expect(before.items.some(i => i.series_id === series.id && i.cycle_index === 2)).toBeFalsy();
+  const before = await (await request.get('/api/planner/calendar?from=2027-05-01&to=2027-05-31')).json();
+  expect(before.items.some(i => i.series_id === series.id && i.cycle_index === 4)).toBeFalsy();
   const requests = [];
   page.on('request', req => { if (/\/api\/planner\/(materialize|calendar)/.test(req.url())) requests.push([req.method(), new URL(req.url()).pathname]); });
-  await page.goto('/#/plans/calendar?mode=month&date=2027-02-15&project=' + project.id);
+  await page.goto('/#/plans/calendar?mode=month&date=2027-05-15&project=' + project.id);
   await expect(page.locator('.pc-calendar')).toBeVisible();
   expect(requests[0]).toEqual(['POST', '/api/planner/materialize']);
   expect(requests.at(-1)).toEqual(['GET', '/api/planner/calendar']);
   let current = await (await request.get('/api/planner/series/' + series.id)).json();
-  const second = current.occurrences.find(o => o.cycle_index === 2);
-  expect(second.base_date).toBe('2027-02-14');
+  const second = current.occurrences.find(o => o.cycle_index === 4);
+  expect(second.base_date).toBe('2027-05-15');
   await expect(page.locator('[data-event-id="task:' + second.task.id + '"]')).toHaveCount(1);
   expect(current.occurrences[0].task.planned_date).toBe('2027-02-10');
   const ids = current.occurrences.map(o => o.id);
@@ -35,26 +35,26 @@ test('future calendar materializes before GET and preserves existing task edits'
   current = await (await request.get('/api/planner/series/' + series.id)).json();
   expect(current.occurrences.map(o => o.id)).toEqual(ids);
 });
-test('existing completion dialog creates exactly one successor via real API', async ({ page, request }) => {
+test('existing completion dialog promotes one current task and keeps dependent successors via real API', async ({ page, request }) => {
   await page.route('https://**/*', route => route.abort());
   const series = await post(request, 'series', { request_id: randomUUID(), task: { title: 'Completion recurrence ' + randomUUID() }, first_date: '2026-11-16', rule: rule('completion') });
   const first = series.occurrences[0].task;
   await page.goto('/#/plans/calendar?mode=day&date=2026-11-16');
   await expect(page.locator('.pc-calendar')).toBeVisible();
   await page.locator('[data-event-id="task:' + first.id + '"] .pc-event-menu').click();
-  await page.locator('dialog').getByRole('button', { name: 'Отметить выполненной', exact: true }).click();
+  await page.locator('dialog').getByRole('button', { name: 'Выполнить другой датой', exact: true }).click();
   const dialog = page.locator('dialog');
   await dialog.locator('input[type="date"]').fill('2026-11-16');
   await dialog.locator('button[type="submit"]').click();
   await expect(dialog).toHaveCount(0);
   let current = await (await request.get('/api/planner/series/' + series.id)).json();
-  expect(current.occurrences).toHaveLength(2);
+  expect(current.occurrences).toHaveLength(4);expect(current.occurrences.filter(o=>o.task.status==='planned'&&!o.task.dynamic)).toHaveLength(1);
   expect(current.occurrences[1].base_date).toBe('2026-12-31');
   const duplicate = await request.post('/api/planner/tasks/' + first.id + '/complete', { data: { expected_revision: first.revision, completed_date: '2026-11-16' } });
   expect(duplicate.status()).toBe(409);
   await post(request, 'materialize', {});
   current = await (await request.get('/api/planner/series/' + series.id)).json();
-  expect(current.occurrences).toHaveLength(2);
+  expect(current.occurrences).toHaveLength(4);expect(current.occurrences.filter(o=>o.task.status==='planned'&&!o.task.dynamic)).toHaveLength(1);
 });
 test('materialization bound preserves viewing ordinary tasks in a distant year', async ({ page, request }) => {
   await page.route('https://**/*', route => route.abort());

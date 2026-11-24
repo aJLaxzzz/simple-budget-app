@@ -12,6 +12,7 @@
    host.append(el('h2',{},t.snapshot.title),el('p',{class:'pl-description'},t.snapshot.description),meta('Сохранённый шаблон'));
    const actions=el('div',{class:'pl-actions'});
    if(!t.archived){actions.append(button('Редактировать шаблон',()=>editTemplate(t)),button('Создать проект',()=>instantiate(t),'pl-primary'),button('Повторять проект',()=>P.createRecurring(null,t)),button('Архивировать шаблон',()=>archive(t)));}
+   actions.append(P.lifecycleMenuButton('templates',t));
    host.append(actions,treePreview(t.snapshot));
    const linked=(await P.seriesList()).filter(s=>s.template_id===t.id);
    host.append(el('h3',{},'Повторения из шаблона'),linked.length?el('div',{class:'pl-actions'},linked.map(s=>el('a',{href:'#/plans/series/'+s.id,class:'pl-button'},P.seriesTitle(s)))):meta('Повторение пока не настроено.'));

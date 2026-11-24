@@ -476,7 +476,7 @@ body.planner-page .header-search { display:none; }
 .pl-project-top { display:flex; gap:12px; align-items:flex-start; justify-content:space-between; }
 .pl-project-heading { display:flex; flex-wrap:wrap; gap:6px 12px; align-items:center; min-width:0; }
 .pl-project-heading h2 { margin:0; font-size:20px; overflow-wrap:anywhere; }
-.pl-project-top > .pl-actions { margin:0; flex-shrink:0; }
+.pl-project-top > .pl-actions { margin:0; flex-shrink:1; min-width:0; max-width:100%; }
 .pl-project-compact .pl-task-meta { margin:4px 0; }
 .pl-project-description { margin:4px 0; font-size:13px; color:var(--text-muted); }
 .pl-project-description summary { cursor:pointer; }
@@ -532,3 +532,38 @@ body.planner-page .header-search { display:none; }
 .pl-project-compact .pl-project-description { margin:4px 0!important; }
 .pl-project-options > summary { padding:2px 0; }
 .pl-project-description > summary { padding:0; }
+
+/* Permanent deletion remains visually distinct from cancellation/archive. */
+.pl-delete-dialog { max-width: 580px; }
+.pl-delete-counts { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:6px 16px; }
+.pl-delete-counts dd { margin:0; font-weight:600; }
+.pl-delete-dialog p { overflow-wrap:anywhere; }
+.pl-delete-dialog h3, .pl-delete-dialog button { overflow-wrap:anywhere; max-width:100%; }
+.pl-delete-dialog [aria-live] > .pl-muted { margin-top:8px; }
+/* Beta: compact palette, predictable action order and styled repetitions. */
+.pl-menu-separator{width:100%;border:0;border-top:1px solid var(--border-color,#3b4152);margin:6px 0}
+.pl-custom-color{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0}
+.pl-custom-color input[type=color]{width:48px;min-width:48px;padding:3px}
+.pl-custom-color input[type=text]{width:120px;min-width:0}
+.pl-series-card{border-left:3px solid var(--pl-accent);gap:8px}
+.pl-series-card .pl-card-top a{display:flex;gap:8px;align-items:center;min-width:0;color:inherit;text-decoration:none}
+.pl-series-card strong{overflow-wrap:anywhere}
+.pl-new-recurrence{margin-top:12px}
+.pl-new-recurrence>label{display:flex;align-items:center;gap:8px}
+.pl-new-recurrence>label{justify-content:flex-start;min-height:44px}
+.pl-new-recurrence input[type=checkbox]{width:18px;min-width:18px;height:18px;min-height:18px;padding:0;flex:0 0 18px;margin:0 4px 0 0}
+.pl-style-comparison{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:12px 0}
+.pl-style-comparison>span:first-child{flex-basis:100%}
+
+/* Existing-task selection keeps controls touchable without widening dialogs. */
+.pl-existing-list{max-height:48vh;overflow:auto}.pl-existing-choice{display:flex;gap:12px;align-items:center;padding:10px;border-bottom:1px solid var(--pl-border,#303b4b)}.pl-existing-choice input[type=checkbox]{width:18px;height:18px;flex:0 0 18px}.pl-existing-choice span{min-width:0;overflow-wrap:anywhere}
+
+/* Project sorting shares the task heading row instead of adding another panel. */
+.pl-project-task-tools { display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin:4px 0; }
+.pl-project-task-tools .pl-project-tasks-heading { margin:0; }
+.pl-project-task-filters { display:flex; align-items:center; gap:8px; flex-wrap:wrap; min-width:0; }
+.pl-project-task-filters .pl-field { display:flex; flex-direction:row; align-items:center; gap:6px; margin:0; min-width:0; }
+.pl-project-task-filters .pl-field > label { font-size:12px; margin:0; }
+.pl-project-task-filters select,.pl-project-task-filters button { min-height:34px; padding:5px 8px; max-width:100%; }
+.pl-project-task-tools + .pl-quick { margin:0 0 8px; padding:4px 10px; }
+@media(max-width:600px) { .pl-project-task-filters { width:100%; } .pl-project-task-filters .pl-field { flex:1 1 100%; justify-content:space-between; } .pl-project-task-filters select { max-width:65%; } }

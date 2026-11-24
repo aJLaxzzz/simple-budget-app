@@ -122,7 +122,7 @@ func (s *Service) iconsRequest(w http.ResponseWriter, r *http.Request) (any, int
 			return nil, 0, e
 		}
 		if kind == "builtin" {
-			data, e = builtinIcons.ReadFile("icons/" + strings.TrimPrefix(id, "lucide:") + ".svg")
+			data, e = builtinIcons.ReadFile("icons/" + strings.ReplaceAll(strings.TrimPrefix(id, "lucide:"), "app:", "app-") + ".svg")
 			if e != nil {
 				return nil, 0, e
 			}
@@ -306,7 +306,7 @@ func checkIconIntegrity(ctx context.Context, q queryer) error {
 			return e
 		}
 		if kind == "builtin" {
-			data, e = builtinIcons.ReadFile("icons/" + strings.TrimPrefix(id, "lucide:") + ".svg")
+			data, e = builtinIcons.ReadFile("icons/" + strings.ReplaceAll(strings.TrimPrefix(id, "lucide:"), "app:", "app-") + ".svg")
 			if e != nil {
 				return fmt.Errorf("unknown built-in icon %s", id)
 			}

@@ -26,6 +26,7 @@ const (
 	Weekends          DayMode    = "weekends"
 	SelectedDays      DayMode    = "selected"
 	RussianWorkdays   DayMode    = "ru_production"
+	RussianWeekdays   DayMode    = "ru_weekdays"
 	Next              Adjustment = "next"
 	Previous          Adjustment = "previous"
 	Nearest           Adjustment = "nearest"

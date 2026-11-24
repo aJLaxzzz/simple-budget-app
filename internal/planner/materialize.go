@@ -14,7 +14,7 @@ import (
 func sortCalendars(items []recurrence.CalendarInfo) {
 	sort.Slice(items, func(i, j int) bool { return items[i].Year < items[j].Year })
 }
-func (s *Service) materializeSeriesTx(ctx context.Context, tx *sql.Tx, v *SeriesDTO, op, now string) (int, bool, error) {
+func (s *Service) materializeSeriesTx(ctx context.Context, tx *sql.Tx, v *SeriesDTO, op, now string, expandDynamic ...bool) (int, bool, error) {
 	oldState := v.State
 	if e := s.refreshPauseState(tx, v); e != nil {
 		return 0, false, e
@@ -27,6 +27,9 @@ func (s *Service) materializeSeriesTx(ctx context.Context, tx *sql.Tx, v *Series
 		if e := eventAs(tx, "series", v.ID, "pause_state_changed", "system", op, now, map[string]any{"state": oldState}, map[string]any{"state": v.State}); e != nil {
 			return 0, false, e
 		}
+	}
+	if v.AnchorMode == "completion" {
+		return s.syncCompletionChain(ctx, tx, v, op, now, false, "", expandDynamic...)
 	}
 	if (v.State != "active" && v.State != "paused") || v.WaitingOccurrenceID != nil {
 		return 0, false, nil
@@ -47,6 +50,18 @@ func (s *Service) materializeSeriesTx(ctx context.Context, tx *sql.Tx, v *Series
 	for attempt := 0; attempt < cycleLimit; attempt++ {
 		if e := ctx.Err(); e != nil {
 			return 0, false, e
+		}
+		var removed int
+		if e := tx.QueryRow("SELECT count(*) FROM removed_cycles WHERE series_id=? AND cycle_index=?", v.ID, v.NextCycle).Scan(&removed); e != nil {
+			return 0, false, e
+		}
+		if removed > 0 {
+			v.NextCycle++
+			if e := saveSeriesRuntime(tx, *v, now); e != nil {
+				return 0, false, e
+			}
+			v.Revision++
+			continue
 		}
 		var exists int
 		if e := tx.QueryRow("SELECT count(*) FROM occurrences WHERE series_id=? AND cycle_index=?", v.ID, v.NextCycle).Scan(&exists); e != nil {
@@ -76,7 +91,8 @@ func (s *Service) materializeSeriesTx(ctx context.Context, tx *sql.Tx, v *Series
 			end = end.AddDate(0, 0, recurrence.MaxAdjustmentDays)
 		}
 		if string(base) > end.Format("2006-01-02") {
-			return created, false, nil
+			n, err := s.ensureUpcomingTx(ctx, tx, v, op, now)
+			return created + n, false, err
 		}
 		c, calendars, e := calculateStoredCycle(ctx, tx, selected, v.NextCycle, calendar)
 		if e != nil {
@@ -85,7 +101,8 @@ func (s *Service) materializeSeriesTx(ctx context.Context, tx *sql.Tx, v *Series
 		// Allowed-day adjustment is monotonic for a fixed rule/calendar. Keep the
 		// first out-of-horizon cycle pending; later cycles cannot precede it.
 		if string(c.AdjustedDate) > horizon {
-			return created, false, nil
+			n, err := s.ensureUpcomingTx(ctx, tx, v, op, now)
+			return created + n, false, err
 		}
 		var task TaskDTO
 		if selected.SourceType == "project" {
@@ -181,7 +198,7 @@ func (s *Service) Materialize(ctx context.Context, in MaterializeInput) (Materia
 				}
 				v.Revision++
 			}
-			one.Created, one.Pending, e = s.materializeSeriesTx(ctx, tx, &v, op, now)
+			one.Created, one.Pending, e = s.materializeSeriesTx(ctx, tx, &v, op, now, in.Through != "")
 			return e
 		})
 		if e != nil {
@@ -195,6 +212,7 @@ func (s *Service) Materialize(ctx context.Context, in MaterializeInput) (Materia
 				one.Error = &APIError{Status: 500, Code: "materialization_failed", Message: "Не удалось материализовать серию; текущая порция полностью отменена"}
 			}
 		}
+		s.recordCalculationError(ctx, id, e)
 		result.Pending = result.Pending || one.Pending
 		result.Results = append(result.Results, one)
 	}
@@ -260,6 +278,20 @@ func (s *Service) advanceTaskSeries(ctx context.Context, tx *sql.Tx, before, tas
 		}
 	}
 	if before.Status == task.Status {
+		if task.SeriesID != nil && !reflect.DeepEqual(task.PlannedDate, before.PlannedDate) {
+			v, e := getSeries(tx, *task.SeriesID)
+			if e != nil {
+				return e
+			}
+			if v.AnchorMode == "completion" {
+				decision := options.DynamicDecision
+				if task.Dynamic {
+					decision = "keep_manual"
+				}
+				_, _, e = s.syncCompletionChain(ctx, tx, &v, op, now, true, decision)
+				return e
+			}
+		}
 		return nil
 	}
 	actor := "owner"
@@ -307,53 +339,12 @@ func (s *Service) advanceTaskSeries(ctx context.Context, tx *sql.Tx, before, tas
 	if e != nil {
 		return e
 	}
-	if v.AnchorMode != "completion" || options.HistoricalOnly {
-		return nil
-	}
-	if active(task.Status) && active(before.Status) {
-		return nil
-	}
-	old := v
-	if active(task.Status) {
-		if task.CycleIndex == nil || *task.CycleIndex+1 != v.NextCycle || v.WaitingOccurrenceID != nil && *v.WaitingOccurrenceID != *task.OccurrenceID {
-			return conflict("completion_branch_conflict", "В серии уже существует продолжение", v)
+	if v.AnchorMode != "completion" {
+		if options.PauseID != nil {
+			return nil
 		}
-		v.WaitingOccurrenceID = task.OccurrenceID
-		v.AnchorDate = nil
-		v.AnchorKind = recurrence.CompletedAnchor
-		if v.State != "archived" {
-			v.State = "active"
-		}
-	} else {
-		if task.CycleIndex == nil || *task.CycleIndex+1 != v.NextCycle || v.WaitingOccurrenceID != nil && *v.WaitingOccurrenceID != *task.OccurrenceID {
-			return conflict("completion_branch_conflict", "Закрываемый цикл не является текущим", v)
-		}
-		v.WaitingOccurrenceID = nil
-		if task.Status == "completed" {
-			v.AnchorDate = task.CompletedDate
-			v.AnchorCycle = *task.CycleIndex
-			v.AnchorKind = recurrence.CompletedAnchor
-			if v.State != "archived" {
-				v.State = "active"
-			}
-		} else {
-			if v.State != "archived" {
-				v.State = "needs_anchor"
-			}
-			v.AnchorDate = nil
-			v.AnchorKind = recurrence.CompletedAnchor
-		}
-	}
-	if s.horizon() > v.HorizonDate {
-		v.HorizonDate = s.horizon()
-	}
-	if e = saveSeriesRuntime(tx, v, now); e != nil {
+		_, e = s.ensureUpcomingTx(ctx, tx, &v, op, now)
 		return e
 	}
-	v.Revision++
-	if e = eventAs(tx, "series", v.ID, "anchor_updated", actor, op, now, old, v); e != nil {
-		return e
-	}
-	_, _, e = s.materializeSeriesTx(ctx, tx, &v, op, now)
-	return e
+	return s.advanceCompletionChain(ctx, tx, &v, before, task, op, now, options)
 }

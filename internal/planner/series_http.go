@@ -30,7 +30,7 @@ func seriesRoute(s *Service, w http.ResponseWriter, r *http.Request, id string) 
 			return 200, map[string]any{"items": items, "next_after": next}, e
 		case "POST":
 			var in CreateSeriesInput
-			if e := strictPlannerInput(w, r, &in, "request_id task existing_task_id expected_revision first_date end_date rule source_type template_id template_version_id"); e != nil {
+			if e := strictPlannerInput(w, r, &in, "first_due_date first_status request_id task existing_task_id expected_revision first_date end_date rule source_type template_id template_version_id"); e != nil {
 				return 0, nil, e
 			}
 			item, e := s.CreateSeries(r.Context(), in)

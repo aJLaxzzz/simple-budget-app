@@ -5,11 +5,11 @@ function groups(tasks,date){return JSON.parse(JSON.stringify(p.taskGroups(tasks,
 test('root opens calendar; old routes and filters retain their meanings',()=>{assert.equal(p.route().view,'calendar');for(const v of ['inbox','tasks','projects','calendar','series','templates','attention','settings'])assert.equal(p.route('#/plans/'+v+'?date=2026-12-31').view,v);assert.equal(p.route('#/plans/tasks?view=undated').params.get('view'),'undated');});
 test('exclusive civil date groups with overdue deadline taking precedence',()=>{
  const tasks=[task('past','2026-11-15'),task('today','2026-11-16'),task('tomorrow','2026-11-17'),task('week','2026-11-22'),task('month','2026-11-30'),task('later','2026-12-01'),task('no-date'),task('late-deadline','2027-01-01','2026-11-15'),task('deadline-only',null,'2026-11-16')];
- assert.deepEqual(groups(tasks,'2026-11-16'),[['overdue',['late-deadline']],['plan_missed',['past']],['today',['deadline-only','today']],['tomorrow',['tomorrow']],['week',['week']],['month',['month']],['later',['later']],['undated',['no-date']]]);
+ assert.deepEqual(groups(tasks,'2026-11-16'),[['overdue',['late-deadline']],['plan_missed',['past']],['today',['deadline-only','today']],['tomorrow',['tomorrow']],['week',['week']],['month',['month','later']],['undated',['no-date']]]);
 });
 test('Monday boundary, tomorrow precedes week/month, year rollover',()=>{
  assert.deepEqual(groups([task('monday','2026-11-23'),task('tuesday','2026-11-24')],'2026-11-22'),[['tomorrow',['monday']],['month',['tuesday']]]);
- assert.deepEqual(groups([task('new-year','2027-01-01'),task('sunday','2027-01-03'),task('next-week','2027-01-04')],'2026-12-31'),[['tomorrow',['new-year']],['week',['sunday']],['later',['next-week']]]);
+ assert.deepEqual(groups([task('new-year','2027-01-01'),task('sunday','2027-01-03'),task('next-week','2027-01-04')],'2026-12-31'),[['tomorrow',['new-year']],['week',['sunday']],['month',['next-week']]]);
 });
 test('leap days and calendar months do not depend on milliseconds or timezone',()=>{
  assert.deepEqual(groups([task('leap','2028-02-29'),task('march','2028-03-01')],'2028-02-28'),[['tomorrow',['leap']],['week',['march']]]);
@@ -18,4 +18,13 @@ test('leap days and calendar months do not depend on milliseconds or timezone',(
 test('closed and skipped items are never active overdue; repeated IDs appear once',()=>{
  const repeat=task('repeat','2020-01-01');repeat.series_id='series';
  assert.deepEqual(groups([repeat,repeat,task('done','2020-01-01',null,'completed'),task('cancel','2020-01-01',null,'cancelled'),task('skip','2020-01-01',null,'skipped')],'2026-11-16'),[['plan_missed',['repeat']],['completed',['done']],['cancelled',['cancel']],['skipped',['skip']]]);
+});
+test('beta2 inclusive rolling 30 days across months and years',()=>{
+ assert.deepEqual(groups([task('30','2026-12-24'),task('31','2026-12-25'),task('nextmonth','2026-12-01')],'2026-11-24'),[['month',['nextmonth','30']],['later',['31']]]);
+ assert.deepEqual(groups([task('30','2027-01-23'),task('31','2027-01-24')],'2026-12-24'),[['month',['30']],['later',['31']]]);
+});
+test('beta2 project ordering sorts actual dates, time, fallback, priority and stable identities',()=>{
+ const rows=[{...task('nov','2027-11-04'),priority:'low'},{...task('oct','2027-10-28'),priority:'high'},task('none'),task('deadline',null,'2027-09-13'),{...task('time1','2027-10-28'),scheduled_time:'10:00'},{...task('time2','2027-10-28'),scheduled_time:'09:00'}];
+ assert.deepEqual(Array.from(p.sortProjectTasks(rows),t=>t.id),['deadline','time2','time1','oct','nov','none']);
+ assert.equal(p.sortProjectTasks(rows.slice(0,2),'priority')[0].id,'oct');
 });

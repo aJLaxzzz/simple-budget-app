@@ -682,10 +682,22 @@ func TestProjectClosureProtectsIndependentTaskSeriesSourceAfterMovingInstances(t
 	input.Task = nil
 	input.ExistingTaskID = task.ID
 	input.ExpectedRevision = task.Revision
+	// New nested schedules are blocked; legacy source references must still
+	// protect project closure after upgrading an existing database.
+	if _, e := s.CreateSeries(ctx, input); e == nil {
+		t.Fatal("new double recurrence accepted")
+	}
+	legacyProject := project(t, h, "Legacy independent source")
+	input.Task = &TaskTemplate{Title: "Legacy independent task", Priority: "normal", ProjectID: &legacyProject.ID}
+	input.ExistingTaskID = ""
+	input.ExpectedRevision = 0
 	nested, e := s.CreateSeries(ctx, input)
 	if e != nil {
 		t.Fatal(e)
 	}
+	legacyVersion, _ := operation()
+	exec(t, db, `INSERT INTO series_versions(id,series_id,version,effective_from,rule_json,source_snapshot_json,created_at)
+      SELECT ?,series_id,version+1,effective_from,rule_json,json_set(source_snapshot_json,'$.project_id',?),created_at FROM series_versions WHERE id=?`, legacyVersion, o.Project.ID, nested.RuleVersionID)
 	for _, cycle := range nested.Occurrences {
 		apiCall(t, h, "PATCH", "/tasks/"+cycle.Task.ID, map[string]any{"expected_revision": cycle.Task.Revision, "project_id": nil}, 200)
 	}

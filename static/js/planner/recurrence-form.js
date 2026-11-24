@@ -5,16 +5,18 @@
     let pending;
     return async data => {
       // A lost response must be retried with the identical command, even if a form was edited.
-      if (!pending) pending = {...data, request_id: crypto.randomUUID()};
+      if (!pending) pending = {...data, request_id: data.request_id || crypto.randomUUID()};
       try { const result = await P.api(path, 'POST', pending); pending = null; return result; }
       catch (error) { if (error.status && error.status < 500) pending = null; else error.uncertainCommand=true; throw error; }
     };
   };
   P.seriesTitle = s => s.project_template?.title || s.template?.title || 'Регулярное дело';
   P.ruleText = rule => {
-    const units = {days:'дн.', weeks:'нед.', months:'календарных мес.', years:'лет'};
-    const days = {any:'любые дни', weekdays:'понедельник–пятница', weekends:'суббота–воскресенье', selected:'выбранные дни недели', ru_production:'рабочие дни РФ'};
-    return `Каждые ${rule.interval} ${units[rule.unit]} ${rule.mode === 'completion' ? 'после выполнения' : 'по расписанию'} · ${days[rule.allowed_days.mode]}`;
+    const n=rule.interval,forms={days:['день','дня','дней'],weeks:['неделю','недели','недель'],months:['месяц','месяца','месяцев'],years:['год','года','лет']};
+    const f=forms[rule.unit],last=n%10,teen=n%100>=11&&n%100<=14;
+    const interval=n===1?({days:'Каждый день',weeks:'Каждую неделю',months:'Каждый месяц',years:'Каждый год'}[rule.unit]):(!teen&&last===1?(rule.unit==='weeks'?'Каждую ':'Каждый '):'Каждые ')+n+' '+f[teen?2:last===1?0:last>=2&&last<=4?1:2];
+    const days={any:'любые дни',weekdays:'понедельник–пятница',weekends:'суббота–воскресенье',selected:'выбранные дни недели',ru_weekdays:'будни без праздников РФ',ru_production:'рабочие дни РФ с праздниками и переносами'};
+    return interval+' '+(rule.mode==='completion'?'после выполнения':'по расписанию')+' · '+days[rule.allowed_days.mode];
   };
   P.ruleBuilder = function(host, options = {}) {
     const initial = options.rule || {unit:'weeks',interval:1,mode:'schedule',allowed_days:{mode:'any'},adjustment:'none'};
@@ -23,19 +25,21 @@
     const advanced = el('details', {open:true}, el('summary',{},'Настройки повторения'));
     const grid = el('div',{class:'pl-form-grid'}); advanced.append(grid); block.append(advanced);
     const interval = P.field(grid,'interval','Каждые','number',initial.interval); interval.min=1; interval.max=10000; interval.required=true;
-    const unit = P.field(grid,'unit','Интервал','select',initial.unit,[['days','Календарные дни'],['weeks','Недели'],['months','Календарные месяцы'],['years','Годы']]);
-    const mode = P.field(grid,'mode','Отсчёт','select',initial.mode,[['schedule','От расписания'],...(!options.project ? [['completion','От фактического выполнения']] : [])]);
+    const unit = P.field(grid,'unit','Интервал','select',initial.unit,[['days','Дни'],['weeks','Недели'],['months','Месяцы'],['years','Годы']]);
+    const mode = P.field(grid,'mode','Отсчёт','select',initial.mode,[['schedule','По расписанию'],...(!options.project ? [['completion','После выполнения']] : [])]);
+    const explanation=el('p',{class:'pl-info'});block.append(explanation);
     if(options.changing){mode.disabled=true;block.append(meta('Режим отсчёта существующего повторения сохраняется. Изменяются интервал и допустимые дни.'));}
-    const allowed = P.field(grid,'allowed','Допустимые дни','select',initial.allowed_days.mode,[['any','Любые'],['weekdays','Понедельник–пятница'],['weekends','Суббота–воскресенье'],['selected','Выбранные дни недели'],['ru_production','Рабочие дни РФ']]);
+    const allowed = P.field(grid,'allowed','Допустимые дни','select',initial.allowed_days.mode,[['any','Любые'],['weekdays','Понедельник–пятница'],['ru_weekdays','Будни без праздников РФ'],['weekends','Суббота–воскресенье'],['selected','Выбранные дни недели'],['ru_production','Рабочие дни РФ с праздниками и переносами']]);
     const weekdays=el('div',{class:'pl-weekday-choices'});
     const dayInputs=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map((label,i)=>{const input=el('input',{type:'checkbox',name:'weekday_'+(i+1),value:i+1,checked:initial.allowed_days.weekdays?.includes(i+1)});weekdays.append(el('label',{},input,label));return input;});grid.append(weekdays);
     const adjustment=P.field(grid,'adjustment','Если день не подходит','select',initial.adjustment,[['none','Без переноса'],['next','Следующий допустимый'],['previous','Предыдущий допустимый'],['nearest','Ближайший допустимый']]);
     const first=P.field(block,'first_date',options.changing ? 'Дата отсчёта выбранного выполнения' : 'Первая дата выполнения','date',options.firstDate||P.today());first.required=true;
     if(options.changing&&initial.mode==='completion'){first.parentElement.hidden=true;first.required=false;}
-    const preview=el('div',{class:'pl-recurrence-preview','aria-live':'polite'});block.append(preview);
+    const preview=el('div',{class:'pl-recurrence-preview','aria-live':'polite',hidden:options.preview===false});block.append(preview);
     const read=()=>({schema_version:1,unit:unit.value,interval:Number(interval.value),mode:mode.value,allowed_days:{mode:allowed.value,...(allowed.value==='selected'?{weekdays:dayInputs.filter(i=>i.checked).map(i=>Number(i.value))}:{})},adjustment:adjustment.value,timezone:'Europe/Moscow'});
     let turn=0,timer;
     async function show() {
+      if(options.preview===false)return;
       const own=++turn;
       preview.replaceChildren(meta('Рассчитываем даты…'));
       try {
@@ -49,7 +53,7 @@
         for(const row of result.items||[])preview.append(el('div',{class:'pl-preview-row'},el('span',{},P.date(row.base_date)+' → '+P.date(row.adjusted_date)),meta(row.reason||'Без переноса'),row.conditional?meta('Условный прогноз'):null));
       }catch(error){if(own!==turn)return;preview.replaceChildren(el('p',{role:'alert'},error.message),el('a',{href:'#/plans/settings'},'Настройки производственного календаря'));}
     }
-    function sync(){weekdays.hidden=allowed.value!=='selected';if(allowed.value==='any')adjustment.value='none';else if(adjustment.value==='none')adjustment.value='next';adjustment.querySelector('[value="none"]').disabled=allowed.value!=='any';clearTimeout(timer);timer=setTimeout(show,250);}
+    function sync(){explanation.textContent=mode.value==='schedule'?'По расписанию: даты рассчитываются заранее, независимо от завершения предыдущих выполнений.':'После выполнения: одно текущее дело и следующие предварительно запланированные задачи. Их даты пересчитываются после переноса или фактического завершения текущего выполнения.';weekdays.hidden=allowed.value!=='selected';if(allowed.value==='any')adjustment.value='none';else if(adjustment.value==='none')adjustment.value='next';adjustment.querySelector('[value="none"]').disabled=allowed.value!=='any';clearTimeout(timer);timer=setTimeout(show,250);}
     preset.addEventListener('change',()=>{const values={daily:['days',1,'schedule'],weekly:['weeks',1,'schedule'],monthly:['months',1,'schedule'],yearly:['years',1,'schedule'],completion:['days',45,'completion']}[preset.value];if(values){[unit.value,interval.value,mode.value]=values;if(options.changing)mode.value=initial.mode;advanced.open=preset.value==='completion';}else advanced.open=true;sync();});
     grid.addEventListener('change',sync);first.addEventListener('change',sync);sync();
     return {read,first,preview,refresh:show};

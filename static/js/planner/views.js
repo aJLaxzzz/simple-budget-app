@@ -41,7 +41,7 @@
       if (['series','templates','task-templates','attention','settings'].includes(route.view) || (['tasks','projects'].includes(route.view) && route.params.get('view')==='regular')) {
         const render = route.params.get('view')==='regular' ? P.renderSeries : {series:P.renderSeries, templates:P.renderTemplates, 'task-templates':P.renderTaskTemplates, attention:P.renderAttention, settings:P.renderCalendarSettings}[route.view];
         await render(content, route);
-        if (generation === turn && route.params.has('task')) {
+        if (generation === turn && (route.params.has('task')||route.params.get('new')==='task')) {
           const [tasks,projects,archive]=await Promise.all([P.api('/tasks?status=active'),P.api('/projects'),P.api('/projects?archived=true')]);
           if(generation!==turn)return; P.data={tasks:tasks.items||[],projects:[...(projects.items||[]),...(archive.items||[])]};
           await P.taskEditor(route, () => generation === turn);
@@ -53,6 +53,16 @@
       if (generation !== turn) return;
       P.data = { tasks: tasks.items || [], projects: [...(projects.items || []), ...(archive.items || [])] };
       content.replaceChildren();
+      if(route.view==='tasks' && !route.id && route.params.get('view')!=='undated' && selectedStatus==='active'){
+        const series=await P.seriesList();let added=false;
+        for(const s of series.filter(s=>s.source_type==='task'&&s.state==='active')){
+          const count=P.data.tasks.filter(t=>t.series_id===s.id&&t.planned_date>=P.today()&&(!t.due_date||t.due_date>=P.today())).length;
+          if(count>=3)continue;
+          try{const result=await P.api('/series/'+s.id+'/ensure-upcoming','POST',{});added ||= result.created>0; }catch(e){console.warn('Повторение требует внимания',s.id,e.message);}
+        }
+        if(added)P.data.tasks=(await P.api('/tasks?status=active')).items;
+        if(generation!==turn)return;
+      }
       if (route.view === 'projects' && route.id) {
         const project = await P.api('/projects/' + encodeURIComponent(route.id));
         if (generation !== turn) return;
@@ -76,11 +86,11 @@
     input.addEventListener('input', () => P.drafts.set(key, input.value));
     form.append(input);
     const create = P.commandSender('/tasks');
-    P.bindForm(form, () => create( { title: input.value.trim(), ...(project ? { project_id: project } : {}), ...(parent ? { parent_task_id: parent } : {}) }), async saved => {
+    P.bindForm(form, () => create( { title: input.value.trim(), ...(!project&&P.route().view==='tasks'&&P.route().params.get('view')!=='undated'?{planned_date:P.today()}:{}), ...(project ? { project_id: project } : {}), ...(parent ? { parent_task_id: parent } : {}) }), async saved => {
       P.drafts.delete(key); input.value=''; P.notify('Задача «'+saved.title+'» добавлена', {label:'Открыть',run:()=>P.openTask(saved.id)});
       if(['tasks','inbox'].includes(P.route().view)){const q=new URLSearchParams(P.route().params);['q','status','project'].forEach(k=>q.delete(k));window.history.replaceState(null,'',P.base()+(q.size?'?'+q:''));}
       await P.refresh();
-      const group = document.querySelector('[data-group=undated]'); if(group)group.open=true;
+
       document.querySelector('.pl-quick input')?.focus();
     });
     return form;
@@ -91,7 +101,7 @@
     complete.setAttribute('aria-label', 'Завершить: ' + task.title);
     complete.disabled = !P.active(task) || Boolean(P.data.projects.find(p => p.id === task.project_id)?.archived_at);
     const title = button(task.title, () => P.openTask(task.id), 'pl-task-title');
-    const details = [(task.saved_template_id||task.source_template_id)&&meta(task.saved_template_id?'◇ Шаблон сохранён':'◇ Из шаблона'), task.series_id && el('span', {class:'pl-repeat-mark', title:'Повторяющаяся задача', 'aria-label':'Повторяющаяся задача'}, '↻'), context && meta(context), task.priority === 'high' && el('span', { class: 'pl-priority' }, '↑ Высокий'), task.priority === 'low' && meta('↓ Низкий'), task.priority === 'normal' && el('span',{class:'pl-muted pl-priority-normal'},'Обычный приоритет'), task.planned_date && meta(P.date(task.planned_date) + (task.scheduled_time ? ' · ' + task.scheduled_time : '')), task.due_date && el('span', { class: P.overdue(task) ? 'pl-overdue' : 'pl-muted' }, 'Крайний срок: ' + P.date(task.due_date)), task.completed_with_open_children && meta('Есть открытые подзадачи')].filter(Boolean);
+    const details = [task.dynamic&&P.active(task)&&meta('Дата может измениться'),(task.saved_template_id||task.source_template_id)&&meta(task.saved_template_id?'◇ Шаблон сохранён':'◇ Из шаблона'), task.series_id && el('span', {class:'pl-repeat-mark', title:'Повторяющаяся задача', 'aria-label':'Повторяющаяся задача'}, '↻'), context && meta(context), task.priority === 'high' && el('span', { class: 'pl-priority' }, '↑ Высокий'), task.priority === 'low' && meta('↓ Низкий'), task.priority === 'normal' && el('span',{class:'pl-muted pl-priority-normal'},'Обычный приоритет'), task.planned_date && meta(P.date(task.planned_date) + (task.scheduled_time ? ' · ' + task.scheduled_time : '')), task.due_date && el('span', { class: P.overdue(task) ? 'pl-overdue' : 'pl-muted' }, 'Крайний срок: ' + P.date(task.due_date)), task.completed_with_open_children && meta('Есть открытые подзадачи')].filter(Boolean);
     P.paint(row,task);title.prepend(P.appearanceIcon(task));
     const timing=P.timing(task);if(timing.label)details.push(el('span',{class:timing.key==='overdue'?'pl-overdue':'pl-plan-missed'},timing.label));
     row.append(complete, el('div', { class: 'pl-task-copy' }, title, el('div', { class: 'pl-task-meta' }, details)), P.status(task), P.actionButton(task));
@@ -117,18 +127,20 @@
     filters.addEventListener('submit', e => e.preventDefault());
     const search = P.field(filters, 'q', 'Поиск по названию', 'search', route.params.get('q') || '');
     const status = P.field(filters, 'status', 'Статус', 'select', route.params.get('status') || 'active', [['active', 'Открытые'], ['all', 'Все статусы'], ...Object.keys(P.labels).filter(k => ['planned', 'in_progress', 'completed', 'cancelled'].includes(k)).map(k => [k, P.labels[k]])]);
+    const showAll=P.field(filters,'future','Будущие повторения','select',route.params.get('future')||'nearest',[['nearest','Три ближайших выполнения'],['all','Все выполнения']]);
     let project;
     if (!inbox) project = P.field(filters, 'project', 'Проект', 'select', route.params.get('project') || 'all', [['all', 'Все проекты'], ['none', 'Без проекта'], ...P.data.projects.map(p => [p.id, p.title + (p.archived_at ? ' · архив' : '')])]);
     const results = el('div', { class: 'pl-results' });
     const draw = () => {
       let tasks = P.data.tasks.filter(t => (!inbox || (!t.project_id && !t.planned_date)) && (!undated || (!t.planned_date && !t.due_date)));
       tasks = tasks.filter(t => (status.value === 'all' || (status.value === 'active' ? P.active(t) : t.status === status.value)) && t.title.toLocaleLowerCase('ru').includes(search.value.toLocaleLowerCase('ru')) && (!project || project.value === 'all' || (project.value === 'none' ? !t.project_id : t.project_id === project.value)));
-      results.replaceChildren(el('p', { class: 'pl-list-count' }, 'Задач: ' + tasks.length), tasks.length ? (inbox ? P.taskTree(tasks) : P.groupedTasks(tasks)) : P.empty(inbox ? 'Входящие разобраны' : 'Задач не найдено', inbox ? 'Новая идея? Добавьте её одной строкой выше.' : 'Измените фильтры или создайте первую задачу.'));
+      const total=tasks.length;tasks=P.limitUpcoming(tasks,inbox||showAll.value==='all');
+      results.replaceChildren(el('p', { class: 'pl-list-count' }, 'Задач: ' + tasks.length), tasks.length ? (inbox ? P.taskTree(tasks) : P.groupedTasks(tasks,Boolean(search.value.trim()))) : P.empty(inbox ? 'Входящие разобраны' : 'Задач не найдено', inbox ? 'Новая идея? Добавьте её одной строкой выше.' : 'Измените фильтры или создайте первую задачу.'));
     };
     let loadedStatus = status.value, loadTurn = 0;
     filters.addEventListener('input', async () => {
       const params = new URLSearchParams(window.location.hash.split('?')[1] || '');
-      params.set('q', search.value); params.set('status', status.value);
+      params.set('q', search.value); params.set('status', status.value);params.set('future',showAll.value);
       if (project) params.set('project', project.value);
       // Filters survive reload and editor back/forward without creating one history entry per keystroke.
       window.history.replaceState(null, '', P.base() + '?' + params);
@@ -185,7 +197,7 @@
     content.append(el('a', { class: 'pl-back', href: '#/plans/projects' }, '← Все проекты'));
     const overview=el('section',{class:'pl-project-overview pl-project-compact'});
     const heading=el('div',{class:'pl-project-heading'},el('h2',{},P.appearanceIcon(project,true),project.title),P.status(project));
-    const controls=el('div',{class:'pl-actions'},!project.archived_at?button('+ Задача в проект',()=>P.newTask(project.id),'pl-primary'):null,P.projectMenuButton(project));
+    const controls=el('div',{class:'pl-actions'},!project.archived_at?button('+ Задача в проект',()=>P.newTask(project.id),'pl-primary'):null,!project.archived_at?button('Добавить существующие',()=>P.addExistingTasks(project)):null,P.projectMenuButton(project));
     overview.append(el('div',{class:'pl-project-top'},heading,controls));
     const dates=el('div',{class:'pl-task-meta'},project.start_date?meta((project.occurrence_id?'↻ Выполнение: ':'Начало: ')+P.date(project.start_date)):null,project.due_date?el('span',{class:P.overdue(project)?'pl-overdue':'pl-muted'},'Крайний срок: '+P.date(project.due_date)):null,project.archived_at?meta('В архиве · только просмотр'):null);
     overview.append(dates);
@@ -201,14 +213,19 @@
     else if(!project.archived_at)properties.append(button('Сохранить как шаблон',()=>P.projectTemplateFlow(project)));
     if(project.source_template_id)properties.append(el('a',{href:'#/plans/templates/'+project.source_template_id},'Создано из шаблона'));
     if(properties.childElementCount)overview.append(el('details',{class:'pl-project-options'},el('summary',{},'Повторение и шаблоны'),properties));
-    content.append(el('h3',{class:'pl-project-tasks-heading'},'Задачи проекта'));
-    if (!project.archived_at) content.append(P.quickForm(project.id));
-    content.append(project.tasks.length ? P.taskTree(project.tasks) : P.empty('Первый шаг ещё впереди', 'Добавьте задачу — даты можно назначить позже.'));
-    if (!project.archived_at) for (const task of project.tasks.filter(t => !t.parent_task_id)) {
-      const row = [...content.querySelectorAll('[data-task-id]')].find(n => n.dataset.taskId === task.id);
+    const taskTools=el('div',{class:'pl-project-task-tools'},el('h3',{class:'pl-project-tasks-heading'},'Задачи проекта'));
+    const projectList=el('div');const filterBox=el('div',{class:'pl-project-task-filters'});
+    let sortValue='planned';try{sortValue=localStorage.getItem('planner.project-sort:'+project.id)||'planned';}catch(_){}
+ const sort=P.field(filterBox,'project_sort','Порядок задач','select',sortValue,[['planned','По плановой дате'],['due','По крайнему сроку'],['priority','По приоритету'],['title','По названию'],['created','По дате создания']]);
+ if(!project.archived_at&&!project.occurrence_id&&!project.repeat_series_id)filterBox.append(button('Настроить повторение задач',()=>P.batchRepeat(project)));
+ const display=P.field(filterBox,'project_tasks','Выполнения в проекте','select','nearest',[['nearest','Ближайшие и обычные задачи'],['all','Все задачи и история']]);
+    const drawTasks=()=>{const tasks=display.value==='all'?project.tasks:P.limitUpcoming(project.tasks.filter(t=>!t.series_id||P.active(t)));projectList.replaceChildren(tasks.length?P.taskTree(P.sortProjectTasks(tasks,sort.value)):P.empty('Первый шаг ещё впереди','Добавьте задачу — даты можно назначить позже.'));
+    if (!project.archived_at) for (const task of tasks.filter(t => !t.parent_task_id)) {
+      const row = [...projectList.querySelectorAll('[data-task-id]')].find(n => n.dataset.taskId === task.id);
       row.append(button('+', () => P.newTask(project.id, task.id), 'pl-icon'));
       row.lastChild.setAttribute('aria-label', 'Добавить подзадачу: ' + task.title);
     }
+    };display.addEventListener('change',drawTasks);sort.addEventListener('change',()=>{try{localStorage.setItem('planner.project-sort:'+project.id,sort.value);}catch(_){}drawTasks();});if(!project.tasks.some(t=>t.series_id))display.closest('.pl-field')?.setAttribute('hidden','');taskTools.append(filterBox);content.append(taskTools);if(!project.archived_at)content.append(P.quickForm(project.id));content.append(projectList);drawTasks();
     const history=P.disclosure('История');content.append(history);P.renderHistory(history, 'project', project.id);
   }
 })(window.Planner);

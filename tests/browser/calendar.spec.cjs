@@ -31,12 +31,18 @@ test.afterAll(() => {
 });
 
 test('month grid, December/January navigation, bounded single API and keyboard days', async ({ page }) => {
-  const requests = [];
+  const requests = [], batches=[];
+  page.on('response',response=>{if(new URL(response.url()).pathname==='/api/planner/materialize')batches.push(response.json());});
   page.on('request', req => { if (req.url().includes('/api/')) requests.push(new URL(req.url()).pathname + new URL(req.url()).search); });
   await open(page);
   await expect(page.locator('.pc-month-day')).toHaveCount(35);
   // Protected image resources are assets; the calendar data still uses one bounded projection.
-  expect(requests.filter(path=>!/^\/api\/planner\/icons\/[^/]+\/image$/.test(path))).toEqual(['/api/planner/attention?limit=1', '/api/planner/materialize', '/api/planner/calendar?from=2026-11-30&to=2027-01-03']);
+  const dataRequests=requests.filter(path=>!/^\/api\/planner\/icons\/[^/]+\/image$/.test(path));
+  expect(dataRequests.filter(path=>path!=='/api/planner/materialize')).toEqual(['/api/planner/attention?limit=1','/api/planner/calendar?from=2026-11-30&to=2027-01-03']);
+  const pages=await Promise.all(batches);expect(pages.length).toBeGreaterThan(0);expect(pages.length).toBeLessThanOrEqual(100);
+  for(const result of pages.slice(0,-1))expect(Boolean(result.pending||result.next_after_series_id)).toBeTruthy();
+  expect(Boolean(pages.at(-1).pending||pages.at(-1).next_after_series_id)).toBeFalsy();
+  expect(dataRequests.slice(1,-1)).toEqual(pages.map(()=>'/api/planner/materialize'));
   await page.getByRole('button', { name: 'Следующий период' }).click();
   await expect(page.locator('.pc-period h2')).toContainText('январь 2027');
   await expect(page.locator('.pc-month-day')).toHaveCount(35);
@@ -220,8 +226,7 @@ test('quick create on selected day and complete parent using existing session ch
   const title = unique('Новая из календаря');
   await page.getByLabel('Название', { exact: true }).fill(title);
   await page.getByRole('dialog').locator('button[type=submit]').click();
-  await expect(page.getByRole('dialog', { name: 'Редактор задачи', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Закрыть редактор' }).click();
+  await expect(page.getByRole('dialog', { name: 'Редактор задачи', exact: true })).toHaveCount(0);
   const data = await (await request.get('/api/planner/tasks?project_id=' + project.id)).json();
   const parent = data.items.find(t => t.title === title);
   const child = await create(request, 'tasks', { title: unique('Дочерняя'), project_id: project.id, parent_task_id: parent.id });

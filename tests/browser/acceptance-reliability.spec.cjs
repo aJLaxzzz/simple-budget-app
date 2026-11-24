@@ -29,6 +29,16 @@ test('protected offline app: financial lifecycle, actual restart, recurrence rep
   const series=await req('POST','/api/planner/series',input,201);const ids=series.occurrences.map(o=>o.id);const task=series.occurrences[0].task;
   const results=await Promise.all([api.patch('/api/planner/tasks/'+task.id,{data:{expected_revision:task.revision,title:'Клиент A'}}),api.patch('/api/planner/tasks/'+task.id,{data:{expected_revision:task.revision,title:'Клиент B'}})]);expect(results.map(r=>r.status()).sort()).toEqual([200,409]);
   await stop(child);child=run(dir);await ready(child);expect((await req('POST','/api/planner/series',input,201)).id).toBe(series.id);await req('POST','/api/planner/materialize',{});const latest=await req('GET','/api/planner/series/'+series.id);expect(latest.occurrences.map(o=>o.id)).toEqual(ids);expect(latest.occurrences[0].task.revision).toBe(2);expect(await(await api.get('/api/backup')).text()).toBe(finance);
+  // Permanent deletion uses the same protected server and leaves financial files untouched.
+  const victim=ids[0], removal=await req('GET','/api/planner/occurrences/'+victim+'/delete-preview');
+  const deletion={request_id:randomUUID(),expected_revision:removal.revision,preview_token:removal.preview_token,confirm:true};
+  expect((await anon.post('/api/planner/occurrences/'+victim+'/delete',{data:deletion})).status()).toBe(401);
+  await req('POST','/api/planner/occurrences/'+victim+'/delete',deletion);
+  await stop(child);child=run(dir);await ready(child);
+  await req('POST','/api/planner/occurrences/'+victim+'/delete',deletion);
+  await req('POST','/api/planner/materialize',{});
+  expect((await req('GET','/api/planner/series/'+series.id)).occurrences.map(o=>o.id)).toEqual(ids.filter(id=>id!==victim));
+  expect(fs.readFileSync(path.join(dir,'data.json'),'utf8')).toBe(finance);
   await req('DELETE',m+'/expenses/'+exp.id,undefined,204);await req('DELETE',m+'/incomes/'+inc.id,undefined,204);await stop(child,'SIGINT');
   expect(execFileSync('/usr/bin/sqlite3',['file:'+path.join(dir,'planner.db')+'?immutable=1','PRAGMA integrity_check; PRAGMA foreign_key_check;'],{encoding:'utf8'}).trim()).toBe('ok');
   child=run(dir);await ready(child);expect((await req('GET',m)).expenses).toHaveLength(0);expect((await req('GET',m)).incomes).toHaveLength(0);await stop(child);

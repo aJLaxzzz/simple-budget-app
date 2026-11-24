@@ -21,16 +21,19 @@ type TaskTemplateInput struct {
 // The preview binds the full source tree, including task revisions, to the command.
 // The original project is never attached to an occurrence or rescheduled.
 type ProjectSourceInput struct {
-	RequestID        string                   `json:"request_id"`
-	ExpectedRevision int64                    `json:"expected_revision"`
-	PreviewToken     string                   `json:"preview_token,omitempty"`
-	Snapshot         *ProjectTemplateSnapshot `json:"snapshot,omitempty"`
-	AnchorDate       string                   `json:"anchor_date"`
-	FirstDate        string                   `json:"first_date,omitempty"`
-	Rule             *recurrence.Rule         `json:"rule,omitempty"`
-	EndDate          *string                  `json:"end_date,omitempty"`
+	IndependentDecision string                   `json:"independent_decision,omitempty"`
+	RequestID           string                   `json:"request_id"`
+	ExpectedRevision    int64                    `json:"expected_revision"`
+	PreviewToken        string                   `json:"preview_token,omitempty"`
+	Snapshot            *ProjectTemplateSnapshot `json:"snapshot,omitempty"`
+	AnchorDate          string                   `json:"anchor_date"`
+	FirstDate           string                   `json:"first_date,omitempty"`
+	Rule                *recurrence.Rule         `json:"rule,omitempty"`
+	EndDate             *string                  `json:"end_date,omitempty"`
 }
 type ProjectSourcePreview struct {
+	Conversions  []DisablePreview        `json:"conversions,omitempty"`
+	Excluded     []TaskDTO               `json:"excluded,omitempty"`
 	Snapshot     ProjectTemplateSnapshot `json:"snapshot"`
 	PreviewToken string                  `json:"preview_token"`
 	Items        []TemplatePreviewCycle  `json:"items"`

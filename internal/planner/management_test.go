@@ -321,7 +321,7 @@ func TestManagementCompletionSkipReanchorBranchAndHistoricalCompletion(t *testin
 	v := createSeries(t, h, seriesInput("completion-management", "2026-11-16", recurrence.Completion, 7))
 	initial := v.Occurrences[0]
 	in, p := managedPreview(t, s, v.ID, SeriesCommand{Action: "pause", StartDate: "2026-11-16", EndDate: "2026-12-14"})
-	if len(p.Rows) != 1 || p.Rows[0].Disposition != "completion_pending_preserved" {
+	if len(p.Rows) != 3 || p.Rows[0].Disposition != "completion_pending_preserved" {
 		t.Fatal(p)
 	}
 	if _, e := s.ApplySeriesCommand(ctx, v.ID, in); e != nil {
@@ -329,12 +329,12 @@ func TestManagementCompletionSkipReanchorBranchAndHistoricalCompletion(t *testin
 	}
 	completeSeriesTask(t, h, initial.Task, "2026-11-16")
 	current := getSeriesTest(t, s, v.ID)
-	if current.State != "needs_anchor" || len(current.Occurrences) != 2 || current.Occurrences[1].Task.Status != "skipped" {
+	if current.State != "needs_anchor" || len(current.Occurrences) != 3 || current.Occurrences[1].Task.Status != "skipped" {
 		t.Fatal(current)
 	}
 	old := current.Occurrences[1]
 	drainSeries(t, s, MaterializeInput{})
-	if len(getSeriesTest(t, s, v.ID).Occurrences) != 2 {
+	if len(getSeriesTest(t, s, v.ID).Occurrences) != 3 {
 		t.Fatal("pause made phantom chain")
 	}
 	managedApply(t, s, v.ID, SeriesCommand{Action: "reanchor", AnchorDate: "2026-12-14", Reason: "Restart"})
@@ -355,7 +355,7 @@ func TestManagementCompletionSkipReanchorBranchAndHistoricalCompletion(t *testin
 		t.Fatal(completed)
 	}
 	current = getSeriesTest(t, s, v.ID)
-	if len(current.Occurrences) != 3 || *current.WaitingOccurrenceID != current.Occurrences[2].ID {
+	if len(current.Occurrences) != 5 || *current.WaitingOccurrenceID != current.Occurrences[2].ID {
 		t.Fatal("historical completion advanced chain")
 	}
 	last := current.Occurrences[2]
@@ -365,7 +365,7 @@ func TestManagementCompletionSkipReanchorBranchAndHistoricalCompletion(t *testin
 		t.Fatal(restored)
 	}
 	completeSeriesTask(t, h, restored.Task, "2026-12-22")
-	if len(getSeriesTest(t, s, v.ID).Occurrences) != 4 {
+	if len(getSeriesTest(t, s, v.ID).Occurrences) != 6 {
 		t.Fatal("restored cycle did not advance")
 	}
 	incidents := allIncidents(t, s, v.ID, "")
@@ -386,14 +386,14 @@ func TestManagementCompletionRuleUsesActualAnchorAndPreservesPendingInPause(t *t
 	rule := v.Rule.Rule
 	rule.Interval = 14
 	in, preview := managedPreview(t, s, v.ID, SeriesCommand{Action: "change_rule", Rule: &rule, FromCycle: ptr(int64(1))})
-	if len(preview.Rows) != 1 || preview.Rows[0].Disposition != "change_date_pause_pending_preserved" || *preview.Rows[0].AfterDate != "2026-11-29" {
+	if len(preview.Rows) != 3 || preview.Rows[0].Disposition != "change_date_pause_pending_preserved" || *preview.Rows[0].AfterDate != "2026-11-29" {
 		t.Fatal(preview)
 	}
 	if _, e := s.ApplySeriesCommand(ctx, v.ID, in); e != nil {
 		t.Fatal(e)
 	}
 	current := getSeriesTest(t, s, v.ID)
-	if len(current.Occurrences) != 2 || current.Occurrences[1].ID != pending.ID || current.Occurrences[1].Task.Status != "planned" || *current.Occurrences[1].Task.PlannedDate != "2026-11-29" || *current.WaitingOccurrenceID != pending.ID || *current.AnchorDate != "2026-11-15" {
+	if len(current.Occurrences) != 4 || current.Occurrences[1].ID != pending.ID || current.Occurrences[1].Task.Status != "planned" || *current.Occurrences[1].Task.PlannedDate != "2026-11-29" || *current.WaitingOccurrenceID != pending.ID || *current.AnchorDate != "2026-11-15" {
 		t.Fatal(current)
 	}
 	if len(allIncidents(t, s, v.ID, "")) != 0 {
@@ -641,7 +641,7 @@ func TestManagementSQLIncidentsStayImmutable(t *testing.T) {
 		}
 	}
 	var count int
-	if e := db.db.QueryRow("SELECT count(*) FROM attention_state WHERE occurrence_id=? AND disposition='needs_decision'", o.ID).Scan(&count); e != nil || count != 1 {
+	if e := db.db.QueryRow("SELECT count(*) FROM attention_state WHERE occurrence_id=? AND disposition='processed'", o.ID).Scan(&count); e != nil || count != 1 {
 		t.Fatal(count, e)
 	}
 	occurrenceApply(t, s, o.ID, "review", occurrenceInput(t, s, o.ID))
@@ -713,12 +713,12 @@ func TestManagementReplaceUnusedAnchorAndArchiveStaysArchived(t *testing.T) {
 		t.Fatal("new anchor silently replaced")
 	}
 	in.BranchDecision = "replace_anchor"
-	restored := occurrenceApply(t, s, o.ID, "restore", in)
-	if restored.ID != o.ID {
-		t.Fatal(restored)
+	if _, e := s.OccurrenceCommand(ctx, o.ID, "restore", in); e == nil {
+		t.Fatal("replaced an existing dynamic continuation")
 	}
+	currentBefore := getSeriesTest(t, s, v.ID)
 	managedApply(t, s, v.ID, SeriesCommand{Action: "archive"})
-	occurrenceApply(t, s, o.ID, "cancel", occurrenceInput(t, s, o.ID))
+	occurrenceApply(t, s, *currentBefore.WaitingOccurrenceID, "cancel", occurrenceInput(t, s, *currentBefore.WaitingOccurrenceID))
 	current := getSeriesTest(t, s, v.ID)
 	if current.State != "archived" {
 		t.Fatal("cancel unarchived series")

@@ -38,7 +38,7 @@ func seriesSummary(tx *sql.Tx, v *SeriesDTO) error {
 		}
 	}
 	return tx.QueryRow(`SELECT
- (SELECT min(COALESCE(t.planned_date,p.start_date,o.manual_date,o.adjusted_date)) FROM occurrences o LEFT JOIN tasks t ON t.occurrence_id=o.id LEFT JOIN projects p ON p.occurrence_id=o.id WHERE o.series_id=? AND (t.status IN('planned','in_progress') OR p.status IN('planned','in_progress'))),
+ (SELECT min(COALESCE(t.planned_date,p.start_date,o.manual_date,o.adjusted_date)) FROM occurrences o LEFT JOIN tasks t ON t.occurrence_id=o.id LEFT JOIN projects p ON p.occurrence_id=o.id WHERE o.series_id=? AND o.dynamic=0 AND (t.status IN('planned','in_progress') OR p.status IN('planned','in_progress'))),
  (SELECT max(t.completed_date) FROM tasks t JOIN occurrences o ON o.id=t.occurrence_id WHERE o.series_id=? AND t.status='completed'),
  (SELECT count(DISTINCT occurrence_id) FROM occurrence_incidents i JOIN occurrences o ON o.id=i.occurrence_id WHERE o.series_id=? AND i.disposition='needs_decision')`, v.ID, v.ID, v.ID).Scan(&v.NextDate, &v.LastCompletedDate, &v.UnresolvedCount)
 }

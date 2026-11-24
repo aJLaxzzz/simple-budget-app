@@ -43,6 +43,7 @@ type Progress struct {
 	OpenTasks int     `json:"open_tasks"`
 }
 type TaskDTO struct {
+	Dynamic bool `json:"dynamic"`
 	TemplateLinks
 	EffectiveAppearance
 	Appearance

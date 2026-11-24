@@ -31,12 +31,12 @@
   function actions(item) { P.objectMenu(item); }
   function eventCard(item, compact = false) {
     const card = el('div', { class: 'pc-event pc-kind-' + item.type + (P.active(item) ? '' : ' pc-closed'), 'data-event-id': item.type + ':' + item.id, 'data-event-date': item.date });
-    const label = [kind[item.type], item.start_time ? item.start_time + (item.end_time ? '–' + item.end_time : '') : null, item.title, P.labels[item.status], item.project_title].filter(Boolean).join(' · ');
-    const open = button((item.status === 'completed' ? '✓ ' : item.status === 'cancelled' ? '− ' : item.status === 'in_progress' ? '• ' : '') + (item.priority === 'high' ? '↑ ' : '') + (item.parent_task_id ? '↳ ' : '') + (item.start_time ? item.start_time + ' ' : '') + (item.type === 'deadline' ? '⚑ ' : item.type === 'planning' ? '◇ ' : item.type === 'session' ? '◷ ' : '') + (item.series_id ? '↻ ' : '') + item.title, () => P.openTask(item.task_id), 'pc-event-title');
+    const label = [item.dynamic&&P.active(item)?'Предварительно запланировано':null,kind[item.type], item.start_time ? item.start_time + (item.end_time ? '–' + item.end_time : '') : null, item.title, P.labels[item.status], item.project_title].filter(Boolean).join(' · ');
+    const open = button((item.status === 'completed' ? '✓ ' : item.status === 'cancelled' ? '− ' : item.status === 'in_progress' ? '• ' : '') + (item.priority === 'high' ? '↑ ' : '') + (item.parent_task_id ? '↳ ' : '') + (item.start_time ? item.start_time + ' ' : '') + (item.type === 'deadline' ? '⚑ ' : item.type === 'planning' ? '◇ ' : item.type === 'session' ? '◷ ' : '') + (item.dynamic&&P.active(item) ? '≈ ' : '') + (item.series_id ? '↻ ' : '') + item.title, () => P.openTask(item.task_id), 'pc-event-title');
     P.paint(card,item);open.prepend(P.appearanceIcon(item));
     open.setAttribute('aria-label', label);
     const menu = button('⋯', () => actions(item), 'pc-event-menu'); menu.setAttribute('aria-label', 'Действия: ' + label);
-    card.append(el('div', { class: 'pc-event-line' }, open, menu));
+    card.append(el('div', { class: 'pc-event-line' }, open, menu));if(item.dynamic&&P.active(item))card.append(el('span',{class:'pc-event-hint'},'Предварительно · зависит от предыдущего'));
     if (!compact) {
       const details=el('div',{class:'pc-event-meta'});
       if(item.type!=='task')details.append(el('span',{},kind[item.type]));

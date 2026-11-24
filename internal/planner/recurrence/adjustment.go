@@ -34,7 +34,7 @@ func permitted(ctx context.Context, date Date, days AllowedDays, calendar Produc
 			}
 		}
 		return false, "selected_weekday_required", "Базовый день недели не входит в выбранный список", nil
-	case RussianWorkdays:
+	case RussianWorkdays, RussianWeekdays:
 		if calendar == nil {
 			return false, "", "", &MissingCalendarError{Year: value.Year()}
 		}
@@ -45,7 +45,7 @@ func permitted(ctx context.Context, date Date, days AllowedDays, calendar Produc
 		if day.Calendar.Year != value.Year() || day.Calendar.Source == "" || day.Calendar.Checksum == "" || day.Calendar.Revision <= 0 || (day.Kind != "working" && day.Kind != "shortened" && day.Kind != "nonworking") {
 			return false, "", "", failure("invalid_production_calendar", "Производственный календарь содержит неполные сведения")
 		}
-		return day.Kind != "nonworking", "ru_nonworking", "Нерабочий день по производственному календарю РФ: " + day.Reason, nil
+		return day.Kind != "nonworking" && (days.Mode != RussianWeekdays || weekday <= 5), "ru_nonworking", "Нерабочий день по производственному календарю РФ: " + day.Reason, nil
 	}
 	return false, "", "", failure("invalid_recurrence_rule", "Неизвестное правило допустимых дней")
 }

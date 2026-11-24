@@ -89,7 +89,7 @@ func TestAcceptanceCalendarsEveryDayAndYearBoundary(t *testing.T) {
 	completeSeriesTask(t, h, first.Task, "2026-12-21")
 	drainSeries(t, s, MaterializeInput{})
 	v = getSeriesTest(t, s, v.ID)
-	if len(v.Occurrences) != 2 || v.Occurrences[1].BaseDate != "2027-02-04" || v.Occurrences[1].AdjustedDate != "2027-02-04" {
+	if len(v.Occurrences) != 4 || v.Occurrences[1].BaseDate != "2027-02-04" || v.Occurrences[1].AdjustedDate != "2027-02-04" {
 		t.Fatal(v.Occurrences)
 	}
 	if e := checkIntegrity(ctx, st.db); e != nil {

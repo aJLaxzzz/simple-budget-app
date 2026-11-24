@@ -418,3 +418,23 @@ func TestVersionWindowsUseBaseDatesAndStableCycles(t *testing.T) {
 		t.Fatal("same version start")
 	}
 }
+
+func TestRussianWeekdaysSeparateFromBothExistingModes(t *testing.T) {
+	calendar := testCalendar(func(ctx context.Context, d Date) (ProductionDay, error) {
+		date, _ := parse(d)
+		kind := "working"
+		if d == "2027-02-22" || d == "2027-02-23" {
+			kind = "nonworking"
+		}
+		return ProductionDay{Kind: kind, Reason: "isolated test calendar", Calendar: CalendarInfo{Year: date.Year(), Source: "synthetic test only", Checksum: "test", Revision: 1}}, nil
+	})
+	for mode, want := range map[DayMode]Date{Weekdays: "2027-02-22", RussianWeekdays: "2027-02-24", RussianWorkdays: "2027-02-20"} {
+		got, e := AdjustDate(testContext, "2027-02-20", AllowedDays{Mode: mode}, Next, calendar)
+		if e != nil || got.Date != want {
+			t.Fatal(mode, got, e)
+		}
+	}
+	if _, e := AdjustDate(testContext, "2027-02-20", AllowedDays{Mode: RussianWeekdays}, Next, nil); e == nil {
+		t.Fatal("missing official year accepted")
+	}
+}

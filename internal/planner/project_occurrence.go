@@ -240,7 +240,7 @@ func (s *Service) projectOccurrenceCommandTx(ctx context.Context, tx *sql.Tx, v 
 }
 func (s *Service) closeProjectTasks(ctx context.Context, tx *sql.Tx, occ string, p ProjectDTO, action string, in OccurrenceCommand, op, now string, automatic bool) error {
 	var nested string
-	e := tx.QueryRow(`SELECT s.id FROM series s JOIN series_versions v ON v.series_id=s.id WHERE s.source_type='task' AND s.state!='archived' AND v.version=(SELECT max(version) FROM series_versions WHERE series_id=s.id) AND json_extract(v.source_snapshot_json,'$.project_id')=? LIMIT 1`, p.ID).Scan(&nested)
+	e := tx.QueryRow(`SELECT s.id FROM series s JOIN series_versions v ON v.series_id=s.id WHERE s.source_type='task' AND s.state!='archived' AND s.disabled_at IS NULL AND v.version=(SELECT max(version) FROM series_versions WHERE series_id=s.id) AND json_extract(v.source_snapshot_json,'$.project_id')=? LIMIT 1`, p.ID).Scan(&nested)
 	if e == nil {
 		return conflict("nested_series_conflict", "Сначала отдельно архивируйте серию задач, создающую выполнения в этом проекте, и перенесите её экземпляры из проекта", map[string]any{"series_id": nested, "project_id": p.ID})
 	}

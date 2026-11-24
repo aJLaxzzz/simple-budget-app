@@ -26,7 +26,30 @@ func templateFromTask(t TaskDTO) TaskTemplate {
 }
 
 func (s *Service) CreateSeries(ctx context.Context, in CreateSeriesInput) (SeriesDTO, error) {
+	if in.SourceType == "project" {
+		if in.FirstDueDate != nil || in.FirstStatus != "" {
+			return SeriesDTO{}, invalid("Параметры первого выполнения относятся только к новой задаче")
+		}
+		return s.createProjectSeries(ctx, in)
+	}
+	var out SeriesDTO
+	e := s.store.Transaction(ctx, func(tx *sql.Tx) error { var e error; out, e = s.createSeriesTx(ctx, tx, in); return e })
+	return out, e
+}
+
+func (s *Service) createSeriesTx(ctx context.Context, tx *sql.Tx, in CreateSeriesInput) (SeriesDTO, error) {
 	var result SeriesDTO
+	if in.FirstDueDate != nil || in.FirstStatus != "" {
+		if in.SourceType == "project" || in.ExistingTaskID != "" {
+			return result, invalid("Параметры первого выполнения относятся только к новой задаче")
+		}
+		if e := validDate(in.FirstDueDate); e != nil {
+			return result, e
+		}
+		if in.FirstStatus != "" && !active(in.FirstStatus) {
+			return result, invalid("Недопустимый начальный статус")
+		}
+	}
 	if in.EndDate != nil {
 		if e := validDate(in.EndDate); e != nil {
 			return result, e
@@ -74,7 +97,10 @@ func (s *Service) CreateSeries(ctx context.Context, in CreateSeriesInput) (Serie
 		return result, e
 	}
 	now := stamp(s.now())
-	e = s.store.Transaction(ctx, func(tx *sql.Tx) error {
+	e = func() error {
+		if e := checkRetiredSeriesRequest(tx, in.RequestID); e != nil {
+			return e
+		}
 		var previous, previousHash string
 		e := tx.QueryRow("SELECT id,request_hash FROM series WHERE request_key=?", in.RequestID).Scan(&previous, &previousHash)
 		if e == nil {
@@ -128,6 +154,11 @@ func (s *Service) CreateSeries(ctx context.Context, in CreateSeriesInput) (Serie
 			source = &t
 			snapshot = templateFromTask(t)
 		}
+		if snapshot.ProjectID != nil {
+			if e := independentTaskProject(tx, *snapshot.ProjectID); e != nil {
+				return e
+			}
+		}
 		snapshot.Title = strings.TrimSpace(snapshot.Title)
 		if e := validateTask(tx, taskFromTemplate(snapshot, in.FirstDate)); e != nil {
 			return e
@@ -161,6 +192,24 @@ func (s *Service) CreateSeries(ctx context.Context, in CreateSeriesInput) (Serie
 		if e != nil {
 			return e
 		}
+		if in.FirstDueDate != nil || in.FirstStatus != "" {
+			before := task
+			task.DueDate = in.FirstDueDate
+			if in.FirstStatus != "" {
+				task.Status = in.FirstStatus
+			}
+			task.UpdatedAt = now
+			if e = validateTask(tx, task); e != nil {
+				return e
+			}
+			if e = saveTask(tx, task); e != nil {
+				return e
+			}
+			task.Revision++
+			if e = event(tx, "task", task.ID, "updated", id, now, before, task); e != nil {
+				return e
+			}
+		}
 		if rule.Mode == recurrence.Completion {
 			if task.Status == "completed" {
 				current.AnchorDate = task.CompletedDate
@@ -189,7 +238,7 @@ func (s *Service) CreateSeries(ctx context.Context, in CreateSeriesInput) (Serie
 		}
 		result.Occurrences, result.HasMore, e = seriesOccurrences(tx, id, 100, 0)
 		return e
-	})
+	}()
 	return result, recurrenceAPIError(e)
 }
 
@@ -229,6 +278,27 @@ func (s *Service) insertCycle(tx *sql.Tx, series *SeriesDTO, c recurrence.Candid
 		return TaskDTO{}, e
 	}
 	task := taskFromTemplate(series.Template, string(c.AdjustedDate))
+	if source == nil {
+		if p, ok, err := seriesProject(tx, series.ID); err != nil {
+			return task, err
+		} else if ok {
+			task.ProjectID = p
+		}
+	}
+	if source == nil && task.ParentTaskID != nil {
+		parent, err := getTask(tx, *task.ParentTaskID)
+		if err != nil {
+			return task, err
+		}
+		task.ProjectID = parent.ProjectID
+	}
+	if source == nil {
+		if a, ok, err := seriesAppearance(tx, series.ID); err != nil {
+			return task, err
+		} else if ok {
+			task.Appearance = a
+		}
+	}
 	var before any
 	if source != nil {
 		task = *source
@@ -244,7 +314,8 @@ func (s *Service) insertCycle(tx *sql.Tx, series *SeriesDTO, c recurrence.Candid
 		}
 		task.RecordMeta = RecordMeta{ID: tid, Revision: 1, CreatedAt: now, UpdatedAt: now}
 	}
-	pending := series.AnchorMode == string(recurrence.Completion) && active(task.Status)
+	dynamic := series.AnchorMode == string(recurrence.Completion) && series.WaitingOccurrenceID != nil
+	pending := series.AnchorMode == string(recurrence.Completion) && active(task.Status) && !dynamic
 	var manual *string
 	if task.PlannedDate != nil && *task.PlannedDate != string(c.AdjustedDate) {
 		manual = task.PlannedDate
@@ -253,7 +324,7 @@ func (s *Service) insertCycle(tx *sql.Tx, series *SeriesDTO, c recurrence.Candid
 	if e != nil {
 		return task, e
 	}
-	_, e = tx.Exec(`INSERT INTO occurrences(id,series_id,rule_version_id,cycle_index,base_date,adjusted_date,manual_date,task_link,calculation_json,pending_completion,manual_override,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`, id, series.ID, series.RuleVersionID, c.CycleIndex, c.BaseDate, c.AdjustedDate, manual, id, string(provenance), pending, manual != nil, now, now)
+	_, e = tx.Exec(`INSERT INTO occurrences(id,series_id,rule_version_id,cycle_index,base_date,adjusted_date,manual_date,task_link,calculation_json,pending_completion,manual_override,created_at,updated_at,dynamic) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, id, series.ID, series.RuleVersionID, c.CycleIndex, c.BaseDate, c.AdjustedDate, manual, id, string(provenance), pending, manual != nil, now, now, dynamic)
 	if e != nil {
 		return task, e
 	}

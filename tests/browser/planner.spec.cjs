@@ -71,7 +71,8 @@ test('create project, open card, create task and subtask, use server progress', 
   await page.getByRole('button', { name: 'Добавить подзадачу: Документы', exact: true }).click();
   await page.getByLabel('Название', { exact: true }).fill('Проверить договор');
   await page.getByRole('dialog').locator('button[type=submit]').click();
-  await expect(editor(page)).toBeVisible();
+  await expect(editor(page)).toHaveCount(0);
+  await page.getByRole('button',{name:'Проверить договор',exact:true}).click();
   await expect(editor(page).getByLabel('Родительская задача', { exact: true })).toHaveValue(/.+/);
   await page.getByRole('button', { name: 'Закрыть редактор' }).click();
   await expect(page.locator('.pl-child').getByRole('button', { name: 'Проверить договор', exact: true })).toBeVisible();
@@ -92,8 +93,8 @@ test('inbox schedule and move keep task, filters and draft navigation', async ({
   await expand(page,'Проект и подзадача');
   await editor(page).getByLabel('Проект', { exact: true }).selectOption(project.id);
   await editor(page).locator('button[type=submit]').click();
-  await expect(editor(page).getByLabel('Плановая дата', { exact: true })).toHaveValue('2026-12-20');
-  await page.getByRole('button', { name: 'Закрыть редактор' }).click();
+  await expect(editor(page)).toHaveCount(0);
+  expect((await get(request, 'tasks', task.id)).planned_date).toBe('2026-12-20');
   await expect(page.getByRole('button', { name: task.title, exact: true })).toHaveCount(0);
   expect((await get(request, 'tasks', task.id)).project_id).toBe(project.id);
   await page.goto('/#/plans/tasks');
@@ -118,7 +119,8 @@ test('completion actual Moscow date, cancellation, restore and lazy history', as
   await openTask(page, task);
   const historyRequests = [];
   page.on('request', req => { if (req.url().includes('/history?')) historyRequests.push(req.url()); });
-  await editor(page).getByRole('button', { name: 'Завершить задачу', exact: true }).click();
+  await editor(page).getByRole('button', {name:'Действия с задачей',exact:true}).click();
+ await page.getByRole('button',{name:'Выполнить другой датой',exact:true}).click();
   expect(await actionDialog(page).getByLabel('Фактическая дата выполнения').inputValue()).toBe(await page.evaluate(() => window.Planner.today()));
   await actionDialog(page).getByLabel('Фактическая дата выполнения').fill('2026-01-15');
   await actionDialog(page).locator('button[type=submit]').click();
@@ -131,7 +133,7 @@ test('completion actual Moscow date, cancellation, restore and lazy history', as
   await editor(page).getByRole('tab', { name: 'Основное', exact: true }).click();
   await editor(page).getByRole('button', { name: 'Восстановить задачу', exact: true }).click();
   await actionDialog(page).locator('button[type=submit]').click();
-  await taskMenu(page,'Отменить');
+  await taskMenu(page,'Отменить задачу');
   await actionDialog(page).locator('button[type=submit]').click();
   await expect(editor(page).getByRole('button', { name: 'Восстановить задачу', exact: true })).toBeVisible();
   expect((await get(request, 'tasks', task.id)).status).toBe('cancelled');
@@ -271,7 +273,8 @@ test('moving a parent moves the whole tree with all expected revisions', async (
   const mutation = page.waitForRequest(req => req.method() === 'PATCH' && req.url().endsWith('/tasks/' + parent.id));
   await editor(page).locator('button[type=submit]').click();
   expect((await mutation).postDataJSON().related_revisions[child.id]).toBe(child.revision);
-  await expect(editor(page).getByLabel('Проект', { exact: true })).toHaveValue(second.id);
+  await expect(editor(page)).toHaveCount(0);
+  expect((await get(request, 'tasks', parent.id)).project_id).toBe(second.id);
   await expect.poll(async () => (await get(request, 'tasks', child.id)).project_id).toBe(second.id);
   await page.goto('/#/plans/projects/' + second.id);
   await expect(page.locator('[data-task-id="' + child.id + '"]')).toHaveCount(1);
@@ -282,7 +285,7 @@ test('cancel task explicitly closes active sessions; restore preserves history',
   const task = await create(request, 'tasks', { title: unique('Отмена периодов работы') });
   const session = await create(request, 'sessions', { task_id: task.id, date: '2027-03-01' });
   await openTask(page, task);
-  await taskMenu(page,'Отменить');
+  await taskMenu(page,'Отменить задачу');
   await actionDialog(page).getByRole('checkbox').check();
   await actionDialog(page).locator('button[type=submit]').click();
   await expect(editor(page).getByRole('button', { name: 'Восстановить задачу', exact: true })).toBeVisible();

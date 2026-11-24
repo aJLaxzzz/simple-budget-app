@@ -23,6 +23,7 @@
     form.addEventListener('change', () => P.drafts.set(key, { values: P.values(form), ...snapshot() }));
   }
   P.taskEditor = async function (route, isCurrent) {
+    const originScroll=P.editorOrigin?.url===P.panelURL()?P.editorOrigin.scrollY:window.scrollY;
     const id = route.params.get('task');
     const context = id ? await P.api('/tasks/' + encodeURIComponent(id) + '/context') : null;
     const fresh = context ? context.task : { title: '', description: '', status: 'planned', priority: 'normal', project_id: route.params.get('for_project') || null, parent_task_id: route.params.get('parent') || null, planned_date: route.params.get('for_date') || null };
@@ -46,7 +47,7 @@
     drawer.append(el('header', { class: 'pl-drawer-head' }, el('div', {}, el('h2', {}, id ? 'Детали задачи' : 'Новая задача')), x));
     const body = el('div', { class: 'pl-drawer-body' }); drawer.append(body);
     const form = el('form', { 'aria-label': 'Редактор задачи', class: 'pl-edit-form' });
-    P.appearanceField(form,value,false,()=>({project:project?.value,parent:parent?.value}));
+    P.appearanceField(form,{...record,...value},false,()=>({project:project?.value,parent:parent?.value}));
     const title = P.field(form, 'title', 'Название', 'textarea', value.title); title.required = true;
     title.rows=value.title?.length>60?2:1; title.classList.add('pl-task-name');
     const parameters=P.disclosure('Параметры');
@@ -91,9 +92,18 @@
     if (record.completed_date) form.append(meta('Фактически выполнено: ' + P.date(record.completed_date)));
     if (record.completed_with_open_children) form.append(el('p', { class: 'pl-note' }, 'Родитель завершён, подзадачи оставлены открытыми. Они продолжают учитываться в прогрессе проекта.'));
     const archived = P.data.projects.find(p => p.id === record.project_id)?.archived_at;
-    if (archived) form.append(el('p', { class: 'pl-note' }, 'Задача в архивном проекте. Для редактирования сначала переместите её в текущий проект.'));
+    if (archived) form.append(el('p', { class: 'pl-note' }, 'Задача в архивном проекте. Для редактирования сначала верните проект из архива через его меню.'));
+    let builder,repeat;
+    if(!id){
+      const recurrence=el('section',{class:'pl-new-recurrence'});repeat=el('input',{type:'checkbox',name:'repeat',value:'yes',checked:value.repeat==='yes'});recurrence.append(el('label',{},repeat,' Повторять задачу'));const settings=el('div');recurrence.append(settings);form.append(recurrence);
+      const toggle=()=>{settings.hidden=!repeat.checked;if(repeat.checked&&!date.value)date.value=P.today();if(repeat.checked&&!builder){
+        builder=P.ruleBuilder(settings,{firstDate:date.value||P.today(),rule:value.unit?{unit:value.unit,interval:Number(value.interval),mode:value.mode,allowed_days:{mode:value.allowed,weekdays:[1,2,3,4,5,6,7].filter(d=>value['weekday_'+d])},adjustment:value.adjustment}:undefined});
+        builder.first.parentElement.hidden=true;builder.first.required=false;
+      } if(builder){builder.first.value=date.value||P.today();settings.querySelectorAll('input,select').forEach(c=>c.disabled=!repeat.checked);if(repeat.checked)builder.refresh();}};
+      repeat.addEventListener('change',toggle);date.addEventListener('input',toggle);toggle();
+    }
     remember(form, key, () => ({ record, related }));
-    const create = P.commandSender('/tasks');
+    const create = P.commandSender('/tasks'),createRepeat=P.commandSender('/series');
     P.bindForm(form, () => {
       const values = P.nullable(P.values(form), ['color_id','icon_id','project_id', 'parent_task_id', 'planned_date', 'scheduled_time', 'due_date']);
       const data = Object.fromEntries(Object.entries(values).filter(([k]) => taskFields.includes(k) || k === 'status'));
@@ -103,10 +113,11 @@
         if (Object.keys(patch).length && !record.occurrence_id && Object.keys(patch).every(key => ['planned_date', 'scheduled_time'].includes(key))) return P.api('/tasks/' + id + '/reschedule', 'POST', { ...patch, planned_date: data.planned_date, expected_revision: record.revision });
         return P.api('/tasks/' + id, 'PATCH', { ...patch, expected_revision: record.revision, related_revisions: P.revisions(related) });
       }
+      if(repeat?.checked){const {planned_date,due_date,status,...task}=data;return createRepeat({task,first_date:planned_date||P.today(),first_due_date:due_date,first_status:status||'planned',rule:builder.read()}).then(s=>s.occurrences.find(o=>o.cycle_index===0).task);}
       return create(data);
     }, async saved => {
       P.drafts.delete(key);
-      if (id) await P.refresh(); else if (isCurrent()) P.openTask(saved.id);
+      P.guardActive=null;P.deferNavigation=null;window.history.replaceState(null,'',P.panelURL());await P.refresh();window.scrollTo(0,originScroll);
       P.notify('Задача «'+saved.title+'» '+(id?'сохранена':'создана'));
     }, async () => {
       const latestContext = await P.api('/tasks/' + id + '/context');
@@ -170,7 +181,7 @@
     // Project forms are hash-addressable just like the task drawer.
     dialog.addEventListener('close', () => { if (P.route().params.has('edit') || P.route().params.get('new') === 'project') P.closeEditor(); });
     const form = el('form', { 'aria-label': 'Редактор проекта' });
-    P.appearanceField(form,value,true);
+    P.appearanceField(form,{...record,...value},true);
     P.field(form, 'title', 'Название проекта', 'text', value.title).required = true;
     P.field(form,'description','Описание','textarea',value.description);
     const parameters=P.disclosure('Даты и статус',[value.start_date?'Начало '+P.date(value.start_date):null,value.due_date?'Крайний срок '+P.date(value.due_date):null].filter(Boolean).join(' · '));parameters.open=route.params.has('dates');form.append(parameters);
@@ -193,7 +204,7 @@
   P.projectAction = function (project, action) {
     const titles = { complete: 'Завершить проект?', cancel: 'Отменить проект?', archive: 'Переместить проект в архив?' };
     const { dialog, close } = P.dialog(titles[action]);
-    dialog.append(el('p', {}, action === 'archive' ? 'Проект останется в архиве для просмотра. Его задачи нельзя будет редактировать без перемещения в другой проект. Возврат проекта из архива пока не поддерживается.' : 'Изменится только статус проекта. Задачи и их периоды работы сохранят свои состояния.'));
+    dialog.append(el('p', {}, action === 'archive' ? 'Проект и его история сохранятся. Найти его можно через фильтр «Архив», а вернуть — действием «Вернуть из архива». Статус выполнения при этом не изменится.' : 'Изменится только статус проекта. Задачи и их периоды работы сохранят свои состояния.'));
     const form = el('form',{'data-submit':{complete:'Завершить проект',cancel:'Отменить проект',archive:'Архивировать проект'}[action]});
     P.bindForm(form, () => P.api('/projects/' + project.id + '/' + action, 'POST', { expected_revision: project.revision }), async () => { close(true); P.notify('Проект «'+project.title+'» '+({complete:'завершён',cancel:'отменён',archive:'перемещён в архив'}[action])); await P.refresh(); }, async () => {
       const latest = await P.api('/projects/' + project.id);
@@ -317,7 +328,7 @@
   function history(kind, id) {
     const section = el('section', { class: 'pl-editor-section' });
     const list = el('div', { class: 'pl-history' });
-    const actions = {saved_as_template:'Сохранено как шаблон',created_from_template:'Создано из шаблона',version_created:'Новая версия шаблона',instantiated:'Создано из шаблона',archived:'Архивировано', created: 'Создано', edited: 'Изменено', status_changed: 'Изменён статус', rescheduled: 'Перенесено', completed: 'Завершено', cancelled: 'Отменено', restored: 'Восстановлено', moved_project: 'Перемещено в проект' };
+    const actions = {repeat_disabled:'Повторение отключено',completion_undone:'Завершение отменено',appearance_changed:'Оформление повторения изменено',unarchived:'Возвращено из архива',occurrence_deleted:'Выполнение удалено навсегда',repeat_deleted:'Повторение удалено навсегда',saved_as_template:'Сохранено как шаблон',created_from_template:'Создано из шаблона',version_created:'Новая версия шаблона',instantiated:'Создано из шаблона',archived:'Архивировано', created: 'Создано', edited: 'Изменено', status_changed: 'Изменён статус', rescheduled: 'Перенесено', completed: 'Завершено', cancelled: 'Отменено', restored: 'Восстановлено', moved_project: 'Перемещено в проект' };
     let offset = 0, loaded = false;
     const load = button('Показать ещё', async () => {
       load.disabled = true;

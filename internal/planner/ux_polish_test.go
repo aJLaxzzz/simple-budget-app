@@ -28,7 +28,7 @@ func TestExpandedCatalogIntegrityCompatibilityAndRestore(t *testing.T) {
 		}
 		seen[i.ID] = true
 		categories[i.Category] = true
-		data, e := builtinIcons.ReadFile("icons/" + strings.TrimPrefix(i.ID, "lucide:") + ".svg")
+		data, e := builtinIcons.ReadFile("icons/" + strings.ReplaceAll(strings.TrimPrefix(i.ID, "lucide:"), "app:", "app-") + ".svg")
 		if e != nil {
 			t.Fatal(e)
 		}
