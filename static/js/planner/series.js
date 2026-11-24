@@ -6,18 +6,18 @@
   P.seriesList=async()=>{const items=[];let after='';do{const page=await P.api('/series'+(after?'?after='+encodeURIComponent(after):''));items.push(...page.items);after=page.next_after;}while(after);return items;};
   P.renderSeries=async function(host,route){
     host.replaceChildren();
-    if(route.id)return detail(host,route.id);
+    if(route.id){const value=await P.api('/series/'+route.id+'?limit=1');host.append(el('h2',{},'Повторение'),meta(P.seriesTitle(value)),button('Настроить повторение',()=>P.repeatEditor(route.id)));if(P.repeatAutoOpenedRoute!==window.location.hash){P.repeatAutoOpenedRoute=window.location.hash;await P.repeatEditor(route.id,{tab:route.params.get('tab')||'schedule'});}return;}
     const scope=route.view==='tasks'?'task':route.view==='projects'?'project':null;
-    host.append(el('div',{class:'pl-section-head'},el('div',{},el('h2',{},scope==='task'?'Регулярные задачи':scope==='project'?'Регулярные проекты':'Регулярные дела'),meta('Ритм повседневных дел — без необходимости помнить о каждом.')),button(scope==='project'?'+ Из шаблона':'+ Регулярное дело',()=>scope==='project'?P.navigate('#/plans/templates'):P.createRecurring(), 'pl-primary')));
+    host.append(el('div',{class:'pl-section-head'},el('div',{},el('h2',{},scope==='task'?'Регулярные задачи':scope==='project'?'Регулярные проекты':'Регулярные дела'),meta('Ритм повседневных дел — без необходимости помнить о каждом.')),button(scope==='project'?'+ Проект':'+ Регулярное дело',()=>scope==='project'?P.navigate('#/plans/projects?new=project'):P.createRecurring(), 'pl-primary')));
     const items=(await P.seriesList()).filter(s=>!scope||s.source_type===scope);const filters=el('form',{class:'pl-filters'});filters.addEventListener('submit',e=>e.preventDefault());
     const search=P.field(filters,'q','Поиск','search',route.params.get('q')||'');const type=P.field(filters,'type','Показывать','select',route.params.get('filter')||'all',[['all','Все'],...(!scope?[['task','Задачи'],['project','Проекты']]:[]),['active','Активные'],['paused','Приостановленные'],['archived','Архивные'],['disabled','Отключённые · история']]);
     const grid=el('div',{class:'pl-project-grid'});
     function draw(){const found=items.filter(s=>(s.state!=='disabled'||type.value==='disabled')&&P.seriesTitle(s).toLocaleLowerCase('ru').includes(search.value.toLocaleLowerCase('ru'))&&(type.value==='all'||s.source_type===type.value||s.state===type.value));grid.replaceChildren(...found.map(s=>{
       const appearance={...(s.project_template||s.template),effective_color_id:s.effective_color_id,effective_icon_id:s.effective_icon_id},card=P.paint(el('article',{class:'pl-project-card pl-series-card'}),appearance);
       const title=el('a',{href:'#/plans/series/'+s.id+'?source='+s.source_type},P.appearanceIcon(appearance,s.source_type==='project'),el('strong',{},P.seriesTitle(s)));
-      const menu=button('···',()=>{const {dialog,close}=P.dialog('Действия с повторением');dialog.append(button('Открыть повторение',()=>{close(true);P.navigate('#/plans/series/'+s.id);}),button('Оформление повторения',()=>{close(true);P.editSeriesAppearance(s.id);}),P.lifecycleMenuButton('series',s));},'pl-icon');menu.setAttribute('aria-label','Действия с повторением');
+      const menu=button('···',()=>{const {dialog,close}=P.dialog('Действия с повторением');dialog.append(button('Настроить повторение',()=>{close(true);P.repeatEditor(s.id);}),button('Оформление повторения',()=>{close(true);P.editSeriesAppearance(s.id);}),P.lifecycleMenuButton('series',s));},'pl-icon');menu.setAttribute('aria-label','Действия с повторением');
       card.append(...[el('div',{class:'pl-card-top'},title,menu),meta(stateLabels[s.state]),s.calculation_error?el('p',{class:'pl-note'},s.calculation_error):null,el('p',{},P.ruleText(s.rule.rule)),s.next_date?meta((s.next_date<P.today()?'Ожидает выполнения с ':s.anchor_mode==='completion'?'Текущее выполнение: ':'Ближайшее: ')+P.date(s.next_date)):meta(s.state==='needs_anchor'?'Выберите дату продолжения':s.anchor_mode==='completion'?'Следующая дата появится после выполнения':'Нет подтверждённых будущих выполнений'),s.last_completed_date?meta('Последнее выполнение: '+P.date(s.last_completed_date)):null,s.unresolved_count?el('span',{class:'pl-overdue'},'Требуют решения: '+s.unresolved_count):null].filter(Boolean));return card;
-    }));if(!found.length)grid.append(P.empty('Повторения ещё не настроены','Создайте регулярную задачу или выберите шаблон проекта.'));}
+    }));if(!found.length)grid.append(P.empty('Повторения ещё не настроены','Создайте задачу или проект и включите повторение.'));}
     filters.addEventListener('input',()=>{const params=new URLSearchParams(route.params);params.delete('q');params.delete('filter');if(search.value)params.set('q',search.value);if(type.value!=='all')params.set('filter',type.value);history.replaceState(null,'',P.base()+(params.size?'?'+params:''));draw();});host.append(filters,grid);draw();
   };
   async function detail(host,id){
@@ -35,7 +35,8 @@
       actions.append(button('Изменить правило',()=>P.seriesChange(series,'change_rule')),button('Приостановить',()=>P.seriesChange(series,'pause')));
       for(const pause of series.pauses||[])if(!pause.resumed_on)actions.append(button('Возобновить · '+P.date(pause.start_date),()=>P.seriesChange(series,'resume',{pause_id:pause.id})));
       if(series.state==='needs_anchor')actions.append(button('Дата, от которой считать дальше',()=>P.seriesChange(series,'reanchor')));
-      if(series.source_type==='project')actions.append(button('Обновить шаблон',()=>P.seriesChange(series,'change_template')));
+      if(series.source_type==='project')actions.append(button('Изменить состав будущих проектов',()=>P.projectComposition({repeat_series_id:series.id,id:series.source_project_id,title:P.seriesTitle(series)})));
+      if(series.source_type==='project')actions.append(button('Проверить и исправить будущие выполнения',()=>P.projectDateRepair({repeat_series_id:series.id,title:P.seriesTitle(series)})));
       actions.append(button('Архивировать повторение',()=>P.seriesChange(series,'archive')));
     }
     actions.append(button('Оформление повторения',()=>P.editSeriesAppearance(series.id)),P.lifecycleMenuButton('series',series));
@@ -53,15 +54,17 @@
     const more=button('Ещё выполнения',async()=>{more.disabled=true;try{const next=await P.api('/series/'+id+'?limit=100&offset='+offset);append(next.occurrences||[]);offset+=(next.occurrences||[]).length;more.hidden=!next.has_more;}catch(e){P.notify(e.message);}finally{more.disabled=false;}});more.hidden=!series.has_more;host.append(more);
     const history=P.disclosure('История повторения');host.append(history);P.renderHistory?.(history,'series',id);
   }
-  P.seriesChange=function(series,action,extras={}){
+  P.renderRepeatHistory=detail;
+  P.seriesChange=function(series,action,extras={},host){
+    if(action==='change_rule'&&!host)return P.repeatEditor(series.id,{tab:'schedule',extras});
     const labels={change_rule:'Изменение будущих выполнений',pause:'Пауза повторения',resume:'Возобновление повторения',archive:'Архивирование повторения',reanchor:'Дата, от которой считать дальше',change_template:'Обновление состава проектов'};
-    const {dialog,close}=P.dialog(labels[action]);dialog.classList.add('pl-management-drawer');const form=el('form',{'aria-label':labels[action]});let builder;
+    const {dialog,close}=P.dialog(labels[action],host);dialog.classList.add('pl-management-drawer');const form=el('form',{'aria-label':labels[action]});let builder;
     if(action==='change_rule'){
       form.append(meta('Закрытые, начатые и вручную перенесённые выполнения сохраняются. Изменение всего повторения использует тот же механизм, начиная с первого выполнения.'));
       const choices=[['0','Все будущие выполнения с сохранением истории'],...(series.occurrences||[]).filter(o=>P.active(o.task||o.project||{})).map(o=>[String(o.cycle_index),'Начиная с '+P.date(o.adjusted_date)])];if(extras.from_cycle!==undefined&&!choices.some(c=>c[0]===String(extras.from_cycle)))choices.push([String(extras.from_cycle),'Выбранное выполнение и будущие']);const scope=P.field(form,'from_cycle','Применить','select',String(extras.from_cycle??0),choices);
       builder=P.ruleBuilder(form,{rule:series.rule.rule,firstDate:extras.first_date||(series.occurrences||[]).find(o=>o.cycle_index===(extras.from_cycle??0))?.base_date||series.rule.first_date,changing:true,completedDate:series.anchor_date,anchorKind:series.anchor_kind,project:series.source_type==='project'});
       scope.addEventListener('change',()=>{builder.first.value=(series.occurrences||[]).find(o=>o.cycle_index===Number(scope.value))?.base_date||series.rule.first_date;builder.refresh();});
-      if(series.source_type==='project')P.field(form,'tasks_date_decision','Даты задач проектов','select','keep',[['keep','Сохранить даты задач'],['shift','Пересчитать относительно нового начала']]);
+      if(series.source_type==='project'){const dates=P.field(form,'tasks_date_decision','Даты задач проектов','select','shift',[['keep','Сохранить даты задач'],['shift','Пересчитать относительно нового начала']]);const note=el('p',{class:'pl-warning'},'Даты уже созданных задач останутся на прежних днях, а новые выполнения будут рассчитаны по новому расписанию.');note.hidden=true;dates.addEventListener('change',()=>note.hidden=dates.value!=='keep');form.append(note);}
     }
     if(action==='pause'){P.field(form,'start_date','Начало паузы','date',P.today()).required=true;P.field(form,'end_date','Последний день паузы','date',P.today()).required=true;P.field(form,'reason','Причина','text','');}
     if(action==='reanchor'){P.field(form,'anchor_date','Дата, от которой считать дальше','date',P.today()).required=true;form.append(meta('Продолжение рассчитывается от этой даты. Старые пропуски остаются в истории.'));}

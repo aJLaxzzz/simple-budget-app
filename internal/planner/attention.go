@@ -15,13 +15,13 @@ const attentionCTE = `WITH problems AS (
  t.id AS task_id,t.project_id,t.occurrence_id,o.series_id,'needs_decision' AS disposition,'overdue' AS source,
  CASE WHEN t.due_date<?1 THEN 'Просрочен крайний срок' ELSE 'Не выполнено по плану' END AS reason,t.updated_at AS occurred_at,CASE WHEN COALESCE(a.snoozed_until,'')>?1 THEN 0 ELSE 1 END AS actionable,a.snoozed_until
  FROM tasks t LEFT JOIN occurrences o ON o.id=t.occurrence_id LEFT JOIN attention_state a ON a.task_id=t.id
- WHERE t.status IN('planned','in_progress') AND COALESCE(o.dynamic,0)=0 AND ((t.due_date IS NOT NULL AND t.due_date<?1) OR (t.planned_date IS NOT NULL AND t.planned_date<?1))
+ WHERE NOT EXISTS(SELECT 1 FROM project_repeat_projection rp WHERE rp.id=t.project_id AND rp.preliminary=1) AND t.status IN('planned','in_progress') AND COALESCE(o.dynamic,0)=0 AND ((t.due_date IS NOT NULL AND t.due_date<?1) OR (t.planned_date IS NOT NULL AND t.planned_date<?1))
  AND NOT EXISTS(SELECT 1 FROM occurrence_incidents i WHERE i.occurrence_id=t.occurrence_id AND i.disposition='needs_decision')
  UNION ALL
  SELECT 'project',p.id,p.title,p.status,p.due_date,NULL,p.id,p.occurrence_id,o.series_id,'needs_decision','overdue','Просрочен крайний срок',p.updated_at,
  CASE WHEN COALESCE(a.snoozed_until,'')>?1 THEN 0 ELSE 1 END,a.snoozed_until
  FROM projects p LEFT JOIN occurrences o ON o.id=p.occurrence_id LEFT JOIN attention_state a ON a.project_id=p.id
- WHERE p.status IN('planned','in_progress') AND p.archived_at IS NULL AND p.due_date<?1
+ WHERE NOT EXISTS(SELECT 1 FROM project_repeat_projection rp WHERE rp.id=p.id AND rp.preliminary=1) AND p.status IN('planned','in_progress') AND p.archived_at IS NULL AND p.due_date<?1
  AND NOT EXISTS(SELECT 1 FROM occurrence_incidents i WHERE i.occurrence_id=p.occurrence_id AND i.disposition='needs_decision')
  UNION ALL
  SELECT i.kind,i.id,COALESCE(t.title,p.title,json_extract(v.source_snapshot_json,'$.title'),'Регулярное дело'),COALESCE(t.status,p.status,o.outcome),
@@ -34,6 +34,8 @@ const attentionCTE = `WITH problems AS (
  SELECT 'series',s.id,json_extract(v.source_snapshot_json,'$.title'),s.state,'',NULL,NULL,NULL,s.id,'needs_decision','anchor','Выберите дату, от которой продолжить повторение',s.updated_at,1,NULL
  FROM series s JOIN series_versions v ON v.series_id=s.id
  WHERE s.state='needs_anchor' AND s.disabled_at IS NULL AND v.version=(SELECT max(version) FROM series_versions WHERE series_id=s.id)
+ UNION ALL
+ SELECT 'series',s.id,json_extract(v.source_snapshot_json,'$.title'),s.state,'',NULL,NULL,NULL,s.id,'needs_decision','project_current','Выберите текущее выполнение проекта',s.updated_at,1,NULL FROM series s JOIN series_versions v ON v.series_id=s.id JOIN project_repeat_state r ON r.series_id=s.id WHERE r.needs_decision=1 AND s.disabled_at IS NULL AND v.version=(SELECT max(version) FROM series_versions WHERE series_id=s.id)
  UNION ALL
  SELECT 'series',s.id,json_extract(v.source_snapshot_json,'$.title'),s.state,'',NULL,NULL,NULL,s.id,'needs_decision','calculation',s.calculation_error,s.updated_at,1,NULL
  FROM series s JOIN series_versions v ON v.series_id=s.id

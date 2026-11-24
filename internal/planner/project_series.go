@@ -42,6 +42,19 @@ func (s *Service) createProjectSeries(ctx context.Context, in CreateSeriesInput)
 
 // Shared by direct creation and the atomic existing-project workflow.
 func (s *Service) createProjectSeriesTx(ctx context.Context, tx *sql.Tx, in CreateSeriesInput, rule recurrence.Rule, op, now string) (CommandResult, error) {
+	return s.createProjectSeriesFromOrigin(ctx, tx, in, rule, op, now, "")
+}
+
+// A newly composed source occupies logical cycle zero without being copied.
+// Keep its immutable origin for month-end arithmetic and working-day shifts.
+func (s *Service) createProjectSeriesFromOrigin(ctx context.Context, tx *sql.Tx, in CreateSeriesInput, rule recurrence.Rule, op, now, origin string) (CommandResult, error) {
+	firstCycle := int64(0)
+	firstDate := in.FirstDate
+	if origin != "" {
+		firstCycle = 1
+		firstDate = origin
+	}
+
 	if e := checkRetiredSeriesRequest(tx, in.RequestID); e != nil {
 		return CommandResult{}, e
 	}
@@ -79,13 +92,13 @@ func (s *Service) createProjectSeriesTx(ctx context.Context, tx *sql.Tx, in Crea
 	if e != nil {
 		return CommandResult{}, e
 	}
-	v := SeriesDTO{EndDate: in.EndDate, RecordMeta: RecordMeta{ID: id, Revision: 1, CreatedAt: now, UpdatedAt: now}, SourceType: "project", AnchorMode: "schedule", State: "active", AnchorKind: recurrence.CompletedAnchor, TemplateVersionID: &template.VersionID, ProjectTemplate: &snapshot, NextCycle: 1, HorizonDate: s.horizon(), Rule: StoredTaskRule{Rule: rule, FirstDate: recurrence.Date(in.FirstDate), Anchor: recurrence.Anchor{Date: recurrence.Date(in.FirstDate), Kind: recurrence.ScheduleAnchor}}}
+	v := SeriesDTO{EndDate: in.EndDate, RecordMeta: RecordMeta{ID: id, Revision: 1, CreatedAt: now, UpdatedAt: now}, SourceType: "project", AnchorMode: "schedule", State: "active", AnchorKind: recurrence.CompletedAnchor, TemplateVersionID: &template.VersionID, ProjectTemplate: &snapshot, NextCycle: firstCycle + 1, HorizonDate: s.horizon(), Rule: StoredTaskRule{Rule: rule, FirstDate: recurrence.Date(firstDate), Anchor: recurrence.Anchor{Date: recurrence.Date(firstDate), Kind: recurrence.ScheduleAnchor}}}
 	version, e := insertVersion(tx, v, v.Rule, now)
 	if e != nil {
 		return CommandResult{}, e
 	}
 	v.RuleVersionID = version
-	c, cal, e := calculateStoredCycle(ctx, tx, v, 0, nil)
+	c, cal, e := calculateStoredCycle(ctx, tx, v, firstCycle, nil)
 	if e != nil {
 		return CommandResult{}, e
 	}
@@ -95,7 +108,7 @@ func (s *Service) createProjectSeriesTx(ctx context.Context, tx *sql.Tx, in Crea
 	if _, e = s.insertProjectCycle(ctx, tx, &v, c, cal, nil, op, now); e != nil {
 		return CommandResult{}, e
 	}
-	_, e = tx.Exec(`INSERT INTO series_runtime(series_id,next_cycle,anchor_cycle,horizon_date,end_date) VALUES(?,1,0,?,?)`, id, v.HorizonDate, v.EndDate)
+	_, e = tx.Exec(`INSERT INTO series_runtime(series_id,next_cycle,anchor_cycle,horizon_date,end_date) VALUES(?,?,0,?,?)`, id, firstCycle+1, v.HorizonDate, v.EndDate)
 	if e != nil {
 		return CommandResult{}, e
 	}

@@ -9,17 +9,17 @@ import (
 
 type rowScanner interface{ Scan(...any) error }
 
-const projectColumns = "id,revision,created_at,updated_at,title,description,status,start_date,due_date,closed_at,archived_at,occurrence_id,template_version_id,color_id,icon_id,COALESCE(color_id,'slate'),COALESCE(icon_id,'lucide:folder'),(SELECT template_id FROM entity_template_links WHERE project_id=projects.id AND role='saved' ORDER BY id DESC LIMIT 1),(SELECT template_id FROM template_versions WHERE id=projects.template_version_id),COALESCE((SELECT series_id FROM occurrences WHERE id=projects.occurrence_id),(SELECT l.series_id FROM entity_template_links l JOIN series s ON s.id=l.series_id WHERE l.project_id=projects.id AND s.disabled_at IS NULL ORDER BY l.id DESC LIMIT 1))"
-const taskColumns = "id,revision,created_at,updated_at,project_id,parent_task_id,title,description,priority,status,planned_date,scheduled_time,due_date,completed_date,completed_at,occurrence_id,(SELECT series_id FROM occurrences WHERE id=tasks.occurrence_id),(SELECT current_rule_version_id FROM occurrence_current WHERE id=tasks.occurrence_id),(SELECT cycle_index FROM occurrences WHERE id=tasks.occurrence_id),(SELECT parent.title FROM tasks parent WHERE parent.id=tasks.parent_task_id),color_id,icon_id,COALESCE(tasks.color_id,(SELECT color_id FROM tasks parent WHERE parent.id=tasks.parent_task_id),(SELECT color_id FROM projects WHERE id=tasks.project_id),'slate'),COALESCE(tasks.icon_id,(SELECT icon_id FROM tasks parent WHERE parent.id=tasks.parent_task_id),(SELECT icon_id FROM projects WHERE id=tasks.project_id),'lucide:circle-check'),(SELECT template_id FROM entity_template_links WHERE task_id=tasks.id AND role='saved' ORDER BY id DESC LIMIT 1),(SELECT template_id FROM entity_template_links WHERE task_id=tasks.id AND role='source' ORDER BY id DESC LIMIT 1),COALESCE((SELECT dynamic FROM occurrences WHERE id=tasks.occurrence_id),0)"
+const projectColumns = "id,revision,created_at,updated_at,title,description,status,start_date,due_date,closed_at,archived_at,occurrence_id,template_version_id,color_id,icon_id,COALESCE(color_id,'slate'),COALESCE(icon_id,'lucide:folder'),(SELECT template_id FROM entity_template_links WHERE project_id=projects.id AND role='saved' ORDER BY id DESC LIMIT 1),(SELECT template_id FROM template_versions WHERE id=projects.template_version_id),COALESCE((SELECT series_id FROM occurrences WHERE id=projects.occurrence_id),(SELECT l.series_id FROM entity_template_links l JOIN series s ON s.id=l.series_id WHERE l.project_id=projects.id AND s.disabled_at IS NULL ORDER BY l.id DESC LIMIT 1)),COALESCE((SELECT mode FROM project_repeat_projection WHERE id=projects.id),'independent'),(SELECT current_project_id FROM project_repeat_projection WHERE id=projects.id),COALESCE((SELECT needs_decision FROM project_repeat_projection WHERE id=projects.id),0),COALESCE((SELECT preliminary FROM project_repeat_projection WHERE id=projects.id),0),COALESCE((SELECT managed FROM project_repeat_projection WHERE id=projects.id),0)"
+const taskColumns = "id,revision,created_at,updated_at,project_id,parent_task_id,title,description,priority,status,planned_date,scheduled_time,due_date,completed_date,completed_at,occurrence_id,(SELECT series_id FROM occurrences WHERE id=tasks.occurrence_id),(SELECT current_rule_version_id FROM occurrence_current WHERE id=tasks.occurrence_id),(SELECT cycle_index FROM occurrences WHERE id=tasks.occurrence_id),(SELECT parent.title FROM tasks parent WHERE parent.id=tasks.parent_task_id),color_id,icon_id,COALESCE(tasks.color_id,(SELECT color_id FROM tasks parent WHERE parent.id=tasks.parent_task_id),(SELECT color_id FROM projects WHERE id=tasks.project_id),'slate'),COALESCE(tasks.icon_id,(SELECT icon_id FROM tasks parent WHERE parent.id=tasks.parent_task_id),(SELECT icon_id FROM projects WHERE id=tasks.project_id),'lucide:circle-check'),(SELECT template_id FROM entity_template_links WHERE task_id=tasks.id AND role='saved' ORDER BY id DESC LIMIT 1),(SELECT template_id FROM entity_template_links WHERE task_id=tasks.id AND role='source' ORDER BY id DESC LIMIT 1),COALESCE((SELECT dynamic FROM occurrences WHERE id=tasks.occurrence_id),0),COALESCE((SELECT s.task_order FROM series s JOIN occurrences o ON o.series_id=s.id WHERE o.id=tasks.occurrence_id),tasks.sort_order),COALESCE((SELECT preliminary FROM project_repeat_projection WHERE id=tasks.project_id),0)"
 
 func scanProject(row rowScanner) (ProjectDTO, error) {
 	var p ProjectDTO
-	e := row.Scan(&p.ID, &p.Revision, &p.CreatedAt, &p.UpdatedAt, &p.Title, &p.Description, &p.Status, &p.StartDate, &p.DueDate, &p.ClosedAt, &p.ArchivedAt, &p.OccurrenceID, &p.TemplateVersionID, &p.ColorID, &p.IconID, &p.EffectiveColorID, &p.EffectiveIconID, &p.SavedTemplateID, &p.SourceTemplateID, &p.RepeatSeriesID)
+	e := row.Scan(&p.ID, &p.Revision, &p.CreatedAt, &p.UpdatedAt, &p.Title, &p.Description, &p.Status, &p.StartDate, &p.DueDate, &p.ClosedAt, &p.ArchivedAt, &p.OccurrenceID, &p.TemplateVersionID, &p.ColorID, &p.IconID, &p.EffectiveColorID, &p.EffectiveIconID, &p.SavedTemplateID, &p.SourceTemplateID, &p.RepeatSeriesID, &p.ProjectMode, &p.CurrentProjectID, &p.NeedsDecision, &p.Preliminary, &p.ManagedRepeat)
 	return p, e
 }
 func scanTask(row rowScanner) (TaskDTO, error) {
 	var t TaskDTO
-	e := row.Scan(&t.ID, &t.Revision, &t.CreatedAt, &t.UpdatedAt, &t.ProjectID, &t.ParentTaskID, &t.Title, &t.Description, &t.Priority, &t.Status, &t.PlannedDate, &t.ScheduledTime, &t.DueDate, &t.CompletedDate, &t.CompletedAt, &t.OccurrenceID, &t.SeriesID, &t.RuleVersionID, &t.CycleIndex, &t.ParentTitle, &t.ColorID, &t.IconID, &t.EffectiveColorID, &t.EffectiveIconID, &t.SavedTemplateID, &t.SourceTemplateID, &t.Dynamic)
+	e := row.Scan(&t.ID, &t.Revision, &t.CreatedAt, &t.UpdatedAt, &t.ProjectID, &t.ParentTaskID, &t.Title, &t.Description, &t.Priority, &t.Status, &t.PlannedDate, &t.ScheduledTime, &t.DueDate, &t.CompletedDate, &t.CompletedAt, &t.OccurrenceID, &t.SeriesID, &t.RuleVersionID, &t.CycleIndex, &t.ParentTitle, &t.ColorID, &t.IconID, &t.EffectiveColorID, &t.EffectiveIconID, &t.SavedTemplateID, &t.SourceTemplateID, &t.Dynamic, &t.SortOrder, &t.ProjectPending)
 	return t, e
 }
 func getProject(tx *sql.Tx, id string) (ProjectDTO, error) {
@@ -105,6 +105,53 @@ func decorateProject(tx *sql.Tx, p *ProjectDTO, includeTasks bool) error {
 	}
 	if p.Progress.Total > 0 {
 		p.Progress.Percent = 100 * float64(p.Progress.Completed) / float64(p.Progress.Total)
+	}
+	if p.RepeatSeriesID == nil && p.OccurrenceID == nil {
+		summary := RoutineSummary{OpenDates: []string{}}
+		series := map[string]bool{}
+		for _, t := range tasks {
+			if t.SeriesID != nil {
+				series[*t.SeriesID] = true
+				if active(t.Status) && !t.Dynamic {
+					date := t.PlannedDate
+					if date == nil {
+						date = t.DueDate
+					}
+					if date != nil {
+						missed := *date
+						if t.DueDate != nil && *t.DueDate < missed {
+							missed = *t.DueDate
+						}
+						summary.OpenDates = append(summary.OpenDates, missed)
+						if summary.NextDate == nil || *date < *summary.NextDate {
+							d := *date
+							summary.NextDate = &d
+						}
+					}
+				}
+				continue
+			}
+			if parents[t.ID] {
+				continue
+			}
+			switch t.Status {
+			case "cancelled":
+				summary.Ordinary.Cancelled++
+			case "skipped":
+				summary.Ordinary.Skipped++
+			default:
+				summary.Ordinary.Total++
+				if t.Status == "completed" {
+					summary.Ordinary.Completed++
+				} else {
+					summary.Ordinary.OpenTasks++
+				}
+			}
+		}
+		summary.Count = len(series)
+		if summary.Count > 0 {
+			p.Routines = &summary
+		}
 	}
 	if includeTasks {
 		p.Tasks = tasks

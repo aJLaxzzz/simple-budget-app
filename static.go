@@ -12,6 +12,8 @@ import (
 // Explicit manifest: files accidentally placed in static are never published.
 // Assets are read once at startup, so later symlink swaps cannot expose data.
 var publicAssets = map[string]string{
+	"/js/planner/repeat-editor.js":       "text/javascript; charset=utf-8",
+	"/js/planner/beta3.js":               "text/javascript; charset=utf-8",
 	"/js/planner/beta2.js":               "text/javascript; charset=utf-8",
 	"/js/planner/icon-catalog.js":        "text/javascript; charset=utf-8",
 	"/js/planner/calendar-days.js":       "text/javascript; charset=utf-8",

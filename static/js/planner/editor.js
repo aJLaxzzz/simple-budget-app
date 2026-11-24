@@ -86,7 +86,7 @@
     if(record.occurrence_id){
       date.readOnly=true;project.disabled=true;parent.disabled=true;
       grid.append(button('Перенести выполнение',()=>P.runAction(record,'reschedule')));
-      form.append(meta('Дата этого выполнения меняется через перенос. Расписание остальных повторений сохраняется.'));
+      form.append(meta('Дата меняется через «Перенести выполнение»: для повторения по расписанию можно выбрать область изменения.'));
     }
 
     if (record.completed_date) form.append(meta('Фактически выполнено: ' + P.date(record.completed_date)));
@@ -102,12 +102,23 @@
       } if(builder){builder.first.value=date.value||P.today();settings.querySelectorAll('input,select').forEach(c=>c.disabled=!repeat.checked);if(repeat.checked)builder.refresh();}};
       repeat.addEventListener('change',toggle);date.addEventListener('input',toggle);toggle();
     }
+    let scopeProject=null,changeScope=null;
+    if(value.project_id&&!record.series_id){scopeProject=await P.api('/projects/'+value.project_id);if(!isCurrent())return;changeScope=P.projectScopeField(form,scopeProject);}
+    if(changeScope){const restore=draft?.values?.change_scope;if(restore)changeScope.value=restore;project.addEventListener('change',()=>{changeScope.disabled=project.value!==scopeProject.id;if(changeScope.disabled)changeScope.value='this';});}
     remember(form, key, () => ({ record, related }));
     const create = P.commandSender('/tasks'),createRepeat=P.commandSender('/series');
     P.bindForm(form, () => {
       const values = P.nullable(P.values(form), ['color_id','icon_id','project_id', 'parent_task_id', 'planned_date', 'scheduled_time', 'due_date']);
       const data = Object.fromEntries(Object.entries(values).filter(([k]) => taskFields.includes(k) || k === 'status'));
       if(record.occurrence_id){delete data.project_id;delete data.parent_task_id;delete data.planned_date;}
+      if(changeScope&&changeScope.value!=='this'){
+        if(repeat?.checked)throw Error('Отдельное повторение дочерней задачи нельзя добавить в повторяющийся состав');
+        if(data.project_id!==scopeProject.id||data.parent_task_id!==(record.parent_task_id||null))throw Error('Перемещение между проектами и родителями выполняется отдельно');
+        const patch=id?changed(data,record):data;
+        if(id&&'status' in patch)throw Error('Измените статус отдельно для выбранного выполнения. Область относится к параметрам задачи.');
+        for(const k of ['project_id','parent_task_id','status'])delete patch[k];
+        return P.scopedProjectSave(scopeProject,{scope:changeScope.value,action:id?'edit':'add',...(id?{task_id:id,expected_task_revision:record.revision}:{parent_id:record.parent_task_id||''}),patch}).then(r=>({...r.task||r.project?.tasks.find(t=>t.id===id)||record,scope_notice:r.scope_notice}));
+      }
       if (id) {
         const patch = changed(data, record);
         if (Object.keys(patch).length && !record.occurrence_id && Object.keys(patch).every(key => ['planned_date', 'scheduled_time'].includes(key))) return P.api('/tasks/' + id + '/reschedule', 'POST', { ...patch, planned_date: data.planned_date, expected_revision: record.revision });
@@ -118,7 +129,7 @@
     }, async saved => {
       P.drafts.delete(key);
       P.guardActive=null;P.deferNavigation=null;window.history.replaceState(null,'',P.panelURL());await P.refresh();window.scrollTo(0,originScroll);
-      P.notify('Задача «'+saved.title+'» '+(id?'сохранена':'создана'));
+      P.notify(saved.scope_notice||('Задача «'+saved.title+'» '+(id?'сохранена':'создана')));
     }, async () => {
       const latestContext = await P.api('/tasks/' + id + '/context');
       const latest = latestContext.task;
@@ -206,7 +217,8 @@
     const { dialog, close } = P.dialog(titles[action]);
     dialog.append(el('p', {}, action === 'archive' ? 'Проект и его история сохранятся. Найти его можно через фильтр «Архив», а вернуть — действием «Вернуть из архива». Статус выполнения при этом не изменится.' : 'Изменится только статус проекта. Задачи и их периоды работы сохранят свои состояния.'));
     const form = el('form',{'data-submit':{complete:'Завершить проект',cancel:'Отменить проект',archive:'Архивировать проект'}[action]});
-    P.bindForm(form, () => P.api('/projects/' + project.id + '/' + action, 'POST', { expected_revision: project.revision }), async () => { close(true); P.notify('Проект «'+project.title+'» '+({complete:'завершён',cancel:'отменён',archive:'перемещён в архив'}[action])); await P.refresh(); }, async () => {
+    const send=P.commandSender('/projects/'+project.id+'/'+action);
+    P.bindForm(form, () => send({ expected_revision: project.revision }), async () => { close(true); P.notify('Проект «'+project.title+'» '+({complete:'завершён',cancel:'отменён',archive:'перемещён в архив'}[action])); await P.refresh(); }, async () => {
       const latest = await P.api('/projects/' + project.id);
       return { record: latest, accept() { project = latest; } };
     });

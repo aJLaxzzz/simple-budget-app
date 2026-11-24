@@ -49,6 +49,11 @@ func (s *Service) projectOccurrenceCommandTx(ctx context.Context, tx *sql.Tx, v 
 			return fail(invalid("Фактическая дата не может быть в будущем"))
 		}
 	}
+	if !automatic && o.Project != nil && action == "complete" {
+		if e := checkProjectPending(tx, &o.Project.ID); e != nil {
+			return fail(e)
+		}
+	}
 	before := o
 	if action == "review" {
 		if o.ProjectStatus != "skipped" {
@@ -236,6 +241,11 @@ func (s *Service) projectOccurrenceCommandTx(ctx context.Context, tx *sql.Tx, v 
 	if e = eventAs(tx, "series", v.ID, "project_"+action, actor, op, now, nil, map[string]any{"occurrence_id": o.ID}); e != nil {
 		return fail(e)
 	}
+	if o.Project != nil {
+		if e = s.advanceProjectRepeat(tx, o.Project.ID); e != nil {
+			return fail(e)
+		}
+	}
 	return CommandResult{Occurrence: &after}, nil
 }
 func (s *Service) closeProjectTasks(ctx context.Context, tx *sql.Tx, occ string, p ProjectDTO, action string, in OccurrenceCommand, op, now string, automatic bool) error {
@@ -288,7 +298,7 @@ func (s *Service) closeProjectTasks(ctx context.Context, tx *sql.Tx, occ string,
 		if e = s.changeTaskTx(ctx, tx, t.ID, action, input, op, now, s.now(), &result, options); e != nil {
 			return e
 		}
-		if action != "complete" {
+		if action != "complete" && occ != "" {
 			_, e = tx.Exec(`INSERT INTO project_closed_tasks(occurrence_id,task_id,closed_revision,previous_status) VALUES(?,?,?,?) ON CONFLICT(occurrence_id,task_id) DO UPDATE SET closed_revision=excluded.closed_revision,previous_status=excluded.previous_status,restored_at=NULL`, occ, t.ID, result.Revision, t.Status)
 			if e != nil {
 				return e

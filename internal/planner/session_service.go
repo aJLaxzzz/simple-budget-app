@@ -137,6 +137,15 @@ func (s *Service) ChangeSession(ctx context.Context, id, action string, in Sessi
 		if e = applySession(in, &v); e != nil {
 			return e
 		}
+		if action == "complete" || v.Status == "in_progress" {
+			task, e := getTask(tx, v.TaskID)
+			if e != nil {
+				return e
+			}
+			if e = checkProjectPending(tx, task.ProjectID); e != nil {
+				return e
+			}
+		}
 		if action != "complete" && in.CompletedDate != nil {
 			return invalid("completed_date допустима только при завершении")
 		}

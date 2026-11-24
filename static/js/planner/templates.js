@@ -2,6 +2,7 @@
  'use strict';const {el,button,meta}=P;
  P.renderTemplates=async function(host,route){
    host.replaceChildren(el('div',{class:'pl-section-head'},el('div',{},el('h2',{},'Шаблоны проектов'),meta('Сохраните привычный порядок действий. Каждый проект начнёт собственную историю.')),button('+ Шаблон',()=>editTemplate(), 'pl-primary')));
+   if(route.params.get('source')){const source=await P.api('/projects/'+route.params.get('source'));host.append(button('Сохранить как шаблон',()=>P.projectTemplateFlow(source)));}
    if(route.id){const template=await P.api('/templates/'+route.id);host.append(el('a',{href:'#/plans/templates'},'← Все шаблоны'));return show(host,template);}
    const filters=el('div',{class:'pl-filters'});const archive=P.field(filters,'archive','Показывать','select','false',[['false','Текущие'],['true','Архив']]);const list=el('div',{class:'pl-project-grid'});let offset=0;
    const more=button('Ещё шаблоны',load);
@@ -21,28 +22,30 @@
  }
  function offsetText(n){return n==null?'Без даты':n===0?'В день начала':n<0?'За '+(-n)+' дн. до начала':'Через '+n+' дн. после начала';}
  function treePreview(snapshot){return el('div',{class:'pl-template-tree'},snapshot.tasks.map(t=>el('div',{class:'pl-template-item'+(t.parent_key?' pl-child':'')},el('strong',{},t.title),meta('План: '+offsetText(t.planned_offset)+' · Срок: '+offsetText(t.due_offset)))));}
- function offsetField(host,name,label,value){
+ function offsetField(host,name,label,value,anchor){
    const group=el('div',{class:'pl-offset-field'});host.append(group);
-   const mode=P.field(group,name+'_mode',label,'select',value==null?'none':value===0?'same':value<0?'before':'after',[['none','Без даты'],['same','В день начала проекта'],['before','За N дней до начала'],['after','Через N дней после начала']]);
+   const mode=P.field(group,name+'_mode',label,'select',value==null?'none':value===0?'same':value<0?'before':'after',[['none','Без даты'],['same','В день начала проекта'],['before','За N дней до начала'],['after','Через N дней после начала'],...(anchor?[['absolute','Конкретная дата']]:[])]);
    const number=P.field(group,name+'_days','Количество дней','number',Math.abs(value||1));number.min=1;number.max=3650;
-   const sync=()=>{number.parentElement.hidden=!['before','after'].includes(mode.value);number.required=!number.parentElement.hidden;};mode.addEventListener('change',sync);sync();
-   return ()=>mode.value==='none'?null:mode.value==='same'?0:Number(number.value)*(mode.value==='before'?-1:1);
+   const absolute=anchor?P.field(group,name+'_absolute','Конкретная дата','date',value==null?'':P.calendarModel.addDays(anchor(),value)):null;
+   const hint=el('p',{class:'pl-relative-hint'});group.append(hint);
+   const sync=()=>{if(absolute){absolute.parentElement.hidden=mode.value!=='absolute';absolute.required=mode.value==='absolute';}number.parentElement.hidden=!['before','after'].includes(mode.value);number.required=!number.parentElement.hidden;if(anchor){const n=mode.value==='none'?null:mode.value==='same'?0:Number(number.value)*(mode.value==='before'?-1:1);hint.textContent=n==null?'':P.relativeDateLabel?.(n,anchor())||'';}};number.addEventListener('input',sync);mode.addEventListener('change',sync);sync();
+   return ()=>mode.value==='absolute'?Math.round((Date.parse(absolute.value+'T00:00:00Z')-Date.parse(anchor()+'T00:00:00Z'))/86400000):mode.value==='none'?null:mode.value==='same'?0:Number(number.value)*(mode.value==='before'?-1:1);
  }
  function editTemplate(template, workflow={}){
    const key=workflow.key||'template:'+(template?.id||'new');const snapshot=structuredClone(P.drafts.get(key)||workflow.snapshot||template?.snapshot||{title:'',description:'',tasks:[]});
-   const {dialog,close}=P.dialog(workflow.title||(template?'Изменить шаблон проекта':'Новый шаблон'));dialog.classList.add('pl-wide-dialog','pl-management-drawer');const form=el('form',{'aria-label':'Шаблон проекта'});
+   const {dialog,close}=P.dialog(workflow.title||(template?'Изменить шаблон проекта':'Новый шаблон'),workflow.host);dialog.classList.add('pl-wide-dialog','pl-management-drawer');const form=el('form',{'aria-label':'Шаблон проекта'});
    workflow.intro && form.append(meta(workflow.intro));
    const appearance=P.appearanceField(form,snapshot,true);
    const title=P.field(form,'title','Название шаблона','text',snapshot.title);title.required=true;const description=P.field(form,'description','Описание проекта','textarea',snapshot.description);
-   const due=offsetField(form,'project_due','Крайний срок проекта',snapshot.due_offset);
+   const due=offsetField(form,'project_due','Крайний срок проекта',snapshot.due_offset,workflow.dateAnchor||workflow.displayAnchor);
    const tree=el('div',{class:'pl-template-tree'});const taskReaders=new Map();
    function capture(){Object.assign(snapshot,appearance());snapshot.title=title.value;snapshot.description=description.value;snapshot.due_offset=due();for(const t of snapshot.tasks){const read=taskReaders.get(t.key);if(read)Object.assign(t,read());}P.drafts.set(key,structuredClone(snapshot));}
    function draw(){taskReaders.clear();tree.replaceChildren();for(const t of snapshot.tasks){
-     const row=el(workflow.submit?'details':'section',{class:'pl-template-edit'+(t.parent_key?' pl-child':'')});if(workflow.submit)row.append(el('summary',{},t.title+' · '+offsetText(t.planned_offset)));const head=el('div',{class:'pl-actions'});
+     const row=el(workflow.submit?'details':'section',{class:'pl-template-edit'+(t.parent_key?' pl-child':''),...(workflow.submit&&!t.title?{open:true}:{})});if(workflow.submit)row.append(el('summary',{},t.title+' · '+(workflow.displayAnchor?P.relativeDateLabel(t.planned_offset,workflow.displayAnchor()):offsetText(t.planned_offset))));const head=el('div',{class:'pl-actions'});
      const appearance=P.appearanceField(row,t,false,()=>({parentAppearance:snapshot.tasks.find(x=>x.key===t.parent_key),projectAppearance:snapshot}),t.key+'_');
      const name=P.field(row,'task_'+t.key,'Название '+(t.parent_key?'подзадачи':'задачи'),'text',t.title);name.required=true;
      const desc=P.field(row,'description_'+t.key,'Описание','textarea',t.description||'');const priority=P.field(row,'priority_'+t.key,'Приоритет','select',t.priority||'normal',['low','normal','high'].map(k=>[k,P.labels[k]]));
-     const dates=el('div',{class:'pl-form-grid'});row.append(dates);const plan=offsetField(dates,'plan_'+t.key,'Плановая дата',t.planned_offset);const deadline=offsetField(dates,'due_'+t.key,'Крайний срок',t.due_offset);
+     const dates=el('div',{class:'pl-form-grid'});row.append(dates);const plan=offsetField(dates,'plan_'+t.key,'Плановая дата',t.planned_offset,workflow.dateAnchor||workflow.displayAnchor);const deadline=offsetField(dates,'due_'+t.key,'Крайний срок',t.due_offset,workflow.dateAnchor||workflow.displayAnchor);
      const time=P.field(row,'time_'+t.key,'Время (необязательно) · Москва','time',t.scheduled_time||'');
      taskReaders.set(t.key,()=>({...appearance(),title:name.value,description:desc.value,priority:priority.value,planned_offset:plan(),due_offset:deadline(),...(time.value?{scheduled_time:time.value}:{scheduled_time:null})}));
      if(!t.parent_key)head.append(button('+ Подзадача',()=>{capture();const at=snapshot.tasks.findIndex(x=>x.key===t.key);snapshot.tasks.splice(at+1,0,{key:crypto.randomUUID(),parent_key:t.key,title:'',priority:'normal'});draw();}));

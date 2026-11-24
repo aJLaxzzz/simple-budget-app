@@ -1,11 +1,11 @@
-const {test,expect}=require('../browser-fixtures.cjs');const {randomUUID}=require('node:crypto');
+const {test,expect,revealAction}=require('../browser-fixtures.cjs');const {randomUUID}=require('node:crypto');
 const today=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Moscow',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 const unique=s=>s+' '+randomUUID();
 async function create(request,type,data){const r=await request.post('/api/planner/'+type,{data});expect(r.ok(),await r.text()).toBeTruthy();return r.json();}
 async function get(request,path){const r=await request.get('/api/planner/'+path);expect(r.ok()).toBeTruthy();return r.json();}
 const editor=page=>page.getByRole('dialog',{name:'Редактор задачи',exact:true});
 const popup=page=>page.locator('.pl-dialog').last();
-async function menu(page,id,action){await page.locator('[data-task-id="'+id+'"]').getByRole('button',{name:'Действия с задачей',exact:true}).click();await popup(page).getByRole('button',{name:action,exact:true}).click();}
+async function menu(page,id,action){await page.locator('[data-task-id="'+id+'"]').getByRole('button',{name:'Действия с задачей',exact:true}).click();await revealAction(page,action);await popup(page).getByRole('button',{name:action,exact:true}).click();}
 async function save(page){await popup(page).locator('button[type=submit]').click();await expect(popup(page)).toHaveCount(0);}
 test.beforeEach(async({page})=>{page.errors=[];page.on('pageerror',e=>page.errors.push(e.message));});
 test.afterEach(async({page})=>expect(page.errors).toEqual([]));

@@ -7,14 +7,14 @@
     const nav = el('nav', {class:'pl-tabs pl-main-tabs','aria-label':'Разделы планировщика'}, [['calendar','Календарь'],['tasks','Задачи'],['projects','Проекты'],['attention','Внимание']].map(([key,title]) => el('a', {href:key==='calendar'?P.calendarLink():'#/plans/'+key, ...(group===key?{'aria-current':'page',class:'is-active'}:{})}, title)));
     const add = button('+', () => {
       const {dialog,close} = P.dialog('Создать');
-      dialog.append(el('div', {class:'pl-create-options'}, button('Создать задачу', () => {close(true);const date=route.view==='calendar'?route.params.get('date')||P.today():null;const project=route.view==='projects'?route.id:route.view==='calendar'&&route.params.get('project')!=='none'?route.params.get('project'):null;P.newTask(project,null,date);}), button('Создать проект', () => {close(true);P.navigate('#/plans/projects?new=project');}),button('Создать из шаблона',()=>{close(true);P.chooseTemplate(route);})));
+      dialog.append(el('div', {class:'pl-create-options'}, button('Создать задачу', () => {close(true);const date=route.view==='calendar'?route.params.get('date')||P.today():null;const project=route.view==='projects'?route.id:route.view==='calendar'&&route.params.get('project')!=='none'?route.params.get('project'):null;P.newTask(project,null,date);}), button('Создать проект', () => {close(true);P.navigate('#/plans/projects?new=project');})));
     }, 'pl-primary pl-icon'); add.setAttribute('aria-label','Создать');
     const settings = el('a', {class:'pl-button pl-icon',href:'#/plans/settings','aria-label':'Настройки планировщика',title:'Настройки планировщика'}, '⚙');
     page.append(el('div', {class:'pl-heading'}, el('div', {}, el('h1',{},'Планы')), el('div',{class:'pl-header-actions'},add,settings)),nav);
     P.updateAttentionCount?.(nav);
     if (group==='tasks' || group==='projects') {
       const project = group==='projects';
-      const entries = project ? [['#/plans/projects','Все проекты','all'],['#/plans/projects?view=regular','Регулярные проекты','regular'],['#/plans/templates','Шаблоны','templates']] : [['#/plans/tasks','Все задачи','all'],['#/plans/tasks?view=regular','Регулярные','regular'],['#/plans/tasks?view=undated','Без даты','undated'],['#/plans/task-templates','Шаблоны задач','templates']];
+      const entries = project ? [['#/plans/projects','Все проекты','all'],['#/plans/projects?view=regular','Регулярные проекты','regular']] : [['#/plans/tasks','Все задачи','all'],['#/plans/tasks?view=regular','Регулярные','regular'],['#/plans/tasks?view=undated','Без даты','undated']];
       const current = ['templates','task-templates'].includes(route.view)?'templates':route.view==='series'?'regular':route.params.get('view')||'all';
       page.append(el('nav', {class:'pl-subnav','aria-label':project?'Представления проектов':'Представления задач'}, entries.map(([href,title,key]) => el('a',{href,...(current===key && route.view!=='inbox'?{'aria-current':'page',class:'is-active'}:{})},title))));
     }

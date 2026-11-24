@@ -1,7 +1,7 @@
 (function(P){
  'use strict';
  const {el,button,meta}=P;
- const countNames={tasks:'Задачи и подзадачи',sessions:'Периоды работы',projects:'Проекты',occurrences:'Регулярные выполнения',series:'Повторения',history_events:'События истории',occurrence_incidents:'Инциденты',entity_template_links:'Связи с шаблонами',template_versions:'Сохранённые варианты шаблона'};
+ const countNames={tasks:'Задачи и подзадачи',sessions:'Периоды работы',projects:'Проекты',occurrences:'Регулярные выполнения',series:'Повторения',history_events:'События истории',occurrence_incidents:'Инциденты'};
  P.unarchive=async function(kind,item){
   if(P.guardActive&&!await P.guardActive())return;
   const {dialog,close}=P.dialog('Вернуть из архива');
@@ -18,8 +18,8 @@
   const form=el('form',{'aria-label':'Окончательное удаление','data-submit':'Удалить навсегда'});
   dialog.append(form);
   let selectedKind=kind,selectedID=item.id,preview=null,turn=0;
-  let occurrence=item.occurrence_id||(kind==='occurrences'?item.id:null),series=item.series_id;
-  const scope=occurrence?P.field(form,'scope','Область удаления','select','occurrence',[['occurrence','Только это выполнение'],['series','Всё повторение навсегда']]):null;
+  let occurrence=item.occurrence_id||(kind==='occurrences'?item.id:null),series=item.series_id||item.repeat_series_id;
+  const scope=(occurrence||series)?P.field(form,'scope','Область удаления','select','occurrence',[['occurrence','Только это выполнение'],['series','Всё повторение навсегда']]):null;
   const details=el('div',{'aria-live':'polite'});form.append(details);
   const executionDate=item.planned_date||item.start_date||item.manual_date||item.adjusted_date||item.date;
   const backup=el('details',{},el('summary',{},'Перед первым удалением — резервный снимок'),meta('Создайте проверенный экспорт SQLite через SQLite .backup (инструкция в README, раздел «Окончательное удаление»). Не копируйте работающую planner.db без WAL. Снимок храните вне каталога приложения. Удаление через интерфейс необратимо.'));form.append(backup);
@@ -34,7 +34,7 @@
    const own=++turn;preview=null;submit.disabled=true;reload.disabled=true;details.replaceChildren(meta('Проверяем зависимости…'));
    try{
     if(scope){if(!series){const context=await P.api('/occurrences/'+occurrence);series=context.series?.id||context.occurrence?.series_id||context.series_id;}
-     selectedKind=scope.value==='series'?'series':'occurrences';selectedID=scope.value==='series'?series:occurrence;
+     selectedKind=scope.value==='series'?'series':occurrence?'occurrences':kind;selectedID=scope.value==='series'?series:occurrence||item.id;
     }
     if(!selectedID)throw new Error('Не удалось определить повторение. Откройте его настройки.');
     const result=await P.api('/'+selectedKind+'/'+selectedID+'/delete-preview');if(own!==turn||!dialog.isConnected)return;preview=result;send=P.commandSender('/'+selectedKind+'/'+selectedID+'/delete');

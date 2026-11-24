@@ -25,7 +25,7 @@
     P.unmount(); host = root;
     const turn = generation;
     document.body.classList.add('planner-page');
-    const route = P.route();
+    const route = P.route();if(route.view!=='series'||!route.id)P.repeatAutoOpenedRoute=null;
     const page = el('section', { class: 'planner', 'aria-label': 'Планы' });
     const chrome=el('div',{class:'pl-navigation'}); P.navigation(chrome, route); page.append(chrome);
     const content = el('div', { class: 'pl-content', 'aria-live': 'polite' }, el('p', { class: 'pl-loading', role: 'status' }, 'Загружаем планы…'));
@@ -79,15 +79,16 @@
     }
   };
   P.empty = (title, text) => el('div', { class: 'pl-empty' }, el('span', { class: 'pl-empty-symbol', 'aria-hidden': 'true' }, '◇'), el('h3', {}, title), el('p', {}, text));
-  P.quickForm = function (project, parent) {
+  P.quickForm = function (project, parent, projectRecord) {
     const key = 'quick:' + (project || '') + ':' + (parent || '');
     const form = el('form', { class: 'pl-quick', 'aria-label': 'Быстрое создание задачи', 'data-submit': 'Добавить' });
     const input = el('input', { name: 'title', placeholder: parent ? 'Название подзадачи…' : 'Что нужно сделать?', required: true, 'aria-label': 'Название новой задачи', autocomplete: 'off', value: P.drafts.get(key) || '' });
     input.addEventListener('input', () => P.drafts.set(key, input.value));
     form.append(input);
+    const scope=projectRecord?.repeat_series_id?P.projectScopeField(form,projectRecord):null;
     const create = P.commandSender('/tasks');
-    P.bindForm(form, () => create( { title: input.value.trim(), ...(!project&&P.route().view==='tasks'&&P.route().params.get('view')!=='undated'?{planned_date:P.today()}:{}), ...(project ? { project_id: project } : {}), ...(parent ? { parent_task_id: parent } : {}) }), async saved => {
-      P.drafts.delete(key); input.value=''; P.notify('Задача «'+saved.title+'» добавлена', {label:'Открыть',run:()=>P.openTask(saved.id)});
+    P.bindForm(form, () => scope&&scope.value!=='this'?P.scopedProjectSave(projectRecord,{scope:scope.value,action:'add',parent_id:parent||'',patch:{title:input.value.trim()}}).then(r=>({...r.task,scope_notice:r.scope_notice})):create( { title: input.value.trim(), ...(!project&&P.route().view==='tasks'&&P.route().params.get('view')!=='undated'?{planned_date:P.today()}:{}), ...(project ? { project_id: project } : {}), ...(parent ? { parent_task_id: parent } : {}) }), async saved => {
+      P.drafts.delete(key); input.value=''; P.notify(saved.scope_notice||('Задача «'+saved.title+'» добавлена'), saved.id?{label:'Открыть',run:()=>P.openTask(saved.id)}:undefined);
       if(['tasks','inbox'].includes(P.route().view)){const q=new URLSearchParams(P.route().params);['q','status','project'].forEach(k=>q.delete(k));window.history.replaceState(null,'',P.base()+(q.size?'?'+q:''));}
       await P.refresh();
 
@@ -99,9 +100,9 @@
     const row = el('div', { class: 'pl-task' + (child ? ' pl-child' : '') + (P.active(task) ? '' : ' pl-terminal'), 'data-task-id': task.id });
     const complete = button(task.status === 'completed' ? '✓' : task.status === 'cancelled' ? '−' : '', () => P.runAction(task, 'complete'), 'pl-check');
     complete.setAttribute('aria-label', 'Завершить: ' + task.title);
-    complete.disabled = !P.active(task) || Boolean(P.data.projects.find(p => p.id === task.project_id)?.archived_at);
+    complete.disabled = task.project_pending || !P.active(task) || Boolean(P.data.projects.find(p => p.id === task.project_id)?.archived_at);
     const title = button(task.title, () => P.openTask(task.id), 'pl-task-title');
-    const details = [task.dynamic&&P.active(task)&&meta('Дата может измениться'),(task.saved_template_id||task.source_template_id)&&meta(task.saved_template_id?'◇ Шаблон сохранён':'◇ Из шаблона'), task.series_id && el('span', {class:'pl-repeat-mark', title:'Повторяющаяся задача', 'aria-label':'Повторяющаяся задача'}, '↻'), context && meta(context), task.priority === 'high' && el('span', { class: 'pl-priority' }, '↑ Высокий'), task.priority === 'low' && meta('↓ Низкий'), task.priority === 'normal' && el('span',{class:'pl-muted pl-priority-normal'},'Обычный приоритет'), task.planned_date && meta(P.date(task.planned_date) + (task.scheduled_time ? ' · ' + task.scheduled_time : '')), task.due_date && el('span', { class: P.overdue(task) ? 'pl-overdue' : 'pl-muted' }, 'Крайний срок: ' + P.date(task.due_date)), task.completed_with_open_children && meta('Есть открытые подзадачи')].filter(Boolean);
+    const details = [(task.dynamic||task.project_pending)&&P.active(task)&&meta('Дата может измениться'),task.series_id && el('span', {class:'pl-repeat-mark', title:'Повторяющаяся задача', 'aria-label':'Повторяющаяся задача'}, '↻'), context && meta(context), task.priority === 'high' && el('span', { class: 'pl-priority' }, '↑ Высокий'), task.priority === 'low' && meta('↓ Низкий'), task.priority === 'normal' && el('span',{class:'pl-muted pl-priority-normal'},'Обычный приоритет'), task.planned_date && meta(P.date(task.planned_date) + (task.scheduled_time ? ' · ' + task.scheduled_time : '')), task.due_date && el('span', { class: P.overdue(task) ? 'pl-overdue' : 'pl-muted' }, 'Крайний срок: ' + P.date(task.due_date)), task.completed_with_open_children && meta('Есть открытые подзадачи')].filter(Boolean);
     P.paint(row,task);title.prepend(P.appearanceIcon(task));
     const timing=P.timing(task);if(timing.label)details.push(el('span',{class:timing.key==='overdue'?'pl-overdue':'pl-plan-missed'},timing.label));
     row.append(complete, el('div', { class: 'pl-task-copy' }, title, el('div', { class: 'pl-task-meta' }, details)), P.status(task), P.actionButton(task));
@@ -132,7 +133,7 @@
     if (!inbox) project = P.field(filters, 'project', 'Проект', 'select', route.params.get('project') || 'all', [['all', 'Все проекты'], ['none', 'Без проекта'], ...P.data.projects.map(p => [p.id, p.title + (p.archived_at ? ' · архив' : '')])]);
     const results = el('div', { class: 'pl-results' });
     const draw = () => {
-      let tasks = P.data.tasks.filter(t => (!inbox || (!t.project_id && !t.planned_date)) && (!undated || (!t.planned_date && !t.due_date)));
+      let tasks = P.data.tasks.filter(t => (!t.project_pending || !P.active(t)) && (!inbox || (!t.project_id && !t.planned_date)) && (!undated || (!t.planned_date && !t.due_date)));
       tasks = tasks.filter(t => (status.value === 'all' || (status.value === 'active' ? P.active(t) : t.status === status.value)) && t.title.toLocaleLowerCase('ru').includes(search.value.toLocaleLowerCase('ru')) && (!project || project.value === 'all' || (project.value === 'none' ? !t.project_id : t.project_id === project.value)));
       const total=tasks.length;tasks=P.limitUpcoming(tasks,inbox||showAll.value==='all');
       results.replaceChildren(el('p', { class: 'pl-list-count' }, 'Задач: ' + tasks.length), tasks.length ? (inbox ? P.taskTree(tasks) : P.groupedTasks(tasks,Boolean(search.value.trim()))) : P.empty(inbox ? 'Входящие разобраны' : 'Задач не найдено', inbox ? 'Новая идея? Добавьте её одной строкой выше.' : 'Измените фильтры или создайте первую задачу.'));
@@ -160,12 +161,14 @@
     content.append(filterPanel, results); draw();
   }
   P.projectDisplayProgress = function(project) {
-    const value=project.progress;
+    const value=project.routines?.ordinary||project.progress;
     const total=value.total+(value.cancelled||0)+(value.skipped||0);
     return {total,completed:value.completed,open:value.total-value.completed,cancelled:value.cancelled||0,skipped:value.skipped||0,percent:total?Math.round(100*value.completed/total):null};
   };
   function progress(project) {
     const v=P.projectDisplayProgress(project);
+    if(project.routines){const r=project.routines;return el('div',{class:'pl-progress-block pl-routine-summary'},el('strong',{},'Регулярных дел: '+r.count),r.next_date?meta('Ближайшее выполнение · '+P.date(r.next_date)):null,meta('Актуальных просрочек: '+r.open_dates.filter(d=>d<P.today()).length),v.total?meta('Обычные задачи: выполнено '+v.completed+' из '+v.total+' · открыто '+v.open):null);}
+
     if(!v.total)return el('div',{class:'pl-progress-block'},meta('В проекте пока нет задач'));
     return el('div',{class:'pl-progress-block'},el('div',{class:'pl-progress-label'},meta('Выполнено '+v.completed+' из '+v.total),el('strong',{},v.percent+'%')),
       el('progress',{max:100,value:v.percent,'aria-label':'Доля выполненных конечных задач'}),
@@ -184,10 +187,10 @@
     const archive = P.field(filters, 'archive', 'Показывать', 'select', 'active', [['active', 'Без архива'], ['archived', 'Архив']]);
     const grid = el('div', { class: 'pl-project-grid' });
     function draw() {
-      const projects = P.data.projects.filter(p => Boolean(p.archived_at) === (archive.value === 'archived') && (!status.value || p.status === status.value)).sort(P.projectOrder);
+      const projects = P.projectCards(P.data.projects.filter(p => Boolean(p.archived_at) === (archive.value === 'archived') && (!status.value || p.status === status.value)));
       grid.replaceChildren(...projects.map(project => {
         const count = project.task_count ?? project.tasks?.length ?? 0;
-        return P.paint(el('a', { class: 'pl-project-card', href: '#/plans/projects/' + encodeURIComponent(project.id) }, el('div', { class: 'pl-card-top' }, P.appearanceIcon(project,true), P.status(project)), el('h3', {}, project.title), project.description?el('p', { class: 'pl-card-description' }, project.description):null, project.start_date?el('p',{class:'pl-project-date'},(project.occurrence_id?'↻ Выполнение · ':'Начало · ')+P.projectDateLabel(project)):null, progress(project), el('div', { class: 'pl-card-bottom' }, project.repeat_series_id&&!project.occurrence_id?meta('↻ Повторение'):null,(project.saved_template_id||project.source_template_id)?meta(project.saved_template_id?'◇ Шаблон сохранён':'◇ Из шаблона'):null, project.due_date ? el('span', { class: P.overdue(project) ? 'pl-overdue' : 'pl-muted' }, (P.overdue(project) ? 'Просрочен · ' : 'До ') + P.date(project.due_date)) : meta('Без крайнего срока'))),project);
+        return P.paint(el('a', { class: 'pl-project-card', href: '#/plans/projects/' + encodeURIComponent(project.id) }, el('div', { class: 'pl-card-top' }, P.appearanceIcon(project,true), P.status(project)), el('h3', {}, project.title), project.description?el('p', { class: 'pl-card-description' }, project.description):null, project.start_date?el('p',{class:'pl-project-date'},(project.occurrence_id?'↻ Выполнение · ':'Начало · ')+P.projectDateLabel(project)):null, progress(project), el('div', { class: 'pl-card-bottom' }, project.repeat_series_id&&!project.occurrence_id?meta('↻ Повторение'):null,project.due_date ? el('span', { class: P.overdue(project) ? 'pl-overdue' : 'pl-muted' }, (P.overdue(project) ? 'Просрочен · ' : 'До ') + P.date(project.due_date)) : meta('Без крайнего срока'))),project);
       }));
       if (!projects.length) grid.append(P.empty('Здесь появятся ваши проекты', 'Создайте проект и добавляйте задачи в удобном темпе.'));
     }
@@ -205,27 +208,22 @@
       if(project.description.length>140)overview.append(el('details',{class:'pl-project-description'},el('summary',{},project.description.slice(0,110)+'… · Подробнее'),el('p',{class:'pl-description'},project.description)));
       else overview.append(el('p',{class:'pl-project-description'},project.description));
     }
-    overview.append(progress(project));content.append(overview);
-    const properties=el('div',{class:'pl-entity-properties'});
-    if(project.repeat_series_id)properties.append(el('a',{href:'#/plans/series/'+project.repeat_series_id+'?source=project'},'↻ Настройки повторения'));
-    else if(!project.archived_at&&!project.occurrence_id)properties.append(button('Повторять проект',()=>P.projectTemplateFlow(project,true)));
-    if(project.saved_template_id)properties.append(el('a',{href:'#/plans/templates/'+project.saved_template_id},'◇ Сохранено как шаблон'));
-    else if(!project.archived_at)properties.append(button('Сохранить как шаблон',()=>P.projectTemplateFlow(project)));
-    if(project.source_template_id)properties.append(el('a',{href:'#/plans/templates/'+project.source_template_id},'Создано из шаблона'));
-    if(properties.childElementCount)overview.append(el('details',{class:'pl-project-options'},el('summary',{},'Повторение и шаблоны'),properties));
+    overview.append(progress(project));if(P.active(project)&&!project.preliminary&&!project.routines&&project.progress.total>0&&project.progress.completed===project.progress.total)overview.append(button("Завершить проект",()=>P.projectAction(project,"complete"),"pl-primary"));content.append(overview);P.projectRepeatPanel(content,project);
+    if(!project.repeat_series_id&&!project.archived_at&&!project.occurrence_id)overview.append(button('Повторять проект',()=>P.projectTemplateFlow(project,true)));
     const taskTools=el('div',{class:'pl-project-task-tools'},el('h3',{class:'pl-project-tasks-heading'},'Задачи проекта'));
     const projectList=el('div');const filterBox=el('div',{class:'pl-project-task-filters'});
-    let sortValue='planned';try{sortValue=localStorage.getItem('planner.project-sort:'+project.id)||'planned';}catch(_){}
- const sort=P.field(filterBox,'project_sort','Порядок задач','select',sortValue,[['planned','По плановой дате'],['due','По крайнему сроку'],['priority','По приоритету'],['title','По названию'],['created','По дате создания']]);
+    const sortKey='planner.project-sort:'+(project.repeat_series_id||project.id);let sortValue='planned';try{sortValue=localStorage.getItem(sortKey)||localStorage.getItem('planner.project-sort:'+project.id)||'planned';}catch(_){}
+ const sort=P.field(filterBox,'project_sort','Порядок задач','select',sortValue,[['manual','Вручную'],['planned','По плановой дате'],['due','По крайнему сроку'],['priority','По приоритету'],['title','По названию'],['created','По дате создания']]);
  if(!project.archived_at&&!project.occurrence_id&&!project.repeat_series_id)filterBox.append(button('Настроить повторение задач',()=>P.batchRepeat(project)));
  const display=P.field(filterBox,'project_tasks','Выполнения в проекте','select','nearest',[['nearest','Ближайшие и обычные задачи'],['all','Все задачи и история']]);
-    const drawTasks=()=>{const tasks=display.value==='all'?project.tasks:P.limitUpcoming(project.tasks.filter(t=>!t.series_id||P.active(t)));projectList.replaceChildren(tasks.length?P.taskTree(P.sortProjectTasks(tasks,sort.value)):P.empty('Первый шаг ещё впереди','Добавьте задачу — даты можно назначить позже.'));
+    const drawTasks=()=>{const tasks=display.value==='all'?project.tasks:P.projectNearest(project.tasks);projectList.replaceChildren(tasks.length?P.taskTree(P.sortProjectTasks(tasks,sort.value)):P.empty('Первый шаг ещё впереди','Добавьте задачу — даты можно назначить позже.'));
     if (!project.archived_at) for (const task of tasks.filter(t => !t.parent_task_id)) {
       const row = [...projectList.querySelectorAll('[data-task-id]')].find(n => n.dataset.taskId === task.id);
       row.append(button('+', () => P.newTask(project.id, task.id), 'pl-icon'));
       row.lastChild.setAttribute('aria-label', 'Добавить подзадачу: ' + task.title);
     }
-    };display.addEventListener('change',drawTasks);sort.addEventListener('change',()=>{try{localStorage.setItem('planner.project-sort:'+project.id,sort.value);}catch(_){}drawTasks();});if(!project.tasks.some(t=>t.series_id))display.closest('.pl-field')?.setAttribute('hidden','');taskTools.append(filterBox);content.append(taskTools);if(!project.archived_at)content.append(P.quickForm(project.id));content.append(projectList);drawTasks();
+    if(sort.value==='manual'&&!project.archived_at){const series=tasks.filter(t=>t.series_id).map(t=>t.series_id);if(new Set(series).size<series.length)projectList.prepend(button('Показать ближайшие для ручного порядка',()=>{display.value='nearest';drawTasks();}));else P.manualTaskOrder(projectList,project,P.sortProjectTasks(tasks,'manual'));}
+    };display.addEventListener('change',drawTasks);sort.addEventListener('change',()=>{try{localStorage.setItem(sortKey,sort.value);}catch(_){}drawTasks();});if(!project.tasks.some(t=>t.series_id))display.closest('.pl-field')?.setAttribute('hidden','');taskTools.append(filterBox);content.append(taskTools);if(!project.archived_at)content.append(P.quickForm(project.id,null,project));content.append(projectList);drawTasks();
     const history=P.disclosure('История');content.append(history);P.renderHistory(history, 'project', project.id);
   }
 })(window.Planner);

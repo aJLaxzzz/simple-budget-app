@@ -145,7 +145,8 @@
       else if(!e.shiftKey&&(document.activeElement===last||!dialog.contains(document.activeElement))){e.preventDefault();first.focus();}
     });
   };
-  P.dialog = function (title) {
+  P.dialog = function (title, host) {
+    if(host)return {dialog:host,close:host.closeEditor};
     const previous = document.activeElement;
     const headingID='planner-dialog-'+(++fieldSequence);
     const dialog = P.el('dialog', { class: 'pl-dialog planner', 'aria-labelledby':headingID });

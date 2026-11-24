@@ -13,7 +13,7 @@ import (
 )
 
 // Parent-first order also satisfies the task hierarchy insert triggers.
-var dataTables = []string{"planner_icons", "icon_events", "planner_settings", "project_templates", "template_versions", "retired_series_requests", "series", "removed_cycles", "series_appearances", "series_versions", "series_version_scopes", "detached_occurrences", "occurrences", "occurrence_schedule", "projects", "series_assignments", "tasks", "entity_template_links", "project_instances", "project_closed_tasks", "series_runtime", "sessions", "series_pauses", "occurrence_incidents", "planner_commands", "history_events", "attention_state", "production_calendar_years", "production_calendar_days", "calendar_imports"}
+var dataTables = []string{"planner_icons", "icon_events", "planner_settings", "project_templates", "template_versions", "retired_series_requests", "series", "removed_cycles", "series_appearances", "series_versions", "series_version_scopes", "detached_occurrences", "occurrences", "occurrence_schedule", "projects", "series_assignments", "project_repeat_state", "tasks", "entity_template_links", "project_instances", "project_closed_tasks", "series_runtime", "sessions", "series_pauses", "occurrence_incidents", "planner_commands", "history_events", "attention_state", "production_calendar_years", "production_calendar_days", "calendar_imports"}
 
 func schema(ctx context.Context, q queryer) ([]string, error) {
 	rows, e := q.QueryContext(ctx, "SELECT type||':'||name||':'||sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' ORDER BY type,name")

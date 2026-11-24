@@ -4,6 +4,7 @@ import (
 	"budget/internal/planner/recurrence"
 	"context"
 	"database/sql"
+	"sort"
 	"time"
 )
 
@@ -186,6 +187,7 @@ func relativeDate(anchor string, date *string) (*int, error) {
 	return &n, nil
 }
 func projectSnapshot(p ProjectDTO, anchor string) (ProjectTemplateSnapshot, error) {
+	sort.SliceStable(p.Tasks, func(i, j int) bool { return p.Tasks[i].SortOrder < p.Tasks[j].SortOrder })
 	v := ProjectTemplateSnapshot{Appearance: p.Appearance, Title: p.Title, Description: p.Description, Tasks: []ProjectTemplateTask{}}
 	var e error
 	v.DueOffset, e = relativeDate(anchor, p.DueDate)
@@ -207,6 +209,12 @@ func projectSnapshot(p ProjectDTO, anchor string) (ProjectTemplateSnapshot, erro
 }
 func (s *Service) projectSourcePreviewTx(ctx context.Context, tx *sql.Tx, id string, in ProjectSourceInput) (ProjectSourcePreview, error) {
 	var out ProjectSourcePreview
+	if in.ProjectMode != "" && in.ProjectMode != "sequential" && in.ProjectMode != "independent" {
+		return out, invalid("Выберите режим выполнения")
+	}
+	if in.ProjectMode != "" && in.Rule != nil && in.FirstDate <= in.AnchorDate {
+		return out, invalid("Следующее выполнение должно начинаться позже исходного периода")
+	}
 	p, e := projectWithTree(tx, id)
 	if e != nil {
 		return out, e
@@ -430,6 +438,18 @@ func (s *Service) SaveProjectTemplate(ctx context.Context, id string, in Project
 				}
 				out.Template = &t
 				seriesID = &out.Series.ID
+				if in.ProjectMode != "" {
+					if _, e = tx.Exec(`UPDATE project_templates SET internal=1 WHERE id=?`, t.ID); e != nil {
+						return out, e
+					}
+					var current any
+					if in.ProjectMode == "sequential" {
+						current = id
+					}
+					if _, e = tx.Exec(`INSERT INTO project_repeat_state(series_id,mode,source_project_id,current_project_id) VALUES(?,?,?,?)`, *seriesID, in.ProjectMode, id, current); e != nil {
+						return out, e
+					}
+				}
 			}
 			if e = linkTemplate(tx, nil, &id, t, "saved", seriesID, now); e != nil {
 				return out, e

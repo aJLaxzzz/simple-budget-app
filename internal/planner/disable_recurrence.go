@@ -216,6 +216,9 @@ func (s *Service) disableTx(ctx context.Context, tx *sql.Tx, id string, in Disab
 		if _, e = tx.Exec("UPDATE series_runtime SET waiting_occurrence_id=NULL,anchor_date=NULL WHERE series_id=?", id); e != nil {
 			return CommandResult{}, e
 		}
+		if _, e = tx.Exec(`DELETE FROM project_repeat_state WHERE series_id=?`, id); e != nil {
+			return CommandResult{}, e
+		}
 		for _, row := range p.Rows {
 			if row.Decision == "keep_source" {
 				if _, e = tx.Exec("UPDATE entity_template_links SET series_id=NULL WHERE project_id=? AND series_id=?", row.ID, id); e != nil {

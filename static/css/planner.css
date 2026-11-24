@@ -567,3 +567,16 @@ body.planner-page .header-search { display:none; }
 .pl-project-task-filters select,.pl-project-task-filters button { min-height:34px; padding:5px 8px; max-width:100%; }
 .pl-project-task-tools + .pl-quick { margin:0 0 8px; padding:4px 10px; }
 @media(max-width:600px) { .pl-project-task-filters { width:100%; } .pl-project-task-filters .pl-field { flex:1 1 100%; justify-content:space-between; } .pl-project-task-filters select { max-width:65%; } }
+/* Beta 3: project work stays in one compact context. */
+.pl-repeat-panel{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0}.pl-repeat-panel>details{padding:6px 10px;border:1px solid var(--border);border-radius:8px;max-width:100%}.pl-repeat-panel>p{flex-basis:100%}.pl-repeat-panel details .pl-button{display:block;margin-top:6px}.pl-order-controls{display:flex;gap:2px;align-items:center}.pl-order-controls [draggable]{cursor:grab}.pl-menu-items details{padding:6px 0}.pl-menu-items details summary{padding:8px;cursor:pointer}.pl-menu-items details button{display:block;width:100%;text-align:left}.pl-task:has(.pl-order-controls){grid-template-columns:auto auto minmax(0,1fr) auto auto}.pl-task:has(.pl-order-controls) .pl-task-copy{min-width:0}@media(max-width:600px){.pl-order-controls{flex-direction:column}.pl-order-controls [draggable]{display:none}.pl-task:has(.pl-order-controls){grid-template-columns:32px 24px minmax(0,1fr) auto}.pl-task:has(.pl-order-controls)>.pl-status{grid-column:3}}
+.pl-project-compact .pl-routine-summary,.pl-routine-summary{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:baseline}.pl-repeat-panel>details{font-size:14px}.pl-repeat-panel>details>button{display:block;margin-top:8px}.pl-project-task-filters select{max-width:100%}@media(max-width:600px){.pl-project-compact .pl-routine-summary{display:grid;gap:6px}.pl-repeat-panel{gap:6px}.pl-repeat-panel>details{padding:4px 8px}}
+
+@media(max-width:600px){.pl-repeat-panel>details{flex:1 1 46%;min-width:0}.pl-repeat-panel>details>summary{padding:6px 0;overflow-wrap:anywhere}.pl-repeat-panel>details[open]{flex-basis:100%}}
+
+/* One repeat editor, backed by the existing schedule/composition workflows. */
+.pl-repeat-editor{width:min(960px,calc(100vw - 24px));max-height:92vh}
+.pl-repeat-editor>.pl-editor-tabs{position:sticky;top:0;background:var(--panel,#171d27);z-index:2;display:flex;flex-wrap:wrap;gap:6px;padding:8px 0}
+.pl-repeat-editor>.pl-editor-tabs [aria-selected=true]{border-color:#60a5fa;color:#93c5fd}
+.pl-repeat-body.pl-dialog,.pl-repeat-body.pl-management-drawer{position:static;width:auto;max-width:none;max-height:none;padding:0;box-shadow:none;border:0}
+.pl-repeat-danger{border-top:1px solid #39404e;margin-top:16px;padding-top:12px;display:flex;flex-wrap:wrap;gap:8px}
+.pl-relative-hint{color:#b6c9e3;font-size:14px;margin:4px 0 12px}

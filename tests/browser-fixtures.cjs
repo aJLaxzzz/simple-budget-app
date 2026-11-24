@@ -25,4 +25,11 @@ const test = base.test.extend({
     }
   }, { auto: true }]
 });
-module.exports = { ...base, test };
+async function revealAction(page,name) {
+ await page.getByRole('button',{name,exact:true,includeHidden:true}).first().waitFor({state:'attached'});
+ const menus=page.locator('.pl-action-menu');
+ for(const menu of await menus.all())for(const group of await menu.locator('details').all()){
+  if(await group.getByRole('button',{name,exact:true,includeHidden:true}).count() && !await group.evaluate(e=>e.open))await group.locator('summary').click();
+ }
+}
+module.exports = { ...base, test, revealAction };

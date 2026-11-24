@@ -146,6 +146,11 @@ func (s *Service) instantiateProjectTx(tx *sql.Tx, snapshot ProjectTemplateSnaps
 			}
 		}
 	}
+	for i, t := range c.Tasks {
+		if _, e = tx.Exec(`UPDATE tasks SET sort_order=? WHERE id=?`, i, keys[t.Key]); e != nil {
+			return p, e
+		}
+	}
 	if e = projectBaseline(tx, p.ID, keys); e != nil {
 		return p, e
 	}
@@ -162,7 +167,7 @@ func (s *Service) Templates(ctx context.Context, archived bool, limit, offset in
 	}
 	items := []ProjectTemplateDTO{}
 	e := s.store.Transaction(ctx, func(tx *sql.Tx) error {
-		rows, e := tx.Query("SELECT id FROM project_templates WHERE template_kind='project' AND archived=? ORDER BY created_at,id LIMIT ? OFFSET ?", archived, limit, offset)
+		rows, e := tx.Query("SELECT id FROM project_templates WHERE template_kind='project' AND internal=0 AND archived=? ORDER BY created_at,id LIMIT ? OFFSET ?", archived, limit, offset)
 		if e != nil {
 			return e
 		}

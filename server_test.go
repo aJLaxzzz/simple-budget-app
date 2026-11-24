@@ -368,7 +368,9 @@ func TestSIGINTAndSIGTERM(t *testing.T) {
 				if !ok {
 					t.Fatal("server failed to start")
 				}
-			case <-time.After(10 * time.Second):
+			// Race instrumentation makes initial SQLite migrations substantially slower.
+			// This deadline covers startup only; signal/shutdown assertions below are unchanged.
+			case <-time.After(60 * time.Second):
 				t.Fatal("startup timeout")
 			}
 			client := &http.Client{Timeout: 5 * time.Second}

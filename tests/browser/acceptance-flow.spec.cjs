@@ -1,4 +1,4 @@
-const {test,expect}=require('../browser-fixtures.cjs');
+const {test,expect,revealAction}=require('../browser-fixtures.cjs');
 const {randomUUID}=require('node:crypto');
 const ruRule={schema_version:1,mode:'completion',unit:'days',interval:45,allowed_days:{mode:'ru_production'},adjustment:'next',timezone:'Europe/Moscow'};
 async function post(request,path,data,status=200){const r=await request.post('/api/planner/'+path,{data});expect(r.status(),await r.text()).toBe(status);return r.json();}
@@ -15,7 +15,7 @@ test('verified years imported explicitly; haircut 45 actual days crosses year wi
  series=await get(request,'series/'+id);expect(series.occurrences).toHaveLength(4);expect(series.occurrences[1].base_date).toBe('2026-12-31');expect(series.occurrences[1].adjusted_date).toBe('2027-01-11');expect(series.occurrences[0].task.completed_date).toBe('2026-11-16');
  await page.locator('.pl-occurrence').nth(1).getByRole('button',{name:'Пропустить',exact:true}).click();await page.getByRole('form',{name:'Действие с выполнением'}).locator('button[type=submit]').click();await expect(page.locator('.pl-dialog')).toHaveCount(0);await page.getByRole('button',{name:'Дата, от которой считать дальше',exact:true}).click();await page.getByRole('form',{name:'Дата, от которой считать дальше'}).getByLabel('Дата, от которой считать дальше',{exact:true}).fill('2026-11-17');await page.getByRole('button',{name:'Посмотреть изменения'}).click();await page.getByRole('button',{name:'Применить изменения',exact:true}).click();await expect(page.locator('.pl-dialog')).toHaveCount(0);
  series=await get(request,'series/'+id);expect(series.occurrences.filter(o=>o.task.status==='planned')).toHaveLength(3);expect(series.occurrences.filter(o=>o.task.status==='planned'&&!o.task.dynamic)).toHaveLength(1);
- await page.locator('.pl-occurrence').nth(1).getByRole('button',{name:'Восстановить',exact:true}).click();await page.getByRole('form',{name:'Действие с выполнением'}).locator('button[type=submit]').click();await expect(page.getByRole('form',{name:'Действие с выполнением'}).getByRole('alert')).toBeVisible();series=await get(request,'series/'+id);expect(series.occurrences.filter(o=>o.task.status==='planned')).toHaveLength(3);expect(series.occurrences.filter(o=>o.task.status==='planned'&&!o.task.dynamic)).toHaveLength(1);
+ await revealAction(page,'Восстановить');await page.locator('.pl-occurrence').nth(1).getByRole('button',{name:'Восстановить',exact:true}).click();await page.getByRole('form',{name:'Действие с выполнением'}).locator('button[type=submit]').click();await expect(page.getByRole('form',{name:'Действие с выполнением'}).getByRole('alert')).toBeVisible();series=await get(request,'series/'+id);expect(series.occurrences.filter(o=>o.task.status==='planned')).toHaveLength(3);expect(series.occurrences.filter(o=>o.task.status==='planned'&&!o.task.dynamic)).toHaveLength(1);
  expect((await get(request,'history?object_type=series&object_id='+id)).items.length).toBeGreaterThan(3);
 });
 test('project deadline attention and independent task series block project closure safely',async({page,request})=>{
@@ -27,14 +27,14 @@ test('project deadline attention and independent task series block project closu
 for(const kind of ['task','project','session'])test('lost create response safely retries ordinary '+kind,async({page,request})=>{
  let form,url,title='Без дубля '+randomUUID();
  if(kind==='task'){await page.goto('/#/plans/inbox');form=page.getByRole('form',{name:'Быстрое создание задачи'});await form.getByRole('textbox').fill(title);url='tasks';}
- if(kind==='project'){await page.goto('/#/plans/projects?new=project');form=page.getByRole('form',{name:'Редактор проекта'});await form.getByLabel('Название проекта').fill(title);url='projects';}
+ if(kind==='project'){await page.goto('/#/plans/projects?new=project');form=page.getByRole('form',{name:'Редактор проекта'});await form.getByLabel('Название проекта').fill(title);url='project-drafts/apply';}
  let task;
  if(kind==='session'){task=await post(request,'tasks',{title},201);await page.goto('/#/plans/tasks?task='+task.id);await page.getByRole('tab',{name:'Периоды работы',exact:true}).click();await page.getByRole('button',{name:'+ Период работы',exact:true}).click();form=page.getByRole('form',{name:'Редактор периода работы'});url='sessions';}
  const bodies=[];let first=true;
  await page.route('**/api/planner/'+url,async r=>{if(r.request().method()!=='POST')return r.continue();bodies.push(r.request().postDataJSON());if(first){first=false;await r.fetch();await r.abort('failed');}else await r.continue();});
  await form.locator('button[type=submit]').click();await expect(form.getByRole('alert')).toContainText('Нет связи');await form.locator('button[type=submit]').click();
  if(kind==='task')await expect(page.getByRole('button',{name:title,exact:true})).toBeVisible();else if(kind==='project')await expect(page.getByRole('heading',{name:title,exact:true})).toBeVisible();else await expect(page.locator('.pl-session')).toHaveCount(1);
- expect(bodies).toHaveLength(2);expect(bodies[0]).toEqual(bodies[1]);expect(bodies[0].request_id).toBeTruthy();const items=(await get(request,url+(task?'?task_id='+task.id:''))).items;expect(kind==='session'?items:items.filter(x=>x.title===title)).toHaveLength(1);
+ expect(bodies).toHaveLength(2);expect(bodies[0]).toEqual(bodies[1]);expect(bodies[0].request_id).toBeTruthy();const items=(await get(request,(kind==='project'?'projects':url)+(task?'?task_id='+task.id:''))).items;expect(kind==='session'?items:items.filter(x=>x.title===title)).toHaveLength(1);
 });
 
 test('project history remains accessible after editing and archiving',async({page,request})=>{

@@ -1,4 +1,4 @@
-const { test, expect } = require('../browser-fixtures.cjs');
+const { test, expect, revealAction } = require('../browser-fixtures.cjs');
 const { randomUUID } = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -42,7 +42,7 @@ test('existing completion dialog promotes one current task and keeps dependent s
   await page.goto('/#/plans/calendar?mode=day&date=2026-11-16');
   await expect(page.locator('.pc-calendar')).toBeVisible();
   await page.locator('[data-event-id="task:' + first.id + '"] .pc-event-menu').click();
-  await page.locator('dialog').getByRole('button', { name: 'Выполнить другой датой', exact: true }).click();
+  await revealAction(page,'Выполнить другой датой');await page.locator('dialog').getByRole('button', { name: 'Выполнить другой датой', exact: true }).click();
   const dialog = page.locator('dialog');
   await dialog.locator('input[type="date"]').fill('2026-11-16');
   await dialog.locator('button[type="submit"]').click();

@@ -229,71 +229,102 @@ func (s *Service) ChangeProject(ctx context.Context, id, action string, in Proje
 		return result, e
 	}
 	e = s.store.Transaction(ctx, func(tx *sql.Tx) error {
-		before, e := getProject(tx, id)
-		if e != nil {
-			return e
-		}
-		if e = checkRevision(in.ExpectedRevision, before.RecordMeta); e != nil {
-			return e
-		}
-		if before.ArchivedAt != nil {
-			return invalid("Архивированный проект доступен только для чтения")
-		}
-		p := before
-		if e = applyProject(in, &p); e != nil {
-			return e
-		}
-		switch action {
-		case "complete":
-			p.Status = "completed"
-		case "cancel":
-			p.Status = "cancelled"
-		case "archive":
-			p.ArchivedAt = &now
-		case "":
-		default:
-			return invalid("Неизвестное действие")
-		}
-		if (p.Status != before.Status && !active(p.Status)) || p.ArchivedAt != nil {
-			var linked int
-			if e = tx.QueryRow(`SELECT count(*) FROM series s JOIN series_versions v ON v.series_id=s.id WHERE s.source_type='task' AND s.state!='archived' AND s.disabled_at IS NULL AND v.version=(SELECT max(v2.version) FROM series_versions v2 WHERE v2.series_id=s.id) AND (json_extract(v.source_snapshot_json,'$.project_id')=? OR EXISTS(SELECT 1 FROM tasks t JOIN occurrences o ON o.id=t.occurrence_id WHERE t.project_id=? AND o.series_id=s.id))`, id, id).Scan(&linked); e != nil {
+		apply := func() error {
+			before, e := getProject(tx, id)
+			if e != nil {
 				return e
 			}
-			if linked > 0 {
-				return conflict("nested_series_conflict", "Проект содержит независимые регулярные задачи. Сначала отдельно остановите их серии или перенесите их источник и выполнения; закрытие проекта не отменяет серии автоматически.", before)
+			if e = checkRevision(in.ExpectedRevision, before.RecordMeta); e != nil {
+				return e
 			}
+			if before.ArchivedAt != nil {
+				return invalid("Архивированный проект доступен только для чтения")
+			}
+			p := before
+			if action == "complete" || action == "cancel" {
+				if e = checkProjectPending(tx, &id); e != nil {
+					return e
+				}
+			}
+			if e = applyProject(in, &p); e != nil {
+				return e
+			}
+			switch action {
+			case "complete":
+				p.Status = "completed"
+			case "cancel":
+				p.Status = "cancelled"
+			case "archive":
+				p.ArchivedAt = &now
+			case "":
+			default:
+				return invalid("Неизвестное действие")
+			}
+			if (p.Status != before.Status && !active(p.Status)) || p.ArchivedAt != nil {
+				var linked int
+				if e = tx.QueryRow(`SELECT count(*) FROM series s JOIN series_versions v ON v.series_id=s.id WHERE s.source_type='task' AND s.state!='archived' AND s.disabled_at IS NULL AND v.version=(SELECT max(v2.version) FROM series_versions v2 WHERE v2.series_id=s.id) AND (json_extract(v.source_snapshot_json,'$.project_id')=? OR EXISTS(SELECT 1 FROM tasks t JOIN occurrences o ON o.id=t.occurrence_id WHERE t.project_id=? AND o.series_id=s.id))`, id, id).Scan(&linked); e != nil {
+					return e
+				}
+				if linked > 0 {
+					return conflict("nested_series_conflict", "Проект содержит независимые регулярные задачи. Сначала отдельно остановите их серии или перенесите их источник и выполнения; закрытие проекта не отменяет серии автоматически.", before)
+				}
+			}
+			if before.ProjectMode == "sequential" && before.OccurrenceID == nil && p.Status != before.Status && !active(p.Status) {
+				var open int
+				if e = tx.QueryRow(`SELECT count(*) FROM tasks WHERE project_id=? AND status IN('planned','in_progress')`, id).Scan(&open); e != nil {
+					return e
+				}
+				var sessions int
+				if e = tx.QueryRow(`SELECT count(*) FROM sessions WHERE task_id IN(SELECT id FROM tasks WHERE project_id=?) AND status='in_progress'`, id).Scan(&sessions); e != nil {
+					return e
+				}
+				if open > 0 || sessions > 0 {
+					return conflict("project_open_work", "Сначала завершите открытые задачи и активные периоды работы текущего проекта.", before)
+				}
+			}
+			if before.OccurrenceID != nil && p.Status != before.Status && !active(p.Status) {
+				return conflict("project_occurrence_command_required", "Закройте экземпляр через /occurrences/{id}, явно обработав открытые задачи и сессии", before)
+			}
+			if p.Status != before.Status && !active(before.Status) {
+				return invalid("Недопустимый переход статуса проекта")
+			}
+			if p.Status != before.Status && !active(p.Status) {
+				p.ClosedAt = &now
+			}
+			if p.Status == before.Status && reflect.DeepEqual(p, before) {
+				return invalid("Нет изменений")
+			}
+			p.UpdatedAt = now
+			if e = saveProject(tx, p); e != nil {
+				return e
+			}
+			p.Revision++
+			eventAction := "edited"
+			if p.ArchivedAt != nil {
+				eventAction = "archived"
+			} else if p.Status != before.Status {
+				eventAction = statusAction(p.Status)
+			}
+			if e = event(tx, "project", id, eventAction, op, now, before, p); e != nil {
+				return e
+			}
+			if e = trackProjectException(tx, before, p, op, now); e != nil {
+				return e
+			}
+			if e = s.advanceProjectRepeat(tx, id); e != nil {
+				return e
+			}
+			result = p
+			return decorateProject(tx, &result, true)
 		}
-		if before.OccurrenceID != nil && p.Status != before.Status && !active(p.Status) {
-			return conflict("project_occurrence_command_required", "Закройте экземпляр через /occurrences/{id}, явно обработав открытые задачи и сессии", before)
+		if in.RequestID == "" {
+			return apply()
 		}
-		if p.Status != before.Status && !active(before.Status) {
-			return invalid("Недопустимый переход статуса проекта")
+		out, err := commandOnce(tx, in.RequestID, "project/"+id, action, now, in, func() (CommandResult, error) { err := apply(); return CommandResult{Project: &result}, err })
+		if out.Project != nil {
+			result = *out.Project
 		}
-		if p.Status != before.Status && !active(p.Status) {
-			p.ClosedAt = &now
-		}
-		if p.Status == before.Status && reflect.DeepEqual(p, before) {
-			return invalid("Нет изменений")
-		}
-		p.UpdatedAt = now
-		if e = saveProject(tx, p); e != nil {
-			return e
-		}
-		p.Revision++
-		eventAction := "edited"
-		if p.ArchivedAt != nil {
-			eventAction = "archived"
-		} else if p.Status != before.Status {
-			eventAction = statusAction(p.Status)
-		}
-		if e = event(tx, "project", id, eventAction, op, now, before, p); e != nil {
-			return e
-		}
-		if e = trackProjectException(tx, before, p, op, now); e != nil {
-			return e
-		}
-		result = p
-		return decorateProject(tx, &result, true)
+		return err
 	})
 	return result, e
 }
@@ -425,6 +456,11 @@ func (s *Service) changeTaskTx(ctx context.Context, tx *sql.Tx, id, action strin
 	before, e := getTask(tx, id)
 	if e != nil {
 		return e
+	}
+	if action == "complete" || (in.Status.Set && in.Status.Value != nil && *in.Status.Value == "in_progress") {
+		if e = checkProjectPending(tx, before.ProjectID); e != nil {
+			return e
+		}
 	}
 	if e = checkRevision(in.ExpectedRevision, before.RecordMeta); e != nil {
 		return e

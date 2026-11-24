@@ -3,6 +3,8 @@
  P.renderCalendarSettings=async function(host){
    const appearance=P.route().params.get('section')==='appearance';
    host.replaceChildren(el('nav',{class:'pl-tabs pl-settings-nav','aria-label':'Подразделы настроек'},[['calendar','Производственный календарь'],['appearance','Оформление']].map(([key,title])=>el('a',{href:'#/plans/settings?section='+key,class:(appearance?key==='appearance':key==='calendar')?'is-active':''},title))));
+   host.append(el('details',{},el('summary',{},'Ранее сохранённые шаблоны'),el('a',{class:'pl-button',href:'#/plans/task-templates'},'Шаблоны задач'),el('a',{class:'pl-button',href:'#/plans/templates'},'Шаблоны проектов'),el('a',{class:'pl-button',href:'#/plans/settings?section=templates'},'Создание из сохранённых заготовок')));
+   if(P.route().params.get('section')==='templates'){host.append(button('Создать из шаблона',()=>P.chooseTemplate(P.route())));return;}
    if(appearance){const icons=el('section',{class:'pl-my-icons'});host.append(icons);await P.renderMyIcons(icons);return;}
    host.append(el('h2',{},'Производственный календарь РФ'));
    const highlight=el('input',{type:'checkbox',checked:P.showCalendarDays()});highlight.addEventListener('change',()=>P.setCalendarDays(highlight.checked));host.append(el('label',{class:'pl-checkbox pc-highlight-setting'},highlight,'Показывать праздники и выходные'));

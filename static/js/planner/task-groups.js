@@ -37,7 +37,7 @@
   P.sortProjectTasks=function(tasks,mode='planned'){
  const date=t=>mode==='due'?(t.due_date||'9999-12-31'):(t.planned_date||t.due_date||'9999-12-31');
  const priorities={high:0,normal:1,low:2};
- return [...tasks].sort((a,b)=> (mode==='title'?a.title.localeCompare(b.title,'ru'):mode==='priority'?priorities[a.priority]-priorities[b.priority]:mode==='created'?(a.created_at||'').localeCompare(b.created_at||''):date(a).localeCompare(date(b))||(a.scheduled_time||'99:99').localeCompare(b.scheduled_time||'99:99')) || (a.created_at||'').localeCompare(b.created_at||'') || a.id.localeCompare(b.id));
+ return [...tasks].sort((a,b)=> (mode==='manual'?(a.sort_order||0)-(b.sort_order||0):mode==='title'?a.title.localeCompare(b.title,'ru'):mode==='priority'?priorities[a.priority]-priorities[b.priority]:mode==='created'?(a.created_at||'').localeCompare(b.created_at||''):date(a).localeCompare(date(b))||(a.scheduled_time||'99:99').localeCompare(b.scheduled_time||'99:99')) || (a.created_at||'').localeCompare(b.created_at||'') || a.id.localeCompare(b.id));
  };
   let saved={};try{saved=JSON.parse(localStorage.getItem('planner.group-expansion')||'{}');}catch(_){}
  const expanded = new Map(Object.entries(saved));

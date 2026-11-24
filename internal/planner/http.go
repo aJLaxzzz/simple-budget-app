@@ -100,6 +100,27 @@ func route(s *Service, w http.ResponseWriter, r *http.Request) (int, any, error)
 	if id != "" && (action == "delete-preview" || action == "delete" || action == "unarchive") {
 		return lifecycleRoute(s, w, r, kind, id, action)
 	}
+	if kind == "series" && (action == "project-preview" || action == "project-apply") {
+		return projectModeRoute(s, w, r, id, action)
+	}
+	if kind == "projects" && (action == "task-change-preview" || action == "task-change-apply") {
+		return projectTaskScopeRoute(s, w, r, id, action)
+	}
+	if kind == "projects" && action == "order" {
+		return projectOrderRoute(s, w, r, id)
+	}
+	if kind == "series" && (action == "dates-preview" || action == "dates-apply") {
+		return projectDateRepairRoute(s, w, r, id, action)
+	}
+	if kind == "series" && (action == "composition-preview" || action == "composition-apply") {
+		return projectCompositionRoute(s, w, r, id, action)
+	}
+	if kind == "projects" && action == "close-current" {
+		return projectSourceActionRoute(s, w, r, id)
+	}
+	if kind == "project-drafts" && len(parts) == 2 {
+		return projectDraftRoute(s, w, r, id)
+	}
 	if kind == "batch-recurrence" && len(parts) == 2 {
 		return batchRepeatRoute(s, w, r, id)
 	}

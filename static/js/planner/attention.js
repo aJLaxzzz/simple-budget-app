@@ -17,7 +17,7 @@
    if(item.series_id)card.firstChild.append(el('a',{class:'pl-attention-context',href:'#/plans/series/'+item.series_id},'↻ Настройки повторения'));
    const actions=el('div',{class:'pl-actions'}), entries=[];
    const add=(label,run)=>entries.push({label,run});
-   if(item.kind==='series'){actions.append(button(item.source==='anchor'?'Выбрать дату продолжения':'Открыть повторение',async()=>{try{if(item.source==='anchor')P.seriesChange(await P.api('/series/'+item.series_id),'reanchor');else P.navigate('#/plans/series/'+item.series_id);}catch(e){P.notify(e.message);}},'pl-primary'));}
+   if(item.kind==='series'){actions.append(button(item.source==='anchor'?'Выбрать дату продолжения':'Открыть повторение',async()=>{try{if(item.source==='project_current'){P.projectMode({repeat_series_id:item.series_id,project_mode:'sequential'});return;}if(item.source==='anchor')P.seriesChange(await P.api('/series/'+item.series_id),'reanchor');else P.navigate('#/plans/series/'+item.series_id);}catch(e){P.notify(e.message);}},'pl-primary'));}
    else if(item.occurrence_id){
      const allowed=P.occurrenceActions(item.status), primary=allowed.includes('reschedule')?'reschedule':allowed.includes('restore')?'restore':allowed[0];
      if(primary)actions.append(button(P.occurrenceLabels[primary],()=>P.openOccurrence(item.occurrence_id,primary),'pl-primary'));

@@ -1,4 +1,4 @@
-const { test, expect } = require('../browser-fixtures.cjs');
+const { test, expect, revealAction } = require('../browser-fixtures.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 let counter = 0;
@@ -210,7 +210,7 @@ test('project and terminal filters, project link and state preserved across plan
   await page.getByLabel('Проект', { exact: true }).selectOption(project.id);
   await expect(event(page, 'task', c.id)).toHaveCount(0);
   await menu(page, 'task', a.id);
-  await dialog(page).getByRole('button', { name: 'Перейти к проекту' }).click();
+  await revealAction(page,'Перейти к проекту');await dialog(page).getByRole('button', { name: 'Перейти к проекту' }).click();
   await expect(page.getByRole('heading', { name: project.title, exact: true })).toBeVisible();
   await page.getByRole('link', { name: 'Календарь', exact: true }).click();
   await expect(page.getByLabel('Выбранный день')).toHaveValue('2026-12-25');

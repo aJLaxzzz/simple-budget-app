@@ -238,6 +238,17 @@ func (s *Service) previewProjectSeriesTx(ctx context.Context, tx *sql.Tx, v Seri
 					row.AfterDate = &target
 					row.Candidate = &c
 					row.Disposition = "change_project"
+					if in.Action == "change_rule" && target != o.AdjustedDate {
+						reason, err := projectSourcePeriodConflict(tx, v.ID, string(c.BaseDate), target)
+						if err != nil {
+							return p, err
+						}
+						if reason != "" {
+							row.Disposition = "conflict_structure"
+							row.Reason = reason
+							p.Conflicts = append(p.Conflicts, reason)
+						}
+					}
 					compositionTemplate := proposed.ProjectTemplate
 					row.TemplateVersionID = proposed.TemplateVersionID
 					// A rule edit does not implicitly apply a different tree version.
@@ -329,7 +340,18 @@ func (s *Service) previewProjectSeriesTx(ctx context.Context, tx *sql.Tx, v Seri
 			if pauseOn(p.Pauses, date) != nil || in.Action == "pause" && date >= in.StartDate && date <= in.EndDate {
 				disposition = "future_pause_skip"
 			}
-			p.Rows = append(p.Rows, SeriesChangeRow{CycleIndex: index, BaseDate: string(c.BaseDate), AdjustedDate: date, AfterDate: &date, Candidate: &c, Calendars: cal, ProposedProject: &composition, Disposition: disposition, Sessions: []SessionDTO{}})
+			reason := ""
+			if in.Action == "change_rule" && disposition == "not_materialized" {
+				reason, e = projectSourcePeriodConflict(tx, v.ID, string(c.BaseDate), date)
+				if e != nil {
+					return p, e
+				}
+				if reason != "" {
+					disposition = "conflict_structure"
+					p.Conflicts = append(p.Conflicts, reason)
+				}
+			}
+			p.Rows = append(p.Rows, SeriesChangeRow{Reason: reason, CycleIndex: index, BaseDate: string(c.BaseDate), AdjustedDate: date, AfterDate: &date, Candidate: &c, Calendars: cal, ProposedProject: &composition, Disposition: disposition, Sessions: []SessionDTO{}})
 		}
 	}
 	clean := in
@@ -358,7 +380,7 @@ func checkTemplateTreeChange(tx *sql.Tx, p ProjectDTO, c ProjectComposition, rem
 	for key, id := range keys {
 		if !wanted[key] {
 			if removed != "cancel" {
-				return conflict("template_removal_confirmation", "Удаление из состава требует removed_tasks_decision=cancel; задачи сохранятся отменёнными", tasks[id])
+				return conflict("template_removal_confirmation", "В составе исключены задачи. Выберите их отмену с сохранением истории и повторите предпросмотр.", tasks[id])
 			}
 		}
 	}
@@ -617,4 +639,21 @@ func (s *Service) automaticProjectAction(ctx context.Context, tx *sql.Tx, series
 	}
 	_, e = s.projectOccurrenceCommandTx(ctx, tx, v, o, action, in, op, now, true)
 	return e
+}
+
+// Different base cycles legitimately adjusted onto the same working day are
+// not duplicates of the source period.
+func projectSourcePeriodConflict(tx *sql.Tx, seriesID, baseDate, adjustedDate string) (string, error) {
+	if baseDate != adjustedDate {
+		return "", nil
+	}
+	var occupied int
+	e := tx.QueryRow(`SELECT count(*) FROM projects source JOIN project_repeat_projection r ON r.id=source.id WHERE r.series_id=? AND source.occurrence_id IS NULL AND source.archived_at IS NULL AND source.start_date=?`, seriesID, baseDate).Scan(&occupied)
+	if e != nil {
+		return "", e
+	}
+	if occupied > 0 {
+		return "Этот период уже занят исходным проектом. Выберите дату следующего выполнения; исходный проект и его задачи сохранятся.", nil
+	}
+	return "", nil
 }

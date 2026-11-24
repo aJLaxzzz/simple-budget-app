@@ -3,6 +3,7 @@ package planner
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -156,7 +157,11 @@ func deletionPlanTx(tx *sql.Tx, kind, id string) (deletionPlan, error) {
 		p.Consequences = append(p.Consequences, "Удаляется только выбранное выполнение. Номер выполнения резервируется навсегда; остальные выполнения сохраняются. При удалении текущего ожидания отсчёт от выполнения потребует новой даты продолжения.")
 	}
 	if kind == "series" || kind == "occurrences" {
-		if e = p.collect(tx, "projects", "occurrence_id IN "+p.ids("occurrences")); e != nil {
+		where := "occurrence_id IN " + p.ids("occurrences")
+		if kind == "series" {
+			where += " OR id IN (SELECT source_project_id FROM project_repeat_state WHERE series_id IN " + p.ids("series") + ")"
+		}
+		if e = p.collect(tx, "projects", where); e != nil {
 			return p, e
 		}
 	}
@@ -218,11 +223,7 @@ func deletionPlanTx(tx *sql.Tx, kind, id string) (deletionPlan, error) {
 	if kind != "series" && len(p.Dependencies) > 0 {
 		p.Consequences = append(p.Consequences, "Связанные самостоятельные повторения и их шаблоны автоматически не удаляются. Для удаления всего повторения откройте его настройки.")
 	}
-	if kind == "tasks" {
-		if e = p.blockIf(tx, "SELECT count(*) FROM project_instances WHERE project_id IN (SELECT project_id FROM tasks WHERE id IN "+tasks+")", "Задача принадлежит проекту из шаблона. Удалите проект целиком; для изменения состава будущих проектов измените шаблон"); e != nil {
-			return p, e
-		}
-	}
+
 	if kind == "templates" || kind == "task-templates" {
 		if e = p.collect(tx, "template_versions", "template_id=?", id); e != nil {
 			return p, e
@@ -231,6 +232,14 @@ func deletionPlanTx(tx *sql.Tx, kind, id string) (deletionPlan, error) {
 			if e = p.blockIf(tx, q, "Шаблон используется объектами или историческими повторениями. Сохраните его в архиве либо сначала удалите зависимые объекты"); e != nil {
 				return p, e
 			}
+		}
+	}
+	if kind == "series" || kind == "projects" || kind == "tasks" || kind == "occurrences" {
+		if e = p.collect(tx, "project_templates", `internal=1 AND (id IN (SELECT template_id FROM template_versions WHERE id IN (SELECT template_version_id FROM series_versions WHERE series_id IN `+excluded+`)) OR id IN (SELECT template_id FROM template_versions WHERE id IN (SELECT template_version_id FROM projects WHERE id IN `+projects+`)) OR id IN (SELECT template_id FROM entity_template_links WHERE project_id IN `+projects+` OR task_id IN `+tasks+`)) AND NOT EXISTS(SELECT 1 FROM series_versions v JOIN template_versions tv ON tv.id=v.template_version_id WHERE tv.template_id=project_templates.id AND v.series_id NOT IN `+excluded+`) AND NOT EXISTS(SELECT 1 FROM projects p JOIN template_versions tv ON tv.id=p.template_version_id WHERE tv.template_id=project_templates.id AND p.id NOT IN `+projects+`) AND NOT EXISTS(SELECT 1 FROM entity_template_links l WHERE l.template_id=project_templates.id AND (l.project_id IS NULL OR l.project_id NOT IN `+projects+`) AND (l.task_id IS NULL OR l.task_id NOT IN `+tasks+`))`); e != nil {
+			return p, e
+		}
+		if e = p.collect(tx, "template_versions", "template_id IN "+p.ids("project_templates")); e != nil {
+			return p, e
 		}
 	}
 	if e = p.collect(tx, "sessions", "task_id IN "+tasks); e != nil {
@@ -254,7 +263,7 @@ func deletionPlanTx(tx *sql.Tx, kind, id string) (deletionPlan, error) {
 		"entity_template_links": "task_id IN " + tasks + " OR project_id IN " + projects,
 	}
 	if kind == "series" {
-		for _, t := range []string{"series_runtime", "series_pauses", "series_version_scopes", "series_versions", "removed_cycles", "series_appearances", "series_assignments"} {
+		for _, t := range []string{"series_runtime", "series_pauses", "series_version_scopes", "series_versions", "removed_cycles", "series_appearances", "series_assignments", "project_repeat_state"} {
 			selectors[t] = "series_id IN " + p.ids("series")
 		}
 		// Original standalone project survives a conversion; its template link also survives.
@@ -267,12 +276,17 @@ func deletionPlanTx(tx *sql.Tx, kind, id string) (deletionPlan, error) {
 	if e = p.collect(tx, "detached_occurrences", "occurrence_id IN "+occ); e != nil {
 		return p, e
 	}
+	if kind != "series" {
+		if e = p.collect(tx, "project_repeat_state", "current_project_id IN "+projects+" OR source_project_id IN "+projects); e != nil {
+			return p, e
+		}
+	}
 	// Capture surviving links for preview invalidation, not for deletion.
 	if kind == "series" {
 		if e = p.collect(tx, "entity_template_links", "task_id IN "+tasks+" OR project_id IN "+projects+" OR series_id IN "+p.ids("series")); e != nil {
 			return p, e
 		}
-		p.Consequences = append(p.Consequences, "Все выполнения повторения и история повторения удаляются, автоматическое создание прекращается. Исходные шаблоны и самостоятельный проект-источник сохраняются.")
+		p.Consequences = append(p.Consequences, "Все выполнения повторения и история повторения удаляются, автоматическое создание прекращается. Самостоятельные ранее отсоединённые объекты и общие заготовки сохраняются. Неиспользуемые внутренние снимки удаляются вместе с повторением.")
 	}
 	for t, rows := range p.rows {
 		p.Counts[t] = len(rows)
@@ -319,6 +333,26 @@ func (s *Service) deleteForeverTx(ctx context.Context, tx *sql.Tx, kind, id stri
 			}
 			if in.PreviewToken == "" || in.PreviewToken != p.PreviewToken {
 				return CommandResult{}, conflict("preview_changed", "Состав удаления изменился. Получите новый предпросмотр и подтвердите его.", p.DeletionPreview)
+			}
+			currentStarts := map[string]string{}
+			if kind != "series" {
+				rows, err := tx.Query(`SELECT r.series_id,coalesce(p.start_date,'') FROM project_repeat_state r JOIN projects p ON p.id=r.current_project_id WHERE r.mode='sequential' AND p.id IN ` + p.ids("projects"))
+				if err != nil {
+					return CommandResult{}, err
+				}
+				for rows.Next() {
+					var sid, start string
+					if err = rows.Scan(&sid, &start); err != nil {
+						rows.Close()
+						return CommandResult{}, err
+					}
+					currentStarts[sid] = start
+				}
+				err = rows.Err()
+				rows.Close()
+				if err != nil {
+					return CommandResult{}, err
+				}
 			}
 			// Reciprocal occurrence/entity FKs are checked at commit, after both are gone.
 			if _, e = tx.Exec("PRAGMA defer_foreign_keys=ON"); e != nil {
@@ -395,8 +429,61 @@ func (s *Service) deleteForeverTx(ctx context.Context, tx *sql.Tx, kind, id stri
 					return CommandResult{}, e
 				}
 			}
-			for _, t := range []string{"detached_occurrences", "history_events", "attention_state", "entity_template_links", "project_closed_tasks", "project_instances", "sessions", "occurrence_incidents", "occurrence_schedule", "series_runtime", "tasks", "projects", "occurrences", "series_pauses", "series_version_scopes", "series_versions", "removed_cycles", "series_appearances", "series_assignments", "series", "template_versions", "project_templates"} {
-				if t == "series" && kind != "series" {
+			if _, e = tx.Exec(`UPDATE project_repeat_state SET needs_decision=1 WHERE current_project_id IN ` + p.ids("projects")); e != nil {
+				return CommandResult{}, e
+			}
+			if kind == "tasks" {
+				rows, e := tx.Query(`SELECT DISTINCT project_id FROM tasks WHERE id IN ` + p.ids("tasks") + ` AND project_id IS NOT NULL`)
+				if e != nil {
+					return CommandResult{}, e
+				}
+				ids := []string{}
+				for rows.Next() {
+					var x string
+					if e = rows.Scan(&x); e != nil {
+						rows.Close()
+						return CommandResult{}, e
+					}
+					ids = append(ids, x)
+				}
+				e = rows.Err()
+				rows.Close()
+				if e != nil {
+					return CommandResult{}, e
+				}
+				for _, pid := range ids {
+					keys, e := projectKeys(tx, pid)
+					if e != nil && e != sql.ErrNoRows {
+						return CommandResult{}, e
+					}
+					if e == nil {
+						for key, tid := range keys {
+							var deleted bool
+							if e = tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM tasks WHERE id=? AND id IN `+p.ids("tasks")+`)`, tid).Scan(&deleted); e != nil {
+								return CommandResult{}, e
+							}
+							if deleted {
+								delete(keys, key)
+							}
+						}
+						raw, e := json.Marshal(keys)
+						if e != nil {
+							return CommandResult{}, e
+						}
+						if _, e = tx.Exec(`UPDATE project_instances SET task_keys_json=? WHERE project_id=?`, string(raw), pid); e != nil {
+							return CommandResult{}, e
+						}
+					}
+					if _, e = tx.Exec(`UPDATE projects SET revision=revision+1,updated_at=? WHERE id=?`, now, pid); e != nil {
+						return CommandResult{}, e
+					}
+					if e = event(tx, "project", pid, "tasks_deleted", in.RequestID, now, nil, p.DeletionPreview); e != nil {
+						return CommandResult{}, e
+					}
+				}
+			}
+			for _, t := range []string{"project_repeat_state", "detached_occurrences", "history_events", "attention_state", "entity_template_links", "project_closed_tasks", "project_instances", "sessions", "occurrence_incidents", "occurrence_schedule", "series_runtime", "tasks", "projects", "occurrences", "series_pauses", "series_version_scopes", "series_versions", "removed_cycles", "series_appearances", "series_assignments", "series", "template_versions", "project_templates"} {
+				if (t == "series" || t == "project_repeat_state") && kind != "series" {
 					continue
 				}
 				if len(p.rows[t]) == 0 {
@@ -415,6 +502,11 @@ func (s *Service) deleteForeverTx(ctx context.Context, tx *sql.Tx, kind, id stri
 					if _, e = s.ensureUpcomingTx(ctx, tx, &v, in.RequestID, now); e != nil {
 						return CommandResult{}, e
 					}
+				}
+			}
+			for sid, start := range currentStarts {
+				if e = s.selectNextProject(tx, sid, start); e != nil {
+					return CommandResult{}, e
 				}
 			}
 			return CommandResult{Deleted: &p.DeletionPreview}, nil

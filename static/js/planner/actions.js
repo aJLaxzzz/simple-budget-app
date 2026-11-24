@@ -6,21 +6,23 @@
   P.actionObject=item=>item.type==='session'?item:item.type&&item.task_id?{...item,id:item.task_id,revision:item.task_revision,status:item.task_status,type:'task',date:item.type==='deadline'?null:item.date}:{...item,type:'task',date:item.date??item.planned_date,start_time:item.start_time??item.scheduled_time};
   P.actionNames=item=>{
     const task=P.actionObject(item), active=P.active(task), archived=item.project_archived||P.data.projects.some(p=>p.id===task.project_id&&p.archived_at);
-    return ['open',...(!archived?(active?['reschedule','complete','completeDate','cancel']:['completed','cancelled','skipped'].includes(task.status)?['restore']:[]):[]),...(!archived&&task.type!=='session'?['saveTemplate','move',...(!task.series_id?[...(['planned','in_progress','completed'].includes(task.status)&&!P.data.tasks.some(t=>t.parent_task_id===task.id)?['repeat']:[])]:task.series_state==='archived'?[]:['changeRule','pauseRepeat','disableRepeat','stopRepeat'])]:[]),...(task.type!=='session'?['deleteForever']:[]),...(task.project_id?['project']:[]),...(task.series_id?['series']:[]),...(task.occurrence_id&&task.type!=='session'&&active&&!archived?['skip']:[])].filter(action=>!(['deadline','planning'].includes(item.type)&&['complete','cancel','restore','skip'].includes(action)) && !(item.type==='deadline'&&action==='reschedule'));
+    return ['open',...(!archived?(active?['reschedule','complete','completeDate','cancel']:['completed','cancelled','skipped'].includes(task.status)?['restore']:[]):[]),...(!archived&&task.type!=='session'?['move',...(!task.series_id?task.project_repeat_series_id?['projectRepeat']:[...(['planned','in_progress','completed'].includes(task.status)&&!P.data.tasks.some(t=>t.parent_task_id===task.id)?['repeat']:[])]:task.series_state==='archived'?[]:['changeRule'])]:[]),...(task.type!=='session'?['deleteForever']:[]),...(task.project_id?['project']:[]),...(task.series_id&&!active&&task.series_state==='archived'?['series']:[]),...(task.occurrence_id&&task.type!=='session'&&active&&!archived?['skip']:[])].filter(action=>!(['deadline','planning'].includes(item.type)&&['complete','cancel','restore','skip'].includes(action)) && !(item.type==='deadline'&&action==='reschedule'));
   };
   P.datePresets=(host,input)=>host.append(el('div',{class:'pl-date-presets'},[ ['Сегодня',0],['Завтра',1],['Через неделю',7] ].map(([label,days])=>button(label,()=>{input.value=C.addDays(P.today(),days);input.dispatchEvent(new Event('input',{bubbles:true}));})),button('Выбрать дату',()=>{input.focus();try{input.showPicker?.();}catch(_){/* native date field remains available */}})));
   P.actionButton=task=>{const b=button('···',()=>P.objectMenu(task),'pl-icon pl-task-menu');b.setAttribute('aria-label','Действия с задачей');return b;};
   P.objectMenu=async function(item){
     if(item.series_id){try{const s=await P.api('/series/'+item.series_id+'?limit=1');item={...item,series_state:s.state};}catch(e){P.notify(e.message);return;}}
+    if(item.project_id&&!item.series_id&&item.type!=='session'){try{const project=await P.api('/projects/'+item.project_id);item={...item,project_repeat_series_id:project.repeat_series_id};}catch(e){P.notify(e.message);return;}}
     const task=P.actionObject(item), session=task.type==='session';
     const {dialog,close}=P.dialog(session?'Действия с периодом работы':'Действия с задачей');dialog.classList.add('pl-action-menu');dialog.setAttribute('aria-label',session?'Действия с периодом работы':'Действия с задачей');
     dialog.append(el('p',{class:'pl-menu-title'},task.title||'Период работы'));
     if(item.type==='deadline')dialog.append(meta('Это срок задачи, а не отдельное выполнение. Крайний срок меняется в редакторе.'));
     if(item.type==='planning')dialog.append(meta('Плановая дата задачи. Работа по периодам показана отдельно.'));
-    const labels={deleteForever:'Удалить навсегда',open:'Открыть / редактировать',reschedule:'Перенести',complete:'Отметить выполненной',cancel:'Отменить задачу',restore:'Восстановить',move:'Переместить в проект',project:'Перейти к проекту',series:'Настройки повторения',skip:'Пропустить выполнение',repeat:'Сделать регулярной',saveTemplate:'Сохранить как шаблон',changeRule:'Изменить повторение',pauseRepeat:'Приостановить повторение',stopRepeat:'Архивировать повторение',disableRepeat:'Отключить повторение',completeDate:'Выполнить другой датой'};
+    const labels={deleteForever:'Удалить навсегда',open:'Открыть / редактировать',reschedule:'Перенести',complete:'Отметить выполненной',cancel:'Отменить задачу',restore:'Восстановить',move:'Переместить в проект',project:'Перейти к проекту',series:'Настроить повторение',skip:'Пропустить выполнение',repeat:'Сделать регулярной',saveTemplate:'Сохранить как шаблон',projectRepeat:'Настроить повторение проекта',changeRule:'Настроить повторение',pauseRepeat:'Приостановить повторение',stopRepeat:'Архивировать повторение',disableRepeat:'Отключить повторение',completeDate:'Выполнить другой датой'};
     const actions=el('div',{class:'pl-menu-items'});
     const danger=['cancel','stopRepeat','deleteForever'];const names=P.actionNames(item);const ordered=[...names.filter(a=>!danger.includes(a)),...danger.filter(a=>names.includes(a))];
-    for(const action of ordered){if(action===ordered.find(a=>danger.includes(a)))actions.append(el('hr',{class:'pl-menu-separator'}));actions.append(button(session&&action==='complete'?'Завершить период':session&&action==='cancel'?'Отменить период работы':labels[action],()=>{close(true);P.runAction(task,action);},danger.includes(action)?'pl-danger':''));}
+    const sections={};const groupFor=a=>['move','completeDate','project'].includes(a)?'Планирование':['repeat','projectRepeat','changeRule','pauseRepeat','disableRepeat','series'].includes(a)?'Повторение':'Статус';
+    for(const action of ordered){let target=actions;if(!danger.includes(action)&&!['open','reschedule','complete'].includes(action)){const key=groupFor(action);if(!sections[key]){sections[key]=el('details',{},el('summary',{},key));actions.append(sections[key]);}target=sections[key];}if(action===ordered.find(a=>danger.includes(a)))actions.append(el('hr',{class:'pl-menu-separator'}));target.append(button(session&&action==='complete'?'Завершить период':session&&action==='cancel'?'Отменить период работы':labels[action],()=>{close(true);P.runAction(task,action);},danger.includes(action)?'pl-danger':''));}
     dialog.append(actions);
   };
   P.runAction=async function(item,action){
@@ -31,6 +33,7 @@
       if(action==='deleteForever')return P.deleteForever('tasks',task);
       if(action==='open')return P.openTask(task.type==='session'?task.task_id:task.id);
       if(action==='project')return P.navigate('#/plans/projects/'+task.project_id);
+      if(action==='projectRepeat')return P.repeatEditor(task.project_repeat_series_id,{projectID:task.project_id});
       if(action==='series')return P.navigate('#/plans/series/'+task.series_id);
       if(['repeat','saveTemplate'].includes(action)){
         const context=await P.api('/tasks/'+task.id+'/context');task=context.task;
@@ -97,16 +100,17 @@
       },async()=>({record:await P.api('/tasks/'+tasks[0].id),async accept(){tasks=await Promise.all(tasks.map(t=>P.api('/tasks/'+t.id)));invalidate();}}));dialog.append(form,preview);
     }catch(e){P.notify(e.message);}
   };
-  P.reschedule = function (item, targetDate, targetTime, immediate = false) {
+  P.reschedule = async function (item, targetDate, targetTime, immediate = false) {
     item = P.actionObject(item);
     if (item.occurrence_id && item.type !== 'session') return P.openOccurrence(item.occurrence_id, 'reschedule', {targetDate,targetTime,immediate});
     const session = item.type === 'session';
+    const scopeProject=!session&&item.project_id?await P.api('/projects/'+item.project_id):null;
     const { dialog, close } = P.dialog(session ? 'Перенос периода работы' : 'Перенос задачи');
     dialog.append(el('p', {}, item.title), meta('Крайний срок задачи не изменится.' + (session ? ' Плановая дата задачи также сохранится.' : '')));
     const form = el('form', { 'data-submit':'Перенести на выбранную дату', 'aria-label': session ? 'Перенос периода работы' : 'Перенос задачи' });
     const date = P.field(form, 'date', 'Новая дата', 'date', targetDate || item.date); date.required = true;
     P.datePresets(form, date);
-    let startValue = targetTime === undefined ? item.start_time : targetTime, endValue = item.end_time;
+    let startValue = targetTime === undefined ? (item.start_time||item.scheduled_time) : targetTime, endValue = item.end_time;
     if (session && targetTime !== undefined) {
       if (targetTime && item.start_time && item.end_time) {
         const end = C.minutes(targetTime) + C.minutes(item.end_time) - C.minutes(item.start_time);
@@ -118,9 +122,10 @@
     const end = session ? P.field(form, 'end', 'Окончание · Москва', 'time', endValue) : null;
     function validate() { if (!end) return; start.required = Boolean(end.value); end.required = Boolean(start.value); end.setCustomValidity(start.value && end.value && end.value <= start.value ? 'Окончание должно быть позже начала' : ''); }
     start.addEventListener('input', validate); end?.addEventListener('input', validate); validate();
+    const changeScope=P.projectScopeField(form,scopeProject);
     let revision = item.revision, baseline = item;
     const path = '/' + (session ? 'sessions' : 'tasks') + '/' + item.id;
-    P.bindForm(form, () => P.api(path + '/reschedule', 'POST', { expected_revision: revision, ...(session ? { date: date.value, start_time: start.value || null, end_time: end.value || null } : { planned_date: date.value, scheduled_time: start.value || null }) }), async () => { close(true); P.notify((session?'Период работы':'Задача')+' «'+(item.title||'Без названия')+'» перенесён'+(session?'':'а')+' на '+P.date(date.value)); await P.refresh(); }, async () => {
+    P.bindForm(form, () => changeScope&&changeScope.value!=='this'?P.scopedProjectSave(scopeProject,{scope:changeScope.value,action:'edit',task_id:item.id,expected_task_revision:revision,patch:{planned_date:date.value,...(start.value!==(item.start_time||item.scheduled_time||'')?{scheduled_time:start.value||null}:{})}}):P.api(path + '/reschedule', 'POST', { expected_revision: revision, ...(session ? { date: date.value, start_time: start.value || null, end_time: end.value || null } : { planned_date: date.value, scheduled_time: start.value || null }) }), async result => { close(true); P.notify(result.scope_notice||((session?'Период работы':'Задача')+' «'+(item.title||'Без названия')+'» перенесён'+(session?'':'а')+' на '+P.date(date.value))); await P.refresh(); }, async () => {
       const latest = await P.api(path);
       return { record: latest, reload() { close(true); P.refresh(); }, accept() {
         const latestDate = session ? latest.date : latest.planned_date;
@@ -135,7 +140,7 @@
     });
     dialog.append(form);
     // No optimistic DOM move: a rejected drop leaves the original event in place.
-    if (immediate) form.requestSubmit();
+    if (immediate&&!changeScope) form.requestSubmit();
   };
   P.projectMenu=function(project){
     const {dialog,close}=P.dialog('Действия с проектом');dialog.setAttribute('aria-label','Действия с проектом');dialog.classList.add('pl-action-menu');const list=el('div',{class:'pl-menu-items'});dialog.append(list);
@@ -143,17 +148,18 @@
     if(!project.archived_at){
       list.append(button('Редактировать проект',run(()=>P.navigate('#/plans/projects/'+project.id+'?edit=project&id='+project.id))),button('Изменить даты',run(()=>P.navigate('#/plans/projects/'+project.id+'?edit=project&id='+project.id+'&dates=1'))));
       if(P.active(project))list.append(button('Завершить проект',run(()=>P.projectAction(project,'complete'))));
-      list.append(button('Добавить существующие задачи',run(()=>P.addExistingTasks(project))),button('Добавить задачу',run(()=>P.compactTask({view:'projects',id:project.id,params:new URLSearchParams()}))),button('Сохранить как шаблон',run(()=>P.projectTemplateFlow(project))));
-      if(project.repeat_series_id)list.append(button('Отключить повторение проекта',run(()=>P.disableRepeat(project.repeat_series_id,project.id))));
-      if(project.repeat_series_id)list.append(button('Изменить повторение',run(async()=>{try{const s=await P.api('/series/'+project.repeat_series_id+'?limit=100');P.seriesChange(s,'change_rule');}catch(e){P.notify(e.message);}})));
+      list.append(button('Добавить существующие задачи',run(()=>P.addExistingTasks(project))),button('Добавить задачу',run(()=>project.repeat_series_id?P.newTask(project.id):P.compactTask({view:'projects',id:project.id,params:new URLSearchParams()}))));
+
+      if(project.repeat_series_id)list.append(button('Настроить повторение',run(()=>P.repeatEditor(project.repeat_series_id,{projectID:project.id}))));
       else if(!project.occurrence_id)list.append(button('Повторять проект',run(()=>P.projectTemplateFlow(project,true))));
 
-      if(project.occurrence_id&&!P.active(project)&&['completed','cancelled','skipped'].includes(project.status))list.append(button('Восстановить проект',run(()=>P.projectAction(project,'restore'))));
+      if((project.occurrence_id||project.managed_repeat)&&P.active(project))list.append(button('Пропустить выполнение',run(()=>P.projectAction(project,'skip'))));
+      if((project.occurrence_id||project.managed_repeat)&&!P.active(project)&&['completed','cancelled','skipped'].includes(project.status))list.append(button('Восстановить проект',run(()=>P.projectAction(project,'restore'))));
 
     }
     if(project.archived_at)list.append(button('Вернуть из архива',run(()=>P.unarchive('projects',project))));
 
-    list.append(button('Просмотреть историю',run(()=>{const h=P.dialog('История проекта');P.renderHistory(h.dialog,'project',project.id);})));list.append(el('hr',{class:'pl-menu-separator'}));if(!project.archived_at){if(P.active(project))list.append(button('Отменить проект',run(()=>P.projectAction(project,'cancel')),'pl-danger'));list.append(button('В архив',run(()=>P.projectAction(project,'archive')),'pl-danger'));}list.append(button('Удалить навсегда',run(()=>P.deleteForever('projects',project)),'pl-danger'));return dialog;
+    list.append(button('Просмотреть историю',run(()=>{const h=P.dialog('История проекта');P.renderHistory(h.dialog,'project',project.id);})));list.append(el('hr',{class:'pl-menu-separator'}));if(!project.archived_at){if(P.active(project))list.append(button('Отменить проект',run(()=>P.projectAction(project,'cancel')),'pl-danger'));list.append(button('В архив',run(()=>P.projectAction(project,'archive')),'pl-danger'));}list.append(button('Удалить навсегда',run(()=>P.deleteForever('projects',project)),'pl-danger'));P.groupProjectMenu(list);return dialog;
   };
   P.projectMenuButton=project=>{const b=button('···',()=>P.projectMenu(project),'pl-icon');b.setAttribute('aria-label','Действия с проектом');return b;};
 })(window.Planner);

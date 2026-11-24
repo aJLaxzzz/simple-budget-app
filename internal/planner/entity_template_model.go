@@ -21,6 +21,7 @@ type TaskTemplateInput struct {
 // The preview binds the full source tree, including task revisions, to the command.
 // The original project is never attached to an occurrence or rescheduled.
 type ProjectSourceInput struct {
+	ProjectMode         string                   `json:"project_mode,omitempty"`
 	IndependentDecision string                   `json:"independent_decision,omitempty"`
 	RequestID           string                   `json:"request_id"`
 	ExpectedRevision    int64                    `json:"expected_revision"`

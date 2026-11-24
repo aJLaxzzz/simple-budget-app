@@ -22,7 +22,7 @@
     const initial = options.rule || {unit:'weeks',interval:1,mode:'schedule',allowed_days:{mode:'any'},adjustment:'none'};
     const block = el('section', {class:'pl-rule-builder'}); host.append(block);
     const preset = P.field(block,'preset','Повторять','select','custom', [['daily','Каждый день'],['weekly','Каждую неделю'],['monthly','Каждый месяц'],['yearly','Каждый год'],...(!options.project ? [['completion','Через N дней после выполнения']] : []),['custom','Настроить самостоятельно']]);
-    const advanced = el('details', {open:true}, el('summary',{},'Настройки повторения'));
+    const advanced = el('details', {open:true}, el('summary',{},'Интервал и допустимые дни'));
     const grid = el('div',{class:'pl-form-grid'}); advanced.append(grid); block.append(advanced);
     const interval = P.field(grid,'interval','Каждые','number',initial.interval); interval.min=1; interval.max=10000; interval.required=true;
     const unit = P.field(grid,'unit','Интервал','select',initial.unit,[['days','Дни'],['weeks','Недели'],['months','Месяцы'],['years','Годы']]);
@@ -53,7 +53,7 @@
         for(const row of result.items||[])preview.append(el('div',{class:'pl-preview-row'},el('span',{},P.date(row.base_date)+' → '+P.date(row.adjusted_date)),meta(row.reason||'Без переноса'),row.conditional?meta('Условный прогноз'):null));
       }catch(error){if(own!==turn)return;preview.replaceChildren(el('p',{role:'alert'},error.message),el('a',{href:'#/plans/settings'},'Настройки производственного календаря'));}
     }
-    function sync(){explanation.textContent=mode.value==='schedule'?'По расписанию: даты рассчитываются заранее, независимо от завершения предыдущих выполнений.':'После выполнения: одно текущее дело и следующие предварительно запланированные задачи. Их даты пересчитываются после переноса или фактического завершения текущего выполнения.';weekdays.hidden=allowed.value!=='selected';if(allowed.value==='any')adjustment.value='none';else if(adjustment.value==='none')adjustment.value='next';adjustment.querySelector('[value="none"]').disabled=allowed.value!=='any';clearTimeout(timer);timer=setTimeout(show,250);}
+    function sync(){explanation.textContent=mode.value==='schedule'?'По расписанию: даты рассчитываются заранее, независимо от завершения предыдущих выполнений.':'После выполнения: одно текущее дело и следующие предварительно запланированные задачи. Их даты пересчитываются после переноса или фактического завершения текущего выполнения.';weekdays.hidden=allowed.value!=='selected';adjustment.closest('.pl-field').hidden=allowed.value==='any';if(allowed.value==='any')adjustment.value='none';else if(adjustment.value==='none')adjustment.value='next';adjustment.querySelector('[value="none"]').disabled=allowed.value!=='any';clearTimeout(timer);timer=setTimeout(show,250);}
     preset.addEventListener('change',()=>{const values={daily:['days',1,'schedule'],weekly:['weeks',1,'schedule'],monthly:['months',1,'schedule'],yearly:['years',1,'schedule'],completion:['days',45,'completion']}[preset.value];if(values){[unit.value,interval.value,mode.value]=values;if(options.changing)mode.value=initial.mode;advanced.open=preset.value==='completion';}else advanced.open=true;sync();});
     grid.addEventListener('change',sync);first.addEventListener('change',sync);sync();
     return {read,first,preview,refresh:show};

@@ -15,7 +15,19 @@ type TemplateLinks struct {
 	SavedTemplateID  *string `json:"saved_template_id,omitempty"`
 	SourceTemplateID *string `json:"source_template_id,omitempty"`
 }
+type RoutineSummary struct {
+	Count     int      `json:"count"`
+	NextDate  *string  `json:"next_date,omitempty"`
+	OpenDates []string `json:"open_dates"`
+	Ordinary  Progress `json:"ordinary"`
+}
 type ProjectDTO struct {
+	ManagedRepeat    bool            `json:"managed_repeat,omitempty"`
+	Routines         *RoutineSummary `json:"routines,omitempty"`
+	ProjectMode      string          `json:"project_mode"`
+	CurrentProjectID *string         `json:"current_project_id,omitempty"`
+	NeedsDecision    bool            `json:"needs_decision"`
+	Preliminary      bool            `json:"preliminary"`
 	TemplateLinks
 	RepeatSeriesID *string `json:"repeat_series_id,omitempty"`
 	EffectiveAppearance
@@ -43,7 +55,9 @@ type Progress struct {
 	OpenTasks int     `json:"open_tasks"`
 }
 type TaskDTO struct {
-	Dynamic bool `json:"dynamic"`
+	SortOrder      int  `json:"sort_order"`
+	ProjectPending bool `json:"project_pending"`
+	Dynamic        bool `json:"dynamic"`
 	TemplateLinks
 	EffectiveAppearance
 	Appearance

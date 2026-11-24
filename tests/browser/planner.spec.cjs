@@ -1,4 +1,4 @@
-const { test, expect } = require('../browser-fixtures.cjs');
+const { test, expect, revealAction } = require('../browser-fixtures.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 let number = 0;
@@ -120,7 +120,7 @@ test('completion actual Moscow date, cancellation, restore and lazy history', as
   const historyRequests = [];
   page.on('request', req => { if (req.url().includes('/history?')) historyRequests.push(req.url()); });
   await editor(page).getByRole('button', {name:'Действия с задачей',exact:true}).click();
- await page.getByRole('button',{name:'Выполнить другой датой',exact:true}).click();
+ await revealAction(page,'Выполнить другой датой');await page.getByRole('button',{name:'Выполнить другой датой',exact:true}).click();
   expect(await actionDialog(page).getByLabel('Фактическая дата выполнения').inputValue()).toBe(await page.evaluate(() => window.Planner.today()));
   await actionDialog(page).getByLabel('Фактическая дата выполнения').fill('2026-01-15');
   await actionDialog(page).locator('button[type=submit]').click();
