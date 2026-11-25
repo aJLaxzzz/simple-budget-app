@@ -13,21 +13,8 @@ def execute(action,device,new_name=None):
     require(root.is_dir() and not root.is_symlink() and root.stat().st_mode&0o077==0,'Existing private ~/.simple-budget-pki required; no CA is created')
     require(NAME.fullmatch(device),'Invalid device name')
     if action=='pki-backup':
-        destination=Path(input('Путь нового зашифрованного .dmg вне репозитория: ')).expanduser().absolute()
-        require(not destination.exists() and destination.suffix=='.dmg','New .dmg path required')
-        require(root not in destination.parents,'PKI backup must be outside PKI directory')
-        repository=Path(__file__).resolve().parents[2]
-        require(repository not in destination.parent.resolve().parents and destination.parent.resolve()!=repository,'PKI backup must never enter the repository or its artifacts')
-        registry=Path.home()/'.simple-budget-admin/device-registry.json'
-        require(registry.exists() and time.time()-registry.stat().st_mtime<86400,'Run make pki-export first; current public allowlist/revocation registry is required')
-        with tempfile.TemporaryDirectory(prefix='budget-pki-backup-') as temp:
-            staging=Path(temp)
-            for source in root.iterdir():
-                require(source.is_file() and source.suffix in ('.key','.crt','.csr','.cnf','.p12'),'Unexpected PKI entry; inspect before export')
-                regular(source,1024*1024);copy_verified(source,staging/source.name,mode=0o600,limit=1024*1024)
-            copy_verified(registry,staging/'device-registry.json',mode=0o600,limit=1024*1024)
-            subprocess.run(['/usr/bin/hdiutil','create','-encryption','AES-256','-srcfolder',str(staging),'-format','UDZO',str(destination)],check=True)
-        return
+        import pki_backup
+        return pki_backup.create(root,os.environ.get('PKI_ARCHIVE') or None)
     regular(root/'ca.crt',64<<10);regular(root/'ca.key',64<<10)
     require((root/'ca.key').stat().st_mode&0o077==0,'CA key must be private')
     require(b'ENCRYPTED' in read(root/'ca.key',64<<10),'CA private key must be encrypted')

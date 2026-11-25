@@ -263,7 +263,7 @@ class InstallerTests(unittest.TestCase):
             for name in ('ca','mac-1','phone'):(root/('etc/caddy/pki/'+name+'.crt')).write_bytes(pem)
             bundle=root/'bundle';(bundle/'ops').mkdir(parents=True);(bundle/'systemd').mkdir()
             repo=Path(__file__).resolve().parents[2];manifest={}
-            for name in ('common.py','remote.py','bootstrap.py','caddy_policy.py'):
+            for name in ('common.py','remote.py','bootstrap.py','caddy_policy.py','admin_session.py'):
                 data=(repo/'scripts/ops'/name).read_bytes();(bundle/'ops'/name).write_bytes(data);manifest['ops/'+name]=hashlib.sha256(data).hexdigest()
             for file in (repo/'deploy/systemd').iterdir():
                 data=file.read_bytes();(bundle/'systemd'/file.name).write_bytes(data);manifest['systemd/'+file.name]=hashlib.sha256(data).hexdigest()

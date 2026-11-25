@@ -55,7 +55,7 @@ def _install(bundle,run=None,root='/'):
         caddy_policy.validate(load(p.at('/etc/caddy/simple-budget.json')),expected,True) if p.at('/etc/caddy/simple-budget.json').exists() else None
     else:caddy_policy.validate(adapted,expected)
     manifest=load(bundle/'bundle.json')
-    required={'ops/'+x for x in ('common.py','remote.py','bootstrap.py','caddy_policy.py')}
+    required={'ops/'+x for x in ('common.py','remote.py','bootstrap.py','caddy_policy.py','admin_session.py')}
     required|={'systemd/'+x for x in ('simple-budget@.service','simple-budget-backup@.service','simple-budget-backup@.timer','simple-budget-tls.service','simple-budget-tls.timer','simple-budget-schedule.service','simple-budget-schedule.timer','caddy-budget.conf','journald-budget.conf')}
     require(set(manifest)==required,'Unexpected infrastructure bundle files')
     for name,digest in manifest.items():require(SHA.fullmatch(digest) and sha(bundle/name)==digest,'Infrastructure checksum mismatch')

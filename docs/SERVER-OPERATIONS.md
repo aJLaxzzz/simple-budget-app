@@ -133,7 +133,7 @@ make rollback ENV=production INSTANCE=production DEVICE=mac-1
 make legacy-export LOCAL_DATA=/absolute/path/to/actual/local/data
 ```
 
-Введите `ОСТАНОВЛЕНО` только после фактической остановки. CLI проверяет parent lease и существующий SQLite flock, копирует DB+WAL и JSON в приватный промежуточный каталог, валидирует/экспортирует SQLite **только на копии**, проверяет неизменность исходных bytes. Исходный marker не создаётся/не меняется. Новый transfer ID относится к клону; snapshot/data.json/categories.json сохраняют данные и ID сущностей. Результат — обычный полный проверенный stage2 archive в `~/.simple-budget-admin/transfer-<ID>`. Он остаётся на Mac.
+Введите `ОСТАНОВЛЕНО` только после фактической остановки. CLI проверяет parent lease и существующий SQLite flock, копирует DB+WAL и JSON в приватный промежуточный каталог, валидирует/экспортирует SQLite **только на копии**, проверяет неизменность исходных bytes. Исходный marker не создаётся/не меняется. Новый transfer ID относится к клону; snapshot/data.json/categories.json сохраняют данные и ID сущностей. Результат — обычный полный проверенный stage2 archive в `~/simple-budget-backups/migration/transfer-<ID>`. Он остаётся на Mac.
 
 Для уже маркированной production-установки использовать обычный полный stage2 backup с существующим ID, а не legacy-export. Экспорт в веб-интерфейсе SQLite отдельно от JSON не заменяет полный перенос.
 
@@ -270,3 +270,39 @@ make acceptance-http ENV=production INSTANCE=acceptance DEVICE=mac-1
 ```
 
 Нужны sudo для получения безопасного status, пароль ключа устройства и пароль приложения. При HTTP401 предусмотрены три попытки app password. Команда проверяет текущий synthetic ID/публичный маршрут и clean revision/schema, затем положительные GET и отрицательные проверки auth/Host/Origin/forwarded/Content-Type. Готовый полный backup читается двумя Range-запросами; planner download сверяется с manifest. Размер скачивания ограничен64MiB для синтетической проверки; обычные административные backup/restore этим лимитом не меняются. Итог сохраняется в `~/.simple-budget-admin/acceptance-http-result.json`. Новая резервная копия, restore, restart и изменение данных не запрашиваются. Неподходящие POST имеют пустой JSON, чтобы даже дефект проверяемого фильтра не создал валидную задачу.
+
+## Server UX 1.1: меню, локальные копии и авторизация
+
+Подробный локальный отчёт и ограничения: [SERVER-UX-1.1.md](SERVER-UX-1.1.md).
+
+```sh
+make server                            # меню, всегда начинает с acceptance
+make server AUTH=manual SUDO_MODE=legacy # совместимо с уже установленным VPS
+make keychain-build
+make keychain-status INSTANCE=acceptance
+```
+
+На проверенном Mac12.7.6 Touch ID доступен, но DP Keychain ad-hoc helper вернул -34018 (недостающий entitlement). Поэтому сейчас используйте ручной режим. `AUTH=keychain` не обходит ограничение и не делает скрытый fallback. Регистрация/замена/проверка/удаление доступны через keychain-register/check/delete с SECRET=app|client|pki; успешная биометрическая регистрация требует отдельно проверенного provisioned helper. Секреты разделены по серверу, instance, installation ID и устройству. CA/sudo password не сохраняются. Реальное число biometric prompts не подтверждено.
+
+Новый ограниченный `SUDO_MODE=session` работает только после согласованной установки административного обновления. Он вызывает sudo один раз, использует отдельный PTY и фиксированный план существующих handler; между командами меню привилегии не сохраняются. Idle120s/новые команды30мин, не более32 шагов; без изменения sudoers/timestamp. При ошибке status/recover, без автоматического повторения mutation. До обновления VPS явно сохраняйте legacy (это также default). `OUTPUT=json` даёт подробный локальный результат; session mode по умолчанию показывает краткую сводку.
+
+Новые каталоги:
+
+| Команда | Каталог |
+|---|---|
+| fetch-backup INSTANCE=acceptance | ~/simple-budget-backups/acceptance/ |
+| fetch-backup INSTANCE=production | ~/simple-budget-backups/production/ |
+| legacy-export (только при отдельно разрешённой остановке источника) | ~/simple-budget-backups/migration/transfer-ID/ |
+| pki-backup | ~/simple-budget-backups/pki/ |
+
+Fetch сохраняет полный backup ID, проверяет SHA256/native verify/installation ID до публикации. Идентичный файл не перезаписывается, отличается — отказ. Старые копии не переносятся и не удаляются.
+
+```sh
+make pki-backup ENV=production INSTANCE=acceptance
+# Необязательный другой НОВЫЙ путь в приватном каталоге:
+make pki-backup ENV=production INSTANCE=acceptance PKI_ARCHIVE="$HOME/simple-budget-backups/pki/extra.dmg"
+```
+
+Имя по умолчанию pki-YYYY-MM-DD_HH-mm-ss.dmg, время Europe/Moscow; коллизии получают числовой suffix. Registry должен быть экспортирован меньше24часов назад; при просрочке сначала `make pki-export ENV=production INSTANCE=acceptance`. AES-256, пароль через NUL-terminated stdinpass, проверка содержимого при readonly mount и detach до публикации. В ручном режиме recovery-пароль вводится дважды; дальнейшие проверки используют его только в памяти команды. Храните пароль независимо от этого Mac, архив — также на независимом носителе.
+
+Пароль браузера сохраняется только средствами браузера/его менеджера; CLI Keychain не настраивает Chrome/Android. Возможность биометрического autofill именно HTTP Basic dialog требует пользовательской проверки; WebAuthn/passkeys и серверный auth не менялись.

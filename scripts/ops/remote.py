@@ -500,7 +500,7 @@ def request_for(token,action,instance):
     uid=pwd.getpwnam(ADMIN).pw_uid
     require(incoming.is_dir() and not incoming.is_symlink() and incoming.stat().st_uid==uid and incoming.stat().st_mode&0o077==0,'Unsafe incoming directory')
     request=load(incoming/'request.json',16384,uid)
-    allowed={'action','instance','request_id','installation_id','confirm','empty_installation','https_verified_revision','decision','scope','allow_corrupt_live','device','fingerprint','backup_id','kind','name','operation_id'}
+    allowed={'action','instance','request_id','installation_id','confirm','empty_installation','https_verified_revision','decision','scope','allow_corrupt_live','device','fingerprint','backup_id','kind','name','operation_id','operation'}
     require(set(request)<=allowed and request.get('action')==action and request.get('instance')==instance and request.get('request_id')==token,'Request operation mismatch')
     return incoming,request
 
@@ -519,6 +519,12 @@ def controller_main():
 
 def main():
     try:
+        if sys.argv[1:]==['session-protocol']:
+            print('1');return
+        if len(sys.argv)==4 and sys.argv[1]=='session':
+            require(os.geteuid()==0 and platform.system()=='Linux','Session requires Linux root')
+            from admin_session import serve
+            serve(sys.argv[2],sys.argv[3]);return
         require(os.geteuid()==0 and platform.system()=='Linux','Administrator requires Linux root')
         require(len(sys.argv) in (3,4),'usage: budget-admin OP production|acceptance [REQUEST_TOKEN]')
         action,instance=sys.argv[1:3];require(action in REQUEST_ACTIONS|READ_ACTIONS,'Unknown operation')

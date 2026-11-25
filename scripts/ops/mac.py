@@ -14,12 +14,17 @@ import sys
 import tempfile
 import uuid
 from common import *
+import secret_store
+import local_backups
 
 ROOT=Path(__file__).resolve().parents[2]
 LOCAL=Path.home()/'.simple-budget-admin'
+ACTIVE_TRANSPORTS=[]
 
 class Transport:
     def __init__(self):
+        self.session=None;self.operation=None;self.instance=None
+        ACTIVE_TRANSPORTS.append(self)
         require(os.environ.get('ENV')=='production','Select the server explicitly: ENV=production')
         raw=subprocess.check_output(['/usr/bin/ssh','-G','budget'],text=True)
         config=dict(line.split(' ',1) for line in raw.splitlines() if ' ' in line)
@@ -27,6 +32,8 @@ class Transport:
         require(config.get('stricthostkeychecking') not in ('false','no','off'),'SSH config must not disable host-key verification')
         self.ssh=['/usr/bin/ssh','-o','StrictHostKeyChecking=yes','-o','ConnectTimeout=15','-o','ServerAliveInterval=15','-o','ServerAliveCountMax=3']
         self.scp=['/usr/bin/scp','-o','StrictHostKeyChecking=yes','-o','ConnectTimeout=15']
+    def close(self):
+        if self.session:self.session.close()
     def command(self,args,tty=False):
         return subprocess.run([*self.ssh,*(['-t'] if tty else []),'budget',shlex.join([str(x) for x in args])],check=True)
     def upload(self,path,token,name):
@@ -49,7 +56,16 @@ class Transport:
             if action=='repair-initialization':
                 require(instance=='acceptance','Repair is synthetic-only')
                 self.command(['sudo','/usr/bin/python3','-I','/home/budgetadmin/.simple-budget-incoming/'+token+'/repair.py',token],tty=True)
-            else:self.command(['sudo','/usr/local/sbin/budget-admin',action,instance,token],tty=True)
+            else:
+                mode=(os.environ.get('SUDO_MODE') or 'legacy')
+                require(mode in ('legacy','session'),'SUDO_MODE must be legacy or session')
+                if mode=='session':
+                    from session_transport import Session
+                    if self.session is None:
+                        state=load(local_state(instance))
+                        self.session=Session(self,self.operation or action,instance,state['installation_id'])
+                    self.session.execute(action,token)
+                else:self.command(['sudo','/usr/local/sbin/budget-admin',action,instance,token],tty=True)
             if action=='clean-incoming':return {'result':'removed'}
             result=Path(tmp)/'result.json';self.download(token,'result.json',result)
             return load(result),token
@@ -77,11 +93,11 @@ def client_context(device='mac-1'):
     require((pki/(device+'.key')).stat().st_mode&0o077==0,'Client key must be private')
     ca='/etc/ssl/cert.pem' if Path('/etc/ssl/cert.pem').exists() else None
     context=ssl.create_default_context(cafile=ca);context.minimum_version=ssl.TLSVersion.TLSv1_2
-    context.load_cert_chain(pki/(device+'.crt'),pki/(device+'.key'),password=lambda:getpass.getpass('Пароль закрытого ключа '+device+': '))
+    context.load_cert_chain(pki/(device+'.crt'),pki/(device+'.key'),password=lambda:secret_store.password('client','Пароль закрытого ключа '+device+': ',device))
     return context
 
 def app_connection(device='mac-1', password=None):
-    return client_context(device),password or getpass.getpass('Пароль приложения: ')
+    return client_context(device),password or secret_store.password('app','Пароль приложения: ')
 
 def https_accept(expected,device):
     context,password=app_connection(device)
@@ -236,7 +252,7 @@ def install(t):
     clean_tree()
     with tempfile.TemporaryDirectory(prefix='budget-infrastructure-') as tmp:
         bundle=Path(tmp);manifest={}
-        names=['common.py','remote.py','bootstrap.py','caddy_policy.py']
+        names=['common.py','remote.py','bootstrap.py','caddy_policy.py','admin_session.py']
         for sub,paths in [('ops',[ROOT/'scripts/ops'/x for x in names]),('systemd',list((ROOT/'deploy/systemd').iterdir()))]:
             for source in paths:
                 name=sub+'/'+source.name;manifest[name]=sha(source)
@@ -251,17 +267,33 @@ def install(t):
 def confirm(label):
     require(input(label+'\nВведите ПОДТВЕРЖДАЮ: ')=='ПОДТВЕРЖДАЮ','Cancelled')
 
-def main():
+def _main(argv=None):
     parser=argparse.ArgumentParser()
     parser.add_argument('action');parser.add_argument('--instance',default=os.environ.get('INSTANCE') or 'acceptance',choices=['acceptance','production'])
     parser.add_argument('--archive',default=os.environ.get('ARCHIVE') or None);parser.add_argument('--device',default=os.environ.get('DEVICE') or 'mac-1')
     parser.add_argument('--backup-id',default=os.environ.get('BACKUP_ID') or None);parser.add_argument('--decision',default=os.environ.get('DECISION') or None)
     parser.add_argument('--source',default=os.environ.get('LOCAL_DATA') or None);parser.add_argument('--name',default=os.environ.get('NAME') or None)
-    args=parser.parse_args();action=args.action
+    args=parser.parse_args(argv);action=args.action
+    state_path=LOCAL/(args.instance+'.json')
+    identity=load(state_path).get('installation_id') if state_path.exists() else None
+    secret_store.SESSION=secret_store.Operation(args.instance,args.device,(os.environ.get('AUTH') or 'manual'),identity)
+    if action.startswith('keychain-'):
+        secret_store.manage(action,args.instance,args.device,(os.environ.get('SECRET') or 'app'),identity);return
+    if secret_store.SESSION.mode=='keychain':
+        # Resolve local authorization before a deployment can enter maintenance.
+        if action in ('deploy','restore','rollback','recover','acceptance','acceptance-download','acceptance-http'):
+            secret_store.password('client','Пароль закрытого ключа: ',args.device)
+            secret_store.password('app','Пароль приложения: ')
+        elif action=='client-revoke':secret_store.password('client','Пароль закрытого ключа: ',args.device)
+        elif action in ('initialize','migrate-data','acceptance-tls'):
+            raise Refused('New installation/test identity requires explicit AUTH=manual; register secrets afterwards')
     if action=='release-linux':release();return
     if action in ('client-issue','client-renew','pki-backup'):
         import pki; pki.execute(action,args.device,args.name);return
-    t=Transport()
+    t=Transport();t.operation=action;t.instance=args.instance
+    if (os.environ.get('SUDO_MODE') or 'legacy')=='session' and action not in ('server-install','repair-initialization'):
+        from session_transport import check_protocol
+        check_protocol(t) # before creating a pending operation or uploading any mutation request
     if action=='acceptance-http':
         import http_acceptance
         http_acceptance.execute(t,args.instance,args.device);return
@@ -306,7 +338,7 @@ def main():
             summary={k:metadata.get(k) for k in ('backup_id','installation_id','created_at','reason')}
             summary['schema_version']=metadata['sqlite']['schema_version']
             print(json.dumps(summary,ensure_ascii=False,indent=2))
-        confirm('Операция '+action+' для '+args.instance+'; восстановление заменяет данные выбранным поколением.')
+        confirm('Сервер '+IP+', '+args.instance+', installation ID '+str(state.get('installation_id','неизвестен'))+'. Операция '+action+'; восстановление/откат заменяет данные выбранным поколением.')
         fields={'confirm':True}
         if action=='restore':
             require(args.archive,'ARCHIVE required');files={'backup.tar.gz':Path(args.archive).resolve()}
@@ -353,17 +385,40 @@ def main():
         rev=https_accept(result['version'],args.device)
         result,_=t.request('commit',args.instance,{'installation_id':state['installation_id'],'https_verified_revision':rev},token=result['request_id'])
     if action=='fetch-backup':
-        dest=LOCAL/(args.backup_id+'.tar.gz');t.download(token,'download.tar.gz',dest)
-        require(sha(dest)==result['sha256'],'Downloaded checksum mismatch')
-        subprocess.run([str(local_binary()),'admin','backup','verify','--archive',str(dest)],check=True)
-        print('Verified external copy:',dest)
+        dest=local_backups.archive_destination(args.instance,args.backup_id)
+        with tempfile.TemporaryDirectory(prefix='.download-',dir=dest.parent) as tmp:
+            partial=Path(tmp)/'archive.tar.gz';t.download(token,'download.tar.gz',partial)
+            require(sha(partial)==result['sha256'],'Downloaded checksum mismatch')
+            metadata=json.loads(subprocess.check_output([str(local_binary()),'admin','backup','verify','--archive',str(partial)]))
+            require(metadata['installation_id']==state.get('installation_id') and metadata['backup_id']==args.backup_id,'Downloaded identity mismatch')
+            created=local_backups.publish(partial,dest,result['sha256'])
+        print(('Проверенная локальная копия: ' if created else 'Идентичная проверенная копия уже существует: ')+str(dest))
     if action in ('client-add','client-revoke'):
         registry_result,_=t.request('pki-export',args.instance);atomic(LOCAL/'device-registry.json',registry_result)
     if action=='pki-export':
         registry=LOCAL/'device-registry.json';atomic(registry,result);print('Public PKI registry:',registry)
-    print(json.dumps(result,ensure_ascii=False,indent=2))
+    show_result(action,result,args.instance)
     if stateful:pending_file.unlink(missing_ok=True)
     t.request('clean-incoming',args.instance,token=token)
+
+def show_result(action,result,instance):
+    if os.environ.get('OUTPUT')=='json' or action in ('client-list','pki-export','logs'):
+        print(json.dumps(result,ensure_ascii=False,indent=2));return
+    print('Сервер '+IP+' / '+instance)
+    if action=='status':
+        print('Приложение: '+str(result.get('service','не инициализировано'))+'; Caddy: '+str(result.get('caddy_active')))
+        release=result.get('release',{});print('Версия: '+str(release.get('revision','—'))+'; схема: '+str(release.get('schema_version','—')))
+        print('Installation ID: '+str(result.get('installation_id','—')))
+        backup=result.get('backup',{});latest=backup.get('latest') or {};manifest=latest.get('manifest',{})
+        print('Последняя копия: '+str(manifest.get('backup_id','нет'))+'; автоматизация: '+str(backup.get('automatic','неизвестно'))+'; следующий запуск: '+str(backup.get('next_at','—')))
+        if any(result.get(k) for k in ('deployment_journal','restore_journal','backup_operation_pending','revocation_pending')):
+            print('Есть незавершённая операция. Проверьте OUTPUT=json и используйте штатный recover; не повторяйте изменение.')
+        print('Свободно на диске: '+str(result.get('disk',{}).get('free_bytes','—'))+' байт; TLS: '+str(result.get('tls',{}).get('status','—')))
+    elif action=='backup':
+        print('Проверенная копия: '+str(result.get('manifest',{}).get('backup_id','—'))+'; размер: '+str(result.get('size','—')))
+    elif action=='tls-status':
+        print(json.dumps(result,ensure_ascii=False,indent=2))
+    else:print('Результат: '+str(result.get('result',result.get('state','выполнено'))))
 
 def local_binary():
     # Isolated administrative helper. Never replaces the user's ./budget.
@@ -372,7 +427,27 @@ def local_binary():
     subprocess.run(['go','build','-o',str(path),'.'],cwd=ROOT,check=True)
     return path
 
+def main(argv=None):
+    try:return _main(argv)
+    finally:
+        failed=sys.exc_info()[0] is not None
+        cleanup_error=None
+        try:
+            for t in ACTIVE_TRANSPORTS[:]:
+                try:t.close()
+                except Exception as e:
+                    print('SSH session close failed; check status before another change.',file=sys.stderr)
+                    cleanup_error=e
+                finally:ACTIVE_TRANSPORTS.remove(t)
+        finally:
+            if secret_store.SESSION:
+                try:secret_store.SESSION.close()
+                finally:secret_store.SESSION=None
+        if cleanup_error and not failed:raise cleanup_error
+
 if __name__=='__main__':
     try:main()
+    except (KeyboardInterrupt,EOFError):
+        print('Операция отменена. Если началось изменение сервера, выполните status/recover.',file=sys.stderr);sys.exit(130)
     except (Refused,OSError,ValueError,KeyError,subprocess.CalledProcessError) as e:
         print('Operation stopped: '+str(e),file=sys.stderr);sys.exit(1)
