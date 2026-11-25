@@ -16,6 +16,7 @@ import uuid
 from common import *
 import secret_store
 import local_backups
+import version_status
 
 ROOT=Path(__file__).resolve().parents[2]
 LOCAL=Path.home()/'.simple-budget-admin'
@@ -92,9 +93,18 @@ def client_context(device='mac-1'):
         regular(pki/name,64<<10)
     require((pki/(device+'.key')).stat().st_mode&0o077==0,'Client key must be private')
     ca='/etc/ssl/cert.pem' if Path('/etc/ssl/cert.pem').exists() else None
-    context=ssl.create_default_context(cafile=ca);context.minimum_version=ssl.TLSVersion.TLSv1_2
-    context.load_cert_chain(pki/(device+'.crt'),pki/(device+'.key'),password=lambda:secret_store.password('client','Пароль закрытого ключа '+device+': ',device))
-    return context
+    manual=secret_store.SESSION is None or secret_store.SESSION.mode=='manual'
+    for attempt in range(1,4):
+        context=ssl.create_default_context(cafile=ca);context.minimum_version=ssl.TLSVersion.TLSv1_2
+        prompt='Пароль закрытого ключа '+device+(' (попытка '+str(attempt)+' из 3)' if attempt>1 else '')+': '
+        try:
+            context.load_cert_chain(pki/(device+'.crt'),pki/(device+'.key'),password=lambda:secret_store.password('client',prompt,device))
+            return context
+        except ssl.SSLError as e:
+            if getattr(e,'reason',None) not in ('PEM_LIB','BAD_DECRYPT'):raise
+            if not manual or attempt==3:
+                raise Refused('Не удалось открыть клиентский ключ '+device+'. Проверьте его пароль и файл ключа. Если операция уже началась, продолжите через status/recover.') from None
+            print('Не удалось открыть клиентский ключ. Повторите именно пароль ключа '+device+' (не sudo и не пароль приложения).',file=sys.stderr)
 
 def app_connection(device='mac-1', password=None):
     return client_context(device),password or secret_store.password('app','Пароль приложения: ')
@@ -107,7 +117,7 @@ def https_accept(expected,device):
             # Reuse the unlocked TLS context; each HTTP connection is closed.
             c=http.client.HTTPSConnection(IP,443,context=context,timeout=30)
             try:
-                c.request('GET','/api/ready',headers={'Authorization':'Basic '+base64.b64encode(('budget:'+password).encode()).decode(),'Origin':'https://'+IP})
+                c.request('GET','/api/ready',headers={'X-Budget-Admin':'1','Authorization':'Basic '+base64.b64encode(('budget:'+password).encode()).decode(),'Origin':'https://'+IP})
                 r=c.getresponse()
                 if r.status==200:
                     data=json.loads(r.read(16384))
@@ -138,12 +148,12 @@ def acceptance(t,instance,device):
     def request(method,path,body=None,headers=None,ctx=context):
         c=http.client.HTTPSConnection(IP,443,context=ctx,timeout=30)
         try:
-            h={'Host':IP,'Authorization':auth,'Origin':'https://'+IP,'Content-Type':'application/json'};h.update(headers or {})
+            h={'Host':IP,'X-Budget-Admin':'1','Authorization':auth,'Origin':'https://'+IP,'Content-Type':'application/json'};h.update(headers or {})
             c.request(method,path,json.dumps(body).encode() if body is not None else None,h)
             r=c.getresponse();data=r.read(2<<20);return r.status,data
         finally:c.close()
     code,data=request('GET','/api/ready');require(code==200,'HTTPS readiness failed')
-    require(request('GET','/api/ready',headers={'Authorization':'Basic aW52YWxpZDppbnZhbGlk'})[0]==401,'App password bypass')
+    require(request('GET','/api/ready',headers={'X-Budget-Admin':'1','Authorization':'Basic aW52YWxpZDppbnZhbGlk'})[0]==401,'App password bypass')
     require(request('POST','/api/planner/tasks',{'title':'must-not-exist'},headers={'Origin':'https://foreign.invalid'})[0]==403,'Foreign Origin accepted')
     require(request('GET','/api/ready',headers={'Host':'foreign.invalid','X-Forwarded-Host':IP})[0] in (403,404,421),'Foreign Host accepted')
     no_cert=ssl.create_default_context(cafile='/etc/ssl/cert.pem' if Path('/etc/ssl/cert.pem').exists() else None)
@@ -183,7 +193,7 @@ def download_verified_backup(context,auth,ident,installation_id):
     c=http.client.HTTPSConnection(IP,443,context=context,timeout=90)
     created=False
     try:
-        c.request('GET','/api/backups/'+ident+'/full',headers={'Authorization':auth,'Host':IP})
+        c.request('GET','/api/backups/'+ident+'/full',headers={'X-Budget-Admin':'1','Authorization':auth,'Host':IP})
         response=c.getresponse();require_download_response(response)
         with open(partial,'xb') as f:
             created=True;os.chmod(partial,0o600)
@@ -402,12 +412,14 @@ def _main(argv=None):
     t.request('clean-incoming',args.instance,token=token)
 
 def show_result(action,result,instance):
+    if action=='status':
+        result=dict(result,version_comparison=version_status.inspect(ROOT,result.get('release') or {}))
     if os.environ.get('OUTPUT')=='json' or action in ('client-list','pki-export','logs'):
         print(json.dumps(result,ensure_ascii=False,indent=2));return
     print('Сервер '+IP+' / '+instance)
     if action=='status':
         print('Приложение: '+str(result.get('service','не инициализировано'))+'; Caddy: '+str(result.get('caddy_active')))
-        release=result.get('release',{});print('Версия: '+str(release.get('revision','—'))+'; схема: '+str(release.get('schema_version','—')))
+        version_status.display(result['version_comparison'],result.get('release') or {})
         print('Installation ID: '+str(result.get('installation_id','—')))
         backup=result.get('backup',{});latest=backup.get('latest') or {};manifest=latest.get('manifest',{})
         print('Последняя копия: '+str(manifest.get('backup_id','нет'))+'; автоматизация: '+str(backup.get('automatic','неизвестно'))+'; следующий запуск: '+str(backup.get('next_at','—')))

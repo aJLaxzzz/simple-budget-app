@@ -22,10 +22,11 @@ var ErrClosed = errors.New("planner store is closed")
 // Store serializes operations on one SQL connection. Transactions and maintenance
 // use the same gate; no caller may retain a transaction beyond its callback.
 type Store struct {
-	mu   sync.Mutex
-	db   *sql.DB
-	file *os.File
-	path string
+	mu       sync.Mutex
+	db       *sql.DB
+	file     *os.File
+	path     string
+	onCommit func()
 }
 
 func Open(ctx context.Context, path string) (*Store, error) {
@@ -198,9 +199,32 @@ func (s *Store) Transaction(ctx context.Context, fn func(*sql.Tx) error) error {
 	if s.db == nil {
 		return ErrClosed
 	}
-	return transaction(ctx, s.db, fn)
+	if s.onCommit == nil {
+		return transaction(ctx, s.db, fn)
+	}
+	var before, after int64
+	if e := s.db.QueryRowContext(ctx, "SELECT total_changes()").Scan(&before); e != nil {
+		return e
+	}
+	err := transaction(ctx, s.db, fn)
+	if err == nil && s.onCommit != nil {
+		// The commit has already succeeded. A disconnected HTTP caller must not
+		// suppress the notification needed by the other connected devices.
+		if e := s.db.QueryRowContext(context.WithoutCancel(ctx), "SELECT total_changes()").Scan(&after); e != nil || after != before {
+			s.onCommit()
+		}
+	}
+	return err
 }
-func transaction(ctx context.Context, db *sql.DB, fn func(*sql.Tx) error) error {
+func transaction(ctx context.Context, db *sql.DB, fn func(*sql.Tx) error) (result error) {
+	defer func() {
+		// database/sql can finish its cancellation rollback before the callback
+		// observes cancellation. Preserve genuine errors; normalize only its
+		// closed-transaction/connection sentinels with a cancelled parent.
+		if ctx.Err() != nil && (errors.Is(result, sql.ErrTxDone) || errors.Is(result, sql.ErrConnDone)) {
+			result = ctx.Err()
+		}
+	}()
 	connection, e := db.Conn(ctx)
 	if e != nil {
 		return e
@@ -238,3 +262,6 @@ func (s *Store) Ready(ctx context.Context) error {
 	return nil
 }
 func SchemaVersion() int { return len(migrations) }
+
+// SetCommitObserver installs a nonblocking notification invoked only after a successful write commit.
+func (s *Store) SetCommitObserver(fn func()) { s.mu.Lock(); defer s.mu.Unlock(); s.onCommit = fn }

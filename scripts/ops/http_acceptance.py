@@ -52,7 +52,7 @@ def execute(transport, instance, device):
     evidence={'at':utc(),'installation_id':state['installation_id'],'device':device,'checks':[]}
     def connect(method,path,body=None,headers=None):
         c=http.client.HTTPSConnection(IP,443,context=context,timeout=30)
-        h={'Host':IP,'Origin':'https://'+IP,'Authorization':'Basic '+base64.b64encode(('budget:'+password).encode()).decode(),'Content-Type':'application/json'}
+        h={'Host':IP,'Origin':'https://'+IP,'X-Budget-Admin':'1','Authorization':'Basic '+base64.b64encode(('budget:'+password).encode()).decode(),'Content-Type':'application/json'}
         h.update(headers or {})
         try:c.request(method,path,body,h);return c,c.getresponse()
         except BaseException:c.close();raise
@@ -84,7 +84,7 @@ def execute(transport, instance, device):
         paths=['/','/js/api.js','/css/style.css','/api/ready','/api/planner/tasks','/api/backups/status',
                '/api/backups/'+ident+'/full','/api/backups/'+ident+'/planner']
         for path in paths:
-            expect('unauthorized '+path,'GET',path,401,headers={'Authorization':''})
+            expect('unauthorized '+path,'GET',path,401,headers={'X-Budget-Admin':'1','Authorization':''})
         for path in paths[:3]:expect('embedded '+path,'GET',path,200)
         forwarded={'X-Forwarded-For':'127.0.0.1','X-Real-IP':'127.0.0.1','X-Forwarded-User':'budget','Forwarded':'for=127.0.0.1;proto=https;host='+IP}
         expect('forwarded cannot authorize','GET','/api/ready',401,headers=dict(forwarded,Authorization=''))
@@ -93,8 +93,8 @@ def execute(transport, instance, device):
         expect('canonical Origin accepted despite forwarded proto','GET','/api/ready',200,headers={'X-Forwarded-Proto':'http'})
         expect('Content-Type enforced','POST','/api/planner/tasks',415,body=b'{}',headers={'Content-Type':'text/plain'})
         expect('cross-site blocked','GET','/api/ready',403,headers={'Sec-Fetch-Site':'cross-site'})
-        expect('bad password rejected','GET','/api/ready',401,headers={'Authorization':'Basic '+base64.b64encode(b'budget:incorrect-synthetic-password').decode()})
-        for path in ('/planner.db','/data.json','/categories.json','/backups/','/staging/',
+        expect('bad password rejected','GET','/api/ready',401,headers={'X-Budget-Admin':'1','Authorization':'Basic '+base64.b64encode(b'budget:incorrect-synthetic-password').decode()})
+        for path in ('/planner.db','/data.json','/categories.json','/web-auth.json','/backups/','/staging/',
                      '/api/backups/../staging/x','/api/backups/'+ident+'/restore'):
             expect('private route '+path,'GET',path,(400,403,404))
         expect('HTTP restore unavailable','POST','/api/backups/'+ident+'/restore',405,body=b'{}')

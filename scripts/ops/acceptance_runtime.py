@@ -101,9 +101,11 @@ def api(port, password, method, path, body=None, expected=200):
     started = time.monotonic()
     try:
         headers = {'Host': '171.22.237.16', 'Origin': 'https://171.22.237.16',
-                   'Authorization': 'Basic ' + base64.b64encode(('budget:'+password).encode()).decode()}
+                   'X-Budget-Admin':'1','Authorization': 'Basic ' + base64.b64encode(('budget:'+password).encode()).decode()}
         if body is not None:
             headers['Content-Type'] = 'application/json'
+        if method not in ('GET','HEAD') and path.startswith(('/api/months','/api/categories')):
+            c.request('GET','/api/months',headers=headers); current=c.getresponse(); current.read(); headers['If-Match']=current.getheader('X-Budget-Revision','')
         c.request(method, path, body=None if body is None else json.dumps(body), headers=headers)
         response = c.getresponse()
         raw = response.read(16 << 20)

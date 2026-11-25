@@ -2,9 +2,10 @@
  'use strict';const {el,button,meta}=P;
  P.renderCalendarSettings=async function(host){
    const section=P.route().params.get('section')||'calendar';const appearance=section==='appearance';
-   host.replaceChildren(el('nav',{class:'pl-tabs pl-settings-nav','aria-label':'Подразделы настроек'},[['calendar','Производственный календарь'],['appearance','Оформление'],['backups','Резервные копии']].map(([key,title])=>el('a',{href:'#/plans/settings?section='+key,class:key===section?'is-active':''},title))));
+   host.replaceChildren(el('nav',{class:'pl-tabs pl-settings-nav','aria-label':'Подразделы настроек'},[['calendar','Производственный календарь'],['appearance','Оформление'],['backups','Резервные копии'],['security','Безопасность']].map(([key,title])=>el('a',{href:'#/plans/settings?section='+key,class:key===section?'is-active':''},title))));
    host.append(el('details',{},el('summary',{},'Ранее сохранённые шаблоны'),el('a',{class:'pl-button',href:'#/plans/task-templates'},'Шаблоны задач'),el('a',{class:'pl-button',href:'#/plans/templates'},'Шаблоны проектов'),el('a',{class:'pl-button',href:'#/plans/settings?section=templates'},'Создание из сохранённых заготовок')));
    if(P.route().params.get('section')==='templates'){host.append(button('Создать из шаблона',()=>P.chooseTemplate(P.route())));return;}
+   if(section==='security'){await window.budgetSecurity(host);return;}
    if(section==='backups'){const nav=host.querySelector('.pl-settings-nav');nav.scrollLeft=nav.scrollWidth;await renderBackups(host);return;}
    if(appearance){const icons=el('section',{class:'pl-my-icons'});host.append(icons);await P.renderMyIcons(icons);return;}
    host.append(el('h2',{},'Производственный календарь РФ'));

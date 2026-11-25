@@ -38,7 +38,7 @@ test('official days, missing year, visible filters, reset, preference and naviga
 for(const width of [1440,1024,768,390,360])test('UX final visual '+width,async({page})=>{
  test.setTimeout(60000); // Thirteen full-page captures are one visual audit workflow.
  await page.setViewportSize({width,height:1000});const dir='artifacts/ux2-stage5/after';fs.mkdirSync(dir,{recursive:true});
- const capture=async name=>{await page.waitForLoadState('networkidle');await expect(page.locator('.pl-loading')).toHaveCount(0);expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);await page.screenshot({path:dir+'/'+name+'-'+width+'.png',fullPage:!(await page.locator('dialog[open]').count()),animations:'disabled'});};
+ const capture=async name=>{await expect.poll(()=>page.evaluate(()=>window.budgetRequests||0)).toBe(0);await expect(page.locator('.pl-loading')).toHaveCount(0);expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);await page.screenshot({path:dir+'/'+name+'-'+width+'.png',fullPage:!(await page.locator('dialog[open]').count()),animations:'disabled'});};
  for(const mode of ['month','week','day']){const start=Date.now();await page.goto('/#/plans/calendar?mode='+mode+'&date=2027-02-23&project='+fixture.p.id);await expect(page.locator('.pc-calendar')).toBeVisible();await expect(page.locator('.pc-day-description')).toContainText('Государственный праздник');timing('calendar-'+mode+'-'+width+'-ms',Date.now()-start);if(mode==='week'&&width<=900)await expect(page.locator('.pc-week-strip')).toBeVisible();await capture('calendar-'+mode);}
  await page.goto('/#/plans/tasks?project='+fixture.p.id);await page.locator('.pl-group-later > summary').click();await expect(page.locator('[data-task-id="'+fixture.t.id+'"]')).toBeVisible();await capture('tasks');
  await page.goto('/#/plans/projects/'+fixture.p.id);await expect(page.getByRole('heading',{name:fixture.p.title,exact:true})).toBeVisible();await capture('project');
@@ -47,7 +47,7 @@ for(const width of [1440,1024,768,390,360])test('UX final visual '+width,async({
 });
 
 test('transient resize keeps calendar, settled mobile width switches layout',async({page})=>{
- await page.goto('/#/plans/calendar?mode=week&date=2027-02-23');await expect(page.locator('.pc-calendar')).toBeVisible();await page.waitForLoadState('networkidle');
+ await page.goto('/#/plans/calendar?mode=week&date=2027-02-23');await expect(page.locator('.pc-calendar')).toBeVisible();await expect.poll(()=>page.evaluate(()=>window.budgetRequests||0)).toBe(0);
  let queries=0;page.on('request',r=>{if(r.url().includes('/api/planner/calendar?'))queries++;});
  await page.setViewportSize({width:1,height:1});await page.setViewportSize({width:1440,height:1000});await page.waitForTimeout(300);expect(queries).toBe(0);await expect(page.locator('.pc-calendar')).toBeVisible();
  await page.setViewportSize({width:390,height:1000});await expect(page.locator('.pc-week-strip')).toBeVisible();expect(queries).toBe(1);

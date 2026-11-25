@@ -142,6 +142,12 @@ func legacyExport(ctx context.Context, source, destination, id string) (backupRe
 	if e != nil {
 		return empty, "", e
 	}
+	// VACUUM INTO produces a standalone DELETE-journal snapshot. Prepare only
+	// this private candidate for the production check-only backup entrypoint;
+	// never change the original legacy database or relax its WAL requirement.
+	if e = planner.UpgradeSnapshot(ctx, filepath.Join(live, "planner.db")); e != nil {
+		return empty, "", e
+	}
 	for _, n := range []string{"data.json", "categories.json"} {
 		if e = copyPrivate(ctx, filepath.Join(clone, n), filepath.Join(live, n), jsonLimit); e != nil {
 			return empty, "", e

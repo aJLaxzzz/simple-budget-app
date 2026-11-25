@@ -141,6 +141,9 @@ func tableCounts(t *testing.T, path string) map[string]int {
 }
 func TestBackupFullRoundTripCorruptionAndPlannerOnly(t *testing.T) {
 	r, o := backupFixture(t)
+	if e := os.WriteFile(filepath.Join(o.DataDir, authFile), []byte(`{"sessions":[{"hash":"synthetic-hash"}]}`), 0600); e != nil {
+		t.Fatal(e)
+	}
 	ctx := context.Background()
 	counts := tableCounts(t, filepath.Join(o.DataDir, "planner.db"))
 	contents := tableFingerprints(t, filepath.Join(o.DataDir, "planner.db"))
@@ -154,6 +157,11 @@ func TestBackupFullRoundTripCorruptionAndPlannerOnly(t *testing.T) {
 	m, e := verifyBackup(ctx, archive, t.TempDir())
 	if e != nil {
 		t.Fatal(e)
+	}
+	for _, f := range m.Files {
+		if f.Name == authFile {
+			t.Fatal("session state entered backup")
+		}
 	}
 	if m.SQLite.Schema != planner.SchemaVersion() || len(m.Files) != 5 {
 		t.Fatal(m)
@@ -175,6 +183,9 @@ func TestBackupFullRoundTripCorruptionAndPlannerOnly(t *testing.T) {
 	if actual := tableFingerprints(t, filepath.Join(target, "planner.db")); actual != contents {
 		t.Fatal("IDs, histories or other table values changed")
 	}
+	if e = os.WriteFile(filepath.Join(target, authFile), []byte(`{"sessions":[{"hash":"old-session"}]}`), 0600); e != nil {
+		t.Fatal(e)
+	}
 	if e = os.WriteFile(filepath.Join(target, "planner.db"), []byte("damaged database"), 0600); e != nil {
 		t.Fatal(e)
 	}
@@ -183,6 +194,9 @@ func TestBackupFullRoundTripCorruptionAndPlannerOnly(t *testing.T) {
 	previous, e := restoreBackup(ctx, r, rest, archive, "planner")
 	if e != nil {
 		t.Fatal(e)
+	}
+	if exists(filepath.Join(previous, authFile)) || exists(filepath.Join(target, authFile)) {
+		t.Fatal("restore retained browser sessions")
 	}
 	if string(readBytes(t, filepath.Join(previous, "planner.db"))) != "damaged database" {
 		t.Fatal("previous corruption evidence lost")
@@ -422,12 +436,13 @@ func TestBackupHTTPAccessStreamingAndPaths(t *testing.T) {
 	r, o := backupFixture(t)
 	v := makeBackup(t, r, o)
 	c := serverConfig{BackupDir: r.Dir, InstallationID: o.ID, Environment: "test", Password: strings.Repeat("p", 40), AllowedHosts: map[string]bool{"127.0.0.1": true}, Local: true}
-	h := accessHandler(c, backupHandler(c))
+	h := authenticatedTestPolicy(t, c, backupHandler(c))
 	send := func(path, method, pass, rangeValue string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, "http://127.0.0.1"+path, nil)
 		req.RemoteAddr = "127.0.0.1:1234"
 		if pass != "" {
 			req.SetBasicAuth("budget", pass)
+			req.Header.Set("X-Budget-Admin", "1")
 		}
 		req.Header.Set("Range", rangeValue)
 		w := httptest.NewRecorder()
@@ -1004,7 +1019,7 @@ func TestBackupHTTPSIPv4Policy(t *testing.T) {
 	r, o := backupFixture(t)
 	v := makeBackup(t, r, o)
 	c := serverConfig{BackupDir: r.Dir, InstallationID: o.ID, Environment: "test", Password: strings.Repeat("p", 40), AllowedHosts: map[string]bool{"171.22.237.16": true}, Local: true, PublicOrigin: "https://171.22.237.16", ProxyMode: "loopback-https"}
-	h := accessHandler(c, backupHandler(c))
+	h := authenticatedTestPolicy(t, c, backupHandler(c))
 	for _, tc := range []struct {
 		host, origin string
 		auth         bool
@@ -1024,6 +1039,7 @@ func TestBackupHTTPSIPv4Policy(t *testing.T) {
 		req.Header.Set("X-Forwarded-Proto", "https")
 		if tc.auth {
 			req.SetBasicAuth("budget", c.Password)
+			req.Header.Set("X-Budget-Admin", "1")
 		}
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, req)

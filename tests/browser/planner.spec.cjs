@@ -30,7 +30,7 @@ test.afterAll(() => {
 
 test('plans navigation, reload, back/forward and no finance requests', async ({ page }) => {
   const financial = [];
-  page.on('request', req => { if (new URL(req.url()).pathname.startsWith('/api/') && !req.url().includes('/api/planner/')) financial.push(req.url()); });
+  page.on('request', req => { if (new URL(req.url()).pathname.startsWith('/api/') && !req.url().includes('/api/planner/') && !req.url().includes('/api/auth/') && !req.url().includes('/api/events')) financial.push(req.url()); });
   await page.goto('/#/plans/inbox');
   await expect(page.getByRole('heading', { name: 'Входящие', exact: true })).toBeVisible();
   await page.getByRole('navigation', { name: 'Разделы планировщика' }).getByRole('link', { name: 'Проекты' }).click();

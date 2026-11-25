@@ -227,7 +227,7 @@ func testActualHTTPReverseProxyOriginAndAuthentication(t *testing.T, host string
 	if e != nil {
 		t.Fatal(e)
 	}
-	upstream := httptest.NewServer(accessHandler(c, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(204) })))
+	upstream := httptest.NewServer(authenticatedTestPolicy(t, c, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(204) })))
 	defer upstream.Close()
 	target, _ := url.Parse(upstream.URL)
 	proxy := httptest.NewServer(httputil.NewSingleHostReverseProxy(target))
@@ -241,6 +241,7 @@ func testActualHTTPReverseProxyOriginAndAuthentication(t *testing.T, host string
 		}
 		if password != "" {
 			req.SetBasicAuth("budget", password)
+			req.Header.Set("X-Budget-Admin", "1")
 		}
 		if forward {
 			req.Header.Set("X-Forwarded-Proto", "https")
@@ -427,6 +428,7 @@ func TestProductionBinaryLifecycle(t *testing.T) {
 		r.Host = "budget.example.test"
 		if auth {
 			r.SetBasicAuth("budget", strings.Repeat("p", 12))
+			r.Header.Set("X-Budget-Admin", "1")
 		}
 		resp, e := client.Do(r)
 		if e != nil {

@@ -15,7 +15,7 @@ test('closing or reloading the page sends no shutdown request', () => {
         const list = handlers.get(name) || [];
         list.push(fn); handlers.set(name, list);
       },
-      budgetAPI(url) { requests.push(url); return new Promise(() => {}); }
+      budgetFinanceView() {}, budgetAPI(url) { requests.push(url); return new Promise(() => {}); }
     },
     document: { getElementById(id) { return id === 'root' ? root : null; } },
     navigator: { sendBeacon(url) { requests.push(url); } },

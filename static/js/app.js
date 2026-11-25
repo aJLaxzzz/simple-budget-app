@@ -8,6 +8,7 @@
   const root = document.getElementById('root');
   const modalRoot = document.getElementById('modal-root');
 
+  var homeSelectedYear;
   var monthSortExpenses = 'desc';
   var monthSortIncomes = 'desc';
   var monthExpenseFilterCategory = '';
@@ -43,9 +44,10 @@
 
   // ——— Home ———
   function renderHome() {
+    window.budgetFinanceView('/api/months');
     if (parseHash().page !== 'home') return;
     root.innerHTML = '<div class="home"><p class="muted">Загрузка...</p></div>';
-    Promise.all([api('/now'), api('/months')]).then(function (results) {
+    return Promise.all([api('/now'), api('/months')]).then(function (results) {
       if (parseHash().page !== 'home') return;
       var now = results[0] || {};
       var months = results[1] || [];
@@ -83,7 +85,8 @@
         if (!seen[m.year]) { seen[m.year] = true; years.push(m.year); }
       });
       years.sort(function (a, b) { return b - a; });
-      selectedYear = selectedYear != null ? selectedYear : (years[0] || new Date().getFullYear());
+      selectedYear = selectedYear != null ? selectedYear : (years.includes(homeSelectedYear) ? homeSelectedYear : (years[0] || new Date().getFullYear()));
+      homeSelectedYear = selectedYear;
       var monthsInYear = months.filter(function (m) { return m.year === selectedYear; });
 
       root.innerHTML = '<div class="home">' +
@@ -172,9 +175,10 @@
   }
 
   function renderMonthPage(monthId) {
+    window.budgetFinanceView('/api/months/' + monthId);
     if (parseHash().page !== 'month') return;
     root.innerHTML = '<div class="month-page"><p class="muted">Загрузка...</p></div>';
-    Promise.all([
+    return Promise.all([
       api('/months/' + monthId),
       api('/categories')
     ]).then(function (results) {
@@ -383,6 +387,7 @@
           .then(function () { renderMonthPage(monthId); }).catch(showAPIError);
       };
       document.getElementById('income-cancel').onclick = function () {
+        window.budgetDraftDirty = false;
         incomeEdit.style.display = 'none';
         incomeVal.style.display = '';
       };
@@ -665,10 +670,11 @@
   }
 
   function renderYearPage(year) {
+    window.budgetFinanceView('/api/years/' + year);
     if (parseHash().page !== 'year') return;
     if (!year) year = new Date().getFullYear();
     root.innerHTML = '<div class="year-page"><p class="muted">Загрузка...</p></div>';
-    api('/years/' + year).then(function (data) {
+    return api('/years/' + year).then(function (data) {
       if (parseHash().page !== 'year' || parseHash().year !== year) return;
       if (!data) {
         root.innerHTML = '<div class="year-page"><p class="muted">Нет данных за этот год.</p><a href="#/">На главную</a></div>';
@@ -782,9 +788,10 @@
   }
 
   function renderCategoriesPage() {
+    window.budgetFinanceView('/api/categories');
     if (parseHash().page !== 'categories') return;
     root.innerHTML = '<div class="categories-page"><p class="muted">Загрузка...</p></div>';
-    api('/categories').then(function (data) {
+    return api('/categories').then(function (data) {
       if (parseHash().page !== 'categories') return;
       var expense = (data && data.expense) ? data.expense.slice() : [];
       var income = (data && data.income) ? data.income.slice() : [];
@@ -877,7 +884,7 @@
         api('/categories', { method: 'PUT', body: JSON.stringify({ expense: exp, income: inc }) })
           .then(function () {
             root.querySelector('.categories-saved').classList.add('visible');
-            setTimeout(function () { root.querySelector('.categories-saved').classList.remove('visible'); }, 2000);
+            setTimeout(function () { root.querySelector('.categories-saved')?.classList.remove('visible'); }, 2000);
           })
           .catch(showAPIError);
       }
@@ -957,23 +964,23 @@
     var route = parseHash();
     if (route.page === 'plans') {
       destroyCharts();
-      window.Planner.mount(root);
-      return;
+      return window.Planner.mount(root);
     }
     if (window.Planner) window.Planner.unmount();
     if (route.page === 'month') {
-      renderMonthPage(route.monthId);
+      return renderMonthPage(route.monthId);
     } else if (route.page === 'year') {
-      renderYearPage(route.year);
+      return renderYearPage(route.year);
     } else if (route.page === 'categories') {
-      renderCategoriesPage();
+      return renderCategoriesPage();
     } else {
-      renderHome();
+      return renderHome();
     }
   }
 
-  window.addEventListener('hashchange', render);
-  render();
+  window.budgetRefreshView = render;
+  window.addEventListener('hashchange', () => { window.budgetDraftDirty = false; if (window.budgetStarted || !window.EventSource) render(); });
+  if (!window.EventSource) render();
 
   function initSearch() {
     var input = document.getElementById('search-input');

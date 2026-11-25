@@ -63,9 +63,19 @@ func accessRequest(h http.Handler, method, path, host, peer, origin, password st
 	}
 	if password != "" {
 		r.SetBasicAuth("budget", password)
+		r.Header.Set("X-Budget-Admin", "1")
 	}
 	if https {
 		r.TLS = &tls.ConnectionState{}
+	}
+	if isWrite(r) && (path == "/api/categories" || strings.HasPrefix(path, "/api/months")) {
+		probe := r.Clone(r.Context())
+		probe.Method = "GET"
+		probe.URL.Path = "/api/months"
+		probe.Body = nil
+		before := httptest.NewRecorder()
+		h.ServeHTTP(before, probe)
+		r.Header.Set("If-Match", before.Header().Get("X-Budget-Revision"))
 	}
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, r)
@@ -151,7 +161,7 @@ func TestAuthenticationCoversAllRoutes(t *testing.T) {
 		for _, method := range []string{"GET", "POST", "PATCH", "DELETE", "PUT"} {
 			for _, bad := range []string{"", "wrong"} {
 				w := accessRequest(h, method, path, c.Addr, "192.0.2.5:1234", "", bad, true)
-				if (w.Code != 401 && w.Code != 429) || (w.Code == 401 && w.Header().Get("WWW-Authenticate") == "") {
+				if (w.Code != 401 && w.Code != 429) || (w.Code == 401 && w.Header().Get("WWW-Authenticate") != "") {
 					t.Fatalf("unprotected %s %s: %d", method, path, w.Code)
 				}
 			}
@@ -266,7 +276,14 @@ func TestGracefulShutdownWaitsForRequest(t *testing.T) {
 	defer cancel()
 	done := make(chan error, 1)
 	go func() {
-		done <- serveUntilCancelled(ctx, listener, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { close(started); <-release; fmt.Fprint(w, "saved") }))
+		done <- serveUntilCancelled(ctx, listener, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			close(started)
+			<-release
+			if r.Context().Err() != nil {
+				t.Error("shutdown cancelled an in-flight ordinary request")
+			}
+			fmt.Fprint(w, "saved")
+		}))
 	}()
 	response := make(chan error, 1)
 	go func() {
@@ -425,6 +442,7 @@ func TestTLSAuthenticationOverHTTP(t *testing.T) {
 		}
 		if tc.user != "" {
 			r.SetBasicAuth(tc.user, tc.password)
+			r.Header.Set("X-Budget-Admin", "1")
 		}
 		response, e := server.Client().Do(r)
 		if e != nil {
@@ -467,6 +485,7 @@ func TestPlannerAPIProtectedAndFinanceUntouched(t *testing.T) {
 		r.RemoteAddr = "127.0.0.1:1234"
 		r.Header.Set("Content-Type", "application/json")
 		r.SetBasicAuth("budget", c.Password)
+		r.Header.Set("X-Budget-Admin", "1")
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, r)
 		return w
@@ -556,5 +575,40 @@ func TestPlannerAPIProtectedAndFinanceUntouched(t *testing.T) {
 	}
 	if string(readFile(t, filepath.Join(c.DataDir, "data.json"))) != originalData || string(readFile(t, filepath.Join(c.DataDir, "categories.json"))) != originalCategories {
 		t.Fatal("planner changed financial files")
+	}
+}
+
+func TestGracefulShutdownClosesLiveStream(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	hub := newEventHub()
+	done := make(chan error, 1)
+	go func() { done <- serveUntilCancelled(ctx, listener, hub.handler(nil, false)) }()
+	client := &http.Client{Timeout: 5 * time.Second}
+	response, err := client.Get("http://" + listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	cancel()
+	if _, err = io.ReadAll(response.Body); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err = <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("SSE prevented graceful shutdown")
+	}
+	hub.mu.Lock()
+	defer hub.mu.Unlock()
+	if len(hub.clients) != 0 {
+		t.Fatal("stream subscriber leaked after shutdown")
 	}
 }

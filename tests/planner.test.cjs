@@ -38,7 +38,7 @@ test('plans startup bypasses all financial API requests', () => {
   let mounted = false;
   const root = {};
   const context = {
-    window:{addEventListener() {},location: { hash: '#/plans/inbox' }, addEventListener() {}, Planner: { mount(value) { mounted = value === root; } }, budgetAPI(url) { calls.push(url); return new Promise(() => {}); } },
+    window:{addEventListener() {},location: { hash: '#/plans/inbox' }, addEventListener() {}, Planner: { mount(value) { mounted = value === root; } }, budgetFinanceView() {}, budgetAPI(url) { calls.push(url); return new Promise(() => {}); } },
     document: { getElementById(id) { return id === 'root' ? root : null; } }
   };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../static/js/app.js'), 'utf8'), context);
@@ -47,7 +47,7 @@ test('plans startup bypasses all financial API requests', () => {
 test('late financial home responses do not create a month after navigating to plans', async () => {
   const pending = [], calls = [];
   const context = {
-    window:{addEventListener() {},location: { hash: '#/' }, addEventListener() {}, Planner: { unmount() {}, mount() {} }, budgetAPI(url) { calls.push(url); return new Promise(resolve => pending.push(resolve)); } },
+    window:{addEventListener() {},location: { hash: '#/' }, addEventListener() {}, Planner: { unmount() {}, mount() {} }, budgetFinanceView() {}, budgetAPI(url) { calls.push(url); return new Promise(resolve => pending.push(resolve)); } },
     document: { getElementById(id) { return id === 'root' ? { innerHTML: '' } : null; } }
   };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../static/js/app.js'), 'utf8'), context);

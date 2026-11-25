@@ -34,3 +34,18 @@ test('planner errors preserve status, code and current revision', async () => {
     return true;
   });
 });
+
+test('finance draft uses the primary snapshot revision, never a newer categories response', async()=>{
+ const requests=[];let rev='generation:1';
+ const context={window:{},fetch:async(url,opts)=>{requests.push({url,opts});return {ok:true,status:200,headers:{get:()=>rev},json:async()=>({})}}};vm.runInNewContext(source,context);
+ const w=context.window;w.budgetFinanceView('/api/months/m');await w.budgetAPI('/api/months/m');
+ rev='generation:2';await w.budgetAPI('/api/categories');w.budgetDraftDirty=true;
+ await w.budgetAPI('/api/months/m');await w.budgetAPI('/api/months/m/income',{method:'PATCH'});
+ assert.equal(requests.at(-1).opts.headers['If-Match'],'generation:1');
+ w.budgetFinanceView('/api/categories');await w.budgetAPI('/api/categories');await w.budgetAPI('/api/categories',{method:'POST'});
+ assert.equal(requests.at(-1).opts.headers['If-Match'],'generation:2');
+});
+test('failed reconciliation read is observable and does not report success',async()=>{
+ const context={window:{},fetch:async()=>({ok:false,status:503,json:async()=>({error:'maintenance'})})};vm.runInNewContext(source,context);
+ await assert.rejects(context.window.budgetAPI('/api/months'),/maintenance/);assert.equal(context.window.budgetReadFailures,1);assert.equal(context.window.budgetRequests,0);
+});

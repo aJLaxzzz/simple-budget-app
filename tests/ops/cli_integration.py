@@ -51,12 +51,37 @@ with tempfile.TemporaryDirectory(prefix='budget-ops-native-') as t:
     assert verified['installation_id']=='1'*32
     a.selected=p.opt/'releases'/'two';request['request_id']='3'*32
     a.prepare(Path(t),request)
+    atomic(p.live/'web-auth.json',{'version':1,'sessions':[]})
     assert load(p.journal)['phase']=='trial'
     a.recover(dict(request,decision='rollback',operation_id=request['request_id']))
     assert p.release().name=='one'
+    assert not (p.live/'web-auth.json').exists()
     a.commit(dict(request,https_verified_revision='a'*40))
     previous=list(p.state.glob('.live.previous-*'));assert previous
     final=json.loads(a.run([helper,'admin','check','--data-dir',p.live,'--installation-id','1'*32]).stdout)
     assert final['schema_version']==14
     assert 'trial' in a.modes and 'closed' in a.modes
+    # Exercise the real non-test Go binary: unit tests use environment=test and
+    # would otherwise mask a VACUUM snapshot whose journal mode is still DELETE.
+    legacy=Path(t)/'legacy-source';shutil.copytree(p.live,legacy)
+    (legacy/'installation.json').unlink()
+    atomic(legacy/'web-auth.json',{'synthetic_token':'must-not-export'})
+    atomic(legacy/'data.json',{'months':[{'id':'month-2040-12','year':2040,'month':12,'income':123,'incomes':[],'expenses':[]}]})
+    source_hashes={f.name:sha(f) for f in legacy.iterdir()}
+    transfer=Path(t)/'transfer';transfer.mkdir(mode=0o700)
+    exported=json.loads(a.run([helper,'admin','legacy-export','--source',legacy,'--backup-dir',transfer,
+                              '--installation-id','4'*32,'--confirm-stopped']).stdout)
+    archive=Path(exported['archive'])
+    verified=json.loads(a.run([helper,'admin','backup','verify','--archive',archive]).stdout)
+    assert verified['installation_id']=='4'*32 and verified['sqlite']['schema_version']==14
+    assert 'web-auth.json' not in [f['name'] for f in verified['files']]
+    assert source_hashes=={f.name:sha(f) for f in legacy.iterdir()}
+    parent=Path(t)/'new-installation';parent.mkdir(mode=0o700);new_live=parent/'live'
+    a.run([helper,'admin','backup','restore','--data-dir',new_live,'--backup-dir',transfer,
+           '--installation-id','4'*32,'--archive',archive,'--scope','full','--confirm'])
+    assert load(new_live/'installation.json')['installation_id']=='4'*32
+    assert not (new_live/'web-auth.json').exists()
+    for name in ('data.json','categories.json'):assert read(new_live/name)==read(legacy/name)
+    a.run([helper,'admin','check','--data-dir',new_live,'--installation-id','4'*32])
+    print('PASS: native production legacy-export/new-installation restore, unchanged source, financial JSON and transfer ID preserved, auth sidecar excluded')
     print('PASS: real CLI init, verified backup, candidate restore/migration, live migration, pre-open rollback, retained old data, integrity/schema check; OS/proxy mocked')

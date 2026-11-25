@@ -1,5 +1,5 @@
 const {validateTestDir,createTestDir,testEnvironment}=require('../test-storage.cjs');
-const {test,expect}=require('../browser-fixtures.cjs');
+const {test,expect,login}=require('../browser-fixtures.cjs');
 const {spawn,execFileSync}=require('node:child_process');
 const {once}=require('node:events');
 const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
@@ -11,8 +11,8 @@ async function ready(child){await new Promise((resolve,reject)=>{let output='';c
 async function stop(child,signal='SIGTERM'){if(child.exitCode!==null)return;const exited=once(child,'exit');child.kill(signal);const [code,sig]=await exited;expect(code).toBe(0);expect(sig).toBeNull();}
 test('protected offline app: financial lifecycle, actual restart, recurrence replay, privacy and integrity',async({browser,playwright})=>{
  test.setTimeout(90000);const dir=createTestDir('budget-acceptance-');fs.writeFileSync(path.join(dir,'data.json'),'broken JSON');let child=run(dir);await once(child,'exit');expect(child.exitCode).not.toBe(0);expect(fs.readFileSync(path.join(dir,'data.json'),'utf8')).toBe('broken JSON');fs.writeFileSync(path.join(dir,'data.json'),'{"months":[]}');
- const auth={username:'budget',password};const api=await playwright.request.newContext({baseURL:base,httpCredentials:auth});const anon=await playwright.request.newContext({baseURL:base});const context=await browser.newContext({baseURL:base,httpCredentials:auth});let page;
- async function req(method,url,data,code=200){const r=await api.fetch(url,{method,data,headers:{"Content-Type":"application/json"}});expect(r.status(),await r.text()).toBe(code);return code===204?null:r.json();}
+ const auth={username:'budget',password};const api=await playwright.request.newContext({baseURL:base,extraHTTPHeaders:{'X-Budget-Admin':'1','Authorization':'Basic '+Buffer.from('budget:'+auth.password).toString('base64')}});const anon=await playwright.request.newContext({baseURL:base});const context=await browser.newContext({baseURL:base});let page;
+ async function req(method,url,data,code=200){const headers={"Content-Type":"application/json"};if(method!=='GET'&&/^\/api\/(months|categories)/.test(url))headers['If-Match']=(await api.get('/api/months')).headers()['x-budget-revision'];const r=await api.fetch(url,{method,data,headers});expect(r.status(),await r.text()).toBe(code);return code===204?null:r.json();}
  try{
   child=run(dir);await ready(child);
   for(const route of ['/api/months','/api/backup','/api/planner/tasks','/api/planner/attention','/vendor/chart.umd-4.4.0.js'])expect((await anon.get(route)).status()).toBe(401);
@@ -22,7 +22,7 @@ test('protected offline app: financial lifecycle, actual restart, recurrence rep
   const inc=await req('POST',m+'/incomes',{category:'salary',amount:1000,day:2,description:'Доход'},201);const exp=await req('POST',m+'/expenses',{category:'food',subcategory:'Продукты',amount:125,day:3,description:'<img src=x onerror="window.financeXSS=1">'},201);
   await req('PATCH',m+'/incomes/'+inc.id,{amount:1200});await req('PATCH',m+'/expenses/'+exp.id,{amount:150});const totals=await req('GET','/api/years/2026');expect(totals.totalIncome).toBe(1200);expect(totals.totalExpenses).toBe(150);expect(totals.balance).toBe(1050);
   const finance=fs.readFileSync(path.join(dir,'data.json'),'utf8');expect(await(await api.get('/api/backup')).text()).toBe(finance);
-  page=await context.newPage();const external=[],errors=[];page.on('request',r=>{if(!r.url().startsWith(base))external.push(r.url());});page.on('pageerror',e=>errors.push(e.message));await page.route('https://**/*',r=>r.abort());
+  page=await context.newPage();await login(page,auth.password);const external=[],errors=[];page.on('request',r=>{if(!r.url().startsWith(base))external.push(r.url());});page.on('pageerror',e=>errors.push(e.message));await page.route('https://**/*',r=>r.abort());
   await page.goto('/#/month/month-2026-11');await expect(page.locator('#btn-add-expense')).toBeVisible();await expect(page.locator('canvas').first()).toBeVisible();expect(await page.evaluate(()=>typeof Chart)).toBe('function');expect(await page.evaluate(()=>window.financeXSS)).toBeUndefined();
   await page.goto('/#/year/2026');await expect(page.locator('#year-select')).toBeVisible();await page.goto('/#/categories');await expect(page.locator('#save-categories')).toBeVisible();
   await page.goto('/#/plans/inbox');await expect(page.getByRole('heading',{name:'Входящие',exact:true})).toBeVisible();expect(fs.readFileSync(path.join(dir,'data.json'),'utf8')).toBe(finance);expect(external).toEqual([]);expect(errors).toEqual([]);

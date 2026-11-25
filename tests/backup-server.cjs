@@ -18,7 +18,7 @@ async function backupServer(){
  (async()=>{
  if(action==='status'){process.exitCode=alive()?0:3;return}if(action==='stopped'){process.exitCode=alive()?3:0;return}
  if(action==='stop'){if(alive())process.kill(pid(),'SIGTERM');await wait(()=>!alive());return}
- if(action==='start'){if(alive())return;const log=fs.openSync(${JSON.stringify(path.join(root,'server.log'))},'a',0o600);if(fs.existsSync(archives+'/repository.json'))env.BUDGET_BACKUP_DIR=archives;const child=spawn(binary,[],{cwd:live,env,stdio:['ignore',log,log],detached:true});fs.writeFileSync(state,JSON.stringify({pid:child.pid}),{mode:0o600});child.unref();await wait(async()=>{try{return (await fetch(url+'/api/ready',{headers:{Authorization:'Basic '+Buffer.from('budget:'+env.BUDGET_PASSWORD).toString('base64')}})).ok}catch{return false}});return}
+ if(action==='start'){if(alive())return;const log=fs.openSync(${JSON.stringify(path.join(root,'server.log'))},'a',0o600);if(fs.existsSync(archives+'/repository.json'))env.BUDGET_BACKUP_DIR=archives;const child=spawn(binary,[],{cwd:live,env,stdio:['ignore',log,log],detached:true});fs.writeFileSync(state,JSON.stringify({pid:child.pid}),{mode:0o600});child.unref();await wait(async()=>{try{return await new Promise(resolve=>require('node:http').get(url+'/api/ready',{headers:{'X-Budget-Admin':'1',Authorization:'Basic '+Buffer.from('budget:'+env.BUDGET_PASSWORD).toString('base64')}},r=>{r.resume();resolve(r.statusCode===200)}).on('error',()=>resolve(false)))}catch{return false}});return}
  throw Error('invalid controller action');
  })().catch(()=>process.exitCode=1);
  `,{mode:0o700});
@@ -26,12 +26,12 @@ async function backupServer(){
  const admin=async(args)=>JSON.parse((await run(binary,['admin','backup',...args,'--environment','test','--data-dir',live,'--backup-dir',archives,'--installation-id',id],{env:environment,timeout:90000,maxBuffer:1024*1024})).stdout);
  try {
  await control('start');
- const auth='Basic '+Buffer.from('budget:'+password).toString('base64');const api=async(type,data)=>{const r=await fetch(baseURL+'/api/planner/'+type,{method:data?'POST':'GET',headers:{Authorization:auth,'Content-Type':'application/json'},body:data?JSON.stringify(data):undefined});if(!r.ok)throw Error('fixture API '+r.status);return r.json()};
+ const auth='Basic '+Buffer.from('budget:'+password).toString('base64');const api=async(type,data)=>new Promise((resolve,reject)=>{const req=require('node:http').request(baseURL+'/api/planner/'+type,{method:data?'POST':'GET',headers:{'X-Budget-Admin':'1',Authorization:auth,'Content-Type':'application/json'}},r=>{let raw='';r.on('data',b=>raw+=b);r.on('end',()=>{if(r.statusCode>=400)return reject(Error('fixture API '+r.statusCode));try{resolve(JSON.parse(raw))}catch(e){reject(e)}})});req.on('error',reject);req.end(data?JSON.stringify(data):undefined)});
  const p=await api('projects',{title:'Домашние планы',color_id:'teal'});await api('tasks',{title:'Проверить запас воды',project_id:p.id,planned_date:'2026-12-02'});
  const firstPID=JSON.parse(fs.readFileSync(state)).pid;
  const receipt=await admin(['create','--reason','daily','--controller',controller]);
  const secondPID=JSON.parse(fs.readFileSync(state)).pid;if(firstPID===secondPID)throw Error('backup did not restart the synthetic application');
- return {baseURL,password,root,live,archives,id,receipt,admin,async close(){await control('stop')}};
+ return {baseURL,password,root,live,archives,id,receipt,admin,async restart(){await control('stop');await control('start')},async snapshot(){return admin(['create','--reason','manual','--controller',controller])},async restore(archive){return admin(['restore','--archive',archive,'--scope','full','--confirm','--controller',controller])},async close(){await control('stop')}};
  } catch(error) { await control('stop').catch(()=>{}); throw error; }
 }
 module.exports={backupServer};

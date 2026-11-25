@@ -141,14 +141,20 @@ class SessionTests(unittest.TestCase):
             finally:mac.ACTIVE_TRANSPORTS[:]=original
 
 class MenuTests(unittest.TestCase):
-    def test_defaults_acceptance_and_dispatches_existing_commands(self):
+    def setUp(self):
+        tmp=tempfile.TemporaryDirectory();self.addCleanup(tmp.cleanup)
+        home=patch.object(Path,'home',return_value=Path(tmp.name));home.start();self.addCleanup(home.stop)
+        env=patch.dict(os.environ,{'INSTANCE':'','SUDO_MODE':'','AUTH':'manual'});env.start();self.addCleanup(env.stop)
+    def test_defaults_production_session_and_dispatches_existing_commands(self):
         run=Mock(return_value=subprocess.CompletedProcess([],0))
-        with tempfile.TemporaryDirectory() as tmp,patch.object(Path,'home',return_value=Path(tmp)),patch.dict(os.environ,{'INSTANCE':'production','ARCHIVE':'old'}),patch('builtins.input',side_effect=['bad','1','0']),contextlib.redirect_stdout(io.StringIO()):
+        with patch.dict(os.environ,{'ARCHIVE':'old'}),patch('builtins.input',side_effect=['bad','1','0']),contextlib.redirect_stdout(io.StringIO()) as output:
             self.assertEqual(menu.main(run=run),0)
-        args,kw=run.call_args;self.assertEqual(args[0][-1],'status');self.assertEqual(kw['env']['INSTANCE'],'acceptance');self.assertNotIn('ARCHIVE',kw['env'])
+        args,kw=run.call_args;self.assertEqual(args[0][-1],'status');self.assertEqual(kw['env']['INSTANCE'],'production');self.assertNotIn('ARCHIVE',kw['env'])
+        self.assertEqual(kw['env']['SUDO_MODE'],'session')
+        self.assertIn('INSTANCE=production',output.getvalue());self.assertIn('SUDO_MODE=session',output.getvalue())
     def test_pending_no_automatic_mutation(self):
         with tempfile.TemporaryDirectory() as tmp,patch.object(Path,'home',return_value=Path(tmp)),patch('builtins.input',side_effect=['2','0']),contextlib.redirect_stdout(io.StringIO()):
-            p=Path(tmp)/'.simple-budget-admin';p.mkdir();atomic(p/'pending-acceptance.json',{})
+            p=Path(tmp)/'.simple-budget-admin';p.mkdir();atomic(p/'pending-production.json',{})
             run=Mock();menu.main(run=run);run.assert_not_called()
     def test_eof_ctrlc_and_nonzero_return(self):
         for error,code in ((EOFError,0),(KeyboardInterrupt,130)):
@@ -157,9 +163,31 @@ class MenuTests(unittest.TestCase):
             menu.main(run=Mock(return_value=subprocess.CompletedProcess([],255)))
             self.assertIn('255',out.getvalue())
     def test_production_requires_explicit_confirmation(self):
-        with patch('builtins.input',side_effect=['12','production','no','1','0']),contextlib.redirect_stdout(io.StringIO()):
+        with patch('builtins.input',side_effect=['12','acceptance','12','production','no','1','12','production','PRODUCTION','1','0']),contextlib.redirect_stdout(io.StringIO()):
+            run=Mock(return_value=subprocess.CompletedProcess([],0));menu.main(run=run)
+            self.assertEqual([call.kwargs['env']['INSTANCE'] for call in run.call_args_list],['acceptance','production'])
+    def test_explicit_legacy_and_acceptance_are_forwarded(self):
+        with patch.dict(os.environ,{'INSTANCE':'acceptance','SUDO_MODE':'legacy'}),patch('builtins.input',side_effect=['1','0']),contextlib.redirect_stdout(io.StringIO()):
             run=Mock(return_value=subprocess.CompletedProcess([],0));menu.main(run=run)
             self.assertEqual(run.call_args.kwargs['env']['INSTANCE'],'acceptance')
+            self.assertEqual(run.call_args.kwargs['env']['SUDO_MODE'],'legacy')
+    def test_invalid_target_or_sudo_mode_refused_before_dispatch(self):
+        for values in ({'INSTANCE':'unexpected'},{'SUDO_MODE':'nopasswd'}):
+            with patch.dict(os.environ,values),contextlib.redirect_stdout(io.StringIO()):
+                run=Mock();self.assertEqual(menu.main(run=run),2);run.assert_not_called()
+    def test_cancelled_rollback_uses_existing_confirmation_without_mutation(self):
+        state=Path.home()/'.simple-budget-admin';state.mkdir(mode=0o700)
+        atomic(state/'production.json',{'instance':'production','installation_id':'a'*32})
+        transport=Mock()
+        def dispatch(args,env):
+            with patch.dict(os.environ,env),patch.object(mac,'LOCAL',state),patch.object(mac,'Transport',return_value=transport),patch.object(st,'check_protocol'):
+                with self.assertRaises(Refused):mac.main([args[-1]])
+            return subprocess.CompletedProcess(args,1)
+        with patch('builtins.input',side_effect=['7','нет','0']) as prompt,contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(menu.main(run=dispatch),0)
+        transport.request.assert_not_called()
+        self.assertTrue(any('ПОДТВЕРЖДАЮ' in call.args[0] for call in prompt.call_args_list))
+        self.assertIn('INSTANCE=production',output.getvalue());self.assertIn('ID '+'a'*32,output.getvalue())
 
 class PKITests(unittest.TestCase):
     def fixture(self,p):
@@ -298,7 +326,31 @@ class MakeCompatibility(unittest.TestCase):
             env=dict(os.environ,HOME=tmp,INSTANCE='production',AUTH='',SUDO_MODE='')
             p=subprocess.run(['make','-s','server'],cwd=repo,env=env,input=b'0\n',stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=10)
             self.assertEqual(p.returncode,0,p.stderr)
-            self.assertIn(b'INSTANCE=acceptance',p.stdout);self.assertIn(b'AUTH=manual; SUDO_MODE=legacy',p.stdout)
+            self.assertIn(b'INSTANCE=production',p.stdout);self.assertIn(b'AUTH=manual; SUDO_MODE=session',p.stdout)
+    def test_make_menu_defaults_and_explicit_overrides(self):
+        repo=Path(__file__).resolve().parents[2]
+        cases=[([],{},'production','session'),
+               (['INSTANCE=acceptance','SUDO_MODE=legacy'],{},'acceptance','legacy'),
+               ([],{'INSTANCE':'acceptance','SUDO_MODE':'legacy'},'acceptance','legacy')]
+        with tempfile.TemporaryDirectory() as tmp:
+            for args,extra,instance,sudo in cases:
+                env={k:v for k,v in os.environ.items() if k not in ('INSTANCE','SUDO_MODE','AUTH','ENV','MAKEFLAGS','MAKEOVERRIDES')}
+                env.update(HOME=tmp,AUTH='manual',**extra)
+                p=subprocess.run(['make','--no-print-directory','-s','server',*args],cwd=repo,env=env,input=b'0\n',capture_output=True,timeout=10)
+                self.assertEqual(p.returncode,0,p.stderr)
+                self.assertIn(('INSTANCE='+instance).encode(),p.stdout)
+                self.assertIn(('SUDO_MODE='+sudo).encode(),p.stdout)
+    def test_direct_mutation_make_defaults_remain_safe(self):
+        repo=Path(__file__).resolve().parents[2]
+        with tempfile.TemporaryDirectory() as tmp:
+            probe=Path(tmp)/'probe.py'
+            probe.write_text("import os,json,sys;print(json.dumps({'action':sys.argv[-1],**{k:os.environ.get(k,'') for k in ('INSTANCE','SUDO_MODE','ENV')}}))")
+            env={k:v for k,v in os.environ.items() if k not in ('INSTANCE','SUDO_MODE','ENV','MAKEFLAGS','MAKEOVERRIDES')};env['HOME']=tmp
+            for action in ('deploy','restore','rollback','initialize','migrate-data','cleanup','client-revoke'):
+                # Replace only the Python entrypoint: never connect to a server.
+                p=subprocess.run(['make','--no-print-directory','-s',action,'PYTHON='+sys.executable+' '+str(probe)],cwd=repo,env=env,capture_output=True,timeout=10)
+                self.assertEqual(p.returncode,0,p.stderr)
+                self.assertEqual(json.loads(p.stdout),{'action':action,'INSTANCE':'acceptance','SUDO_MODE':'legacy','ENV':''})
 
 class SessionPreflight(unittest.TestCase):
     def test_protocol_failure_before_pending_or_release_upload(self):

@@ -4,8 +4,6 @@ import (
 	"budget/internal/planner"
 	"budget/internal/storageguard"
 	"context"
-	"crypto/sha256"
-	"crypto/subtle"
 	"crypto/tls"
 	"errors"
 	"fmt"
@@ -22,8 +20,6 @@ import (
 )
 
 func accessHandler(c serverConfig, next http.Handler) http.Handler {
-	budget := &failureBudget{}
-	expected := sha256.Sum256([]byte(c.Password))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Budget-App", "simple-budget-app")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -45,7 +41,7 @@ func accessHandler(c serverConfig, next http.Handler) http.Handler {
 			accessError(w, r, "HTTPS required", http.StatusForbidden)
 			return
 		}
-		if r.Header.Get("Sec-Fetch-Site") == "cross-site" {
+		if r.Header.Get("Sec-Fetch-Site") == "cross-site" && !browserNavigation(r) {
 			accessError(w, r, "Cross-site access denied", http.StatusForbidden)
 			return
 		}
@@ -66,20 +62,7 @@ func accessHandler(c serverConfig, next http.Handler) http.Handler {
 				return
 			}
 		}
-		if c.Password != "" {
-			user, password, ok := r.BasicAuth()
-			actual := sha256.Sum256([]byte(password))
-			if !ok || user != "budget" || subtle.ConstantTimeCompare(actual[:], expected[:]) != 1 {
-				if r.Header.Get("Authorization") != "" && !budget.allow(time.Now()) {
-					w.Header().Set("Retry-After", "1")
-					accessError(w, r, "Too many failed authentication attempts", http.StatusTooManyRequests)
-					return
-				}
-				w.Header().Set("WWW-Authenticate", `Basic realm="Local budget", charset="UTF-8"`)
-				accessError(w, r, "Authentication required", http.StatusUnauthorized)
-				return
-			}
-		}
+
 		if r.Method != "GET" && r.Method != "HEAD" && r.Method != "OPTIONS" {
 			media := strings.TrimSpace(strings.Split(r.Header.Get("Content-Type"), ";")[0])
 			if media != "application/json" {
@@ -127,20 +110,33 @@ func prepareApplication(c serverConfig, store *planner.Store) (http.Handler, err
 	if e = loadData(); e != nil {
 		return nil, e
 	}
+	auth, e := newWebAuth(c)
+	if e != nil {
+		return nil, e
+	}
+	hub := newEventHub()
 	base := newFinancialHandler(assets)
 	if store != nil {
 		mux := http.NewServeMux()
+		store.SetCommitObserver(func() { hub.publish("planner") })
 		mux.Handle("/api/ready", readyHandler(store))
 		mux.Handle("/api/backups/", backupHandler(c))
 		mux.Handle("/api/planner/", planner.NewHandler(planner.NewService(store)))
 		mux.Handle("/", base)
 		base = mux
 	}
-	return accessHandler(c, limitFinancialBody(base)), nil
+	syncMux := http.NewServeMux()
+	syncMux.Handle("/api/events", hub.handler(auth, c.Password != ""))
+	syncMux.Handle("/", base)
+	protected := auth.handler(c, assets, withSync(hub, syncMux))
+	return accessHandler(c, limitFinancialBody(protected)), nil
 }
 
 func serveUntilCancelled(ctx context.Context, listener net.Listener, handler http.Handler) error {
-	srv := &http.Server{Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 1 << 20}
+	// Stop long-lived streams immediately, but let normal requests finish under
+	// Shutdown's grace period instead of cancelling their database transactions.
+	base := context.WithValue(context.WithoutCancel(ctx), serverShutdownKey{}, ctx.Done())
+	srv := &http.Server{BaseContext: func(net.Listener) context.Context { return base }, Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 1 << 20}
 	done := make(chan error, 1)
 	go func() { done <- srv.Serve(listener) }()
 	select {

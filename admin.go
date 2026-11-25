@@ -90,6 +90,7 @@ func command(args []string, out io.Writer) error {
 		}
 		if c.Password != "" {
 			req.SetBasicAuth("budget", c.Password)
+			req.Header.Set("X-Budget-Admin", "1")
 		}
 		client := http.Client{Timeout: 5 * time.Second, Transport: &http.Transport{Proxy: nil}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 		resp, e := client.Do(req)

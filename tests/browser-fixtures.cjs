@@ -32,4 +32,7 @@ async function revealAction(page,name) {
   if(await group.getByRole('button',{name,exact:true,includeHidden:true}).count() && !await group.evaluate(e=>e.open))await group.locator('summary').click();
  }
 }
-module.exports = { ...base, test, revealAction };
+async function login(page,password) {
+ await page.goto('/login.html');await page.getByLabel('Логин',{exact:true}).fill('budget');await page.getByLabel('Пароль',{exact:true}).fill(password);await page.getByRole('button',{name:'Войти',exact:true}).click();await page.waitForURL(url=>url.pathname==='/');
+}
+module.exports = { ...base, test, revealAction, login };

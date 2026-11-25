@@ -39,14 +39,19 @@ def selection(choice):
     return action,extra
 
 def main(input_fn=None,run=None):
-    # Never inherit a production instance silently; each menu starts in acceptance.
-    instance='acceptance';run=run or subprocess.run;auth=(os.environ.get('AUTH') or 'manual')
+    # These defaults apply only to the interactive manager, not direct commands.
+    instance=os.environ.get('INSTANCE') or 'production'
+    sudo_mode=os.environ.get('SUDO_MODE') or 'session'
+    if instance not in ('acceptance','production') or sudo_mode not in ('session','legacy'):
+        print('Не выполнено: INSTANCE должен быть production/acceptance, SUDO_MODE — session/legacy.')
+        return 2
+    run=run or subprocess.run;auth=(os.environ.get('AUTH') or 'manual')
     while True:
         try:
             state=Path.home()/'.simple-budget-admin'/(instance+'.json')
             identity=load(state).get('installation_id','неизвестен') if state.exists() else 'не инициализирована'
             print('\nSimple Budget — budget / '+IP+' — INSTANCE='+instance+' — ID '+identity)
-            print('AUTH='+auth+'; SUDO_MODE='+(os.environ.get('SUDO_MODE') or 'legacy'))
+            print('AUTH='+auth+'; SUDO_MODE='+sudo_mode)
             pending=state.with_name('pending-'+instance+'.json')
             if pending.exists():print('Есть незавершённая операция. Сначала состояние (1), затем штатный recovery (13).')
             print(MENU);choice=input('Выбор: ').strip()
@@ -62,7 +67,7 @@ def main(input_fn=None,run=None):
                 auth=action.removeprefix('auth-');print('Выбран '+auth+'. Недоступный Keychain остановит команду без скрытого fallback.');continue
             if pending.exists() and action in ('deploy','restore','rollback'):
                 print('Операция не запущена: сначала status/recover.');continue
-            env=dict(os.environ,ENV='production',INSTANCE=instance,AUTH=auth)
+            env=dict(os.environ,ENV='production',INSTANCE=instance,AUTH=auth,SUDO_MODE=sudo_mode)
             # No stale command arguments carried between menu actions.
             for key in ('ARCHIVE','DECISION','BACKUP_ID','NAME','SECRET','ALLOW_CORRUPT_LIVE','KIND','LOCAL_DATA','PKI_ARCHIVE'):env.pop(key,None)
             env.update(extra)

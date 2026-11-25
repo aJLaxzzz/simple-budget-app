@@ -13,6 +13,7 @@
   return P.paint(icon,item);
  };
  let catalogPromise;
+ P.invalidateIconCatalog=()=>{catalogPromise=null;};
  P.iconCatalog=(refresh=false)=>{if(refresh)catalogPromise=null;return catalogPromise||(catalogPromise=P.api('/icons').catch(e=>{catalogPromise=null;throw e;}));};
  // A local picker changes form controls only. The existing save/revision/dirty guard owns persistence.
  P.appearanceField=function(host,value={},project=false,context,prefix=''){

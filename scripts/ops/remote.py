@@ -73,6 +73,16 @@ class Admin:
         if controller:args+=['--controller',self.p.controller]
         return json.loads(self.run(args,timeout=2700).stdout)
     def backup_command(self, action, *extra, binary=None):
+        # Old releases predate web-auth.json. Invalidate this non-user-data sidecar
+        # before asking their restore CLI to inspect live. Existing journals and
+        # stopped-service controller keep startup closed throughout this step.
+        session_file=self.p.live/'web-auth.json'
+        if action=='restore' and '--data-dir' in extra and Path(extra[extra.index('--data-dir')+1])==self.p.live and session_file.exists():
+            require(self.p.journal.exists(),'Restore session invalidation requires deployment journal')
+            require(load(self.p.journal)['installation_id']==self.p.identity(),'Restore identity mismatch')
+            self.controller('stopped',self.p.identity())
+            regular(session_file,256<<10)
+            session_file.unlink();sync_dir(self.p.live)
         return json.loads(self.run([binary or self.binary(),'admin','backup',action,'--backup-dir',self.p.backups,'--installation-id',self.p.identity(),*extra],timeout=2700).stdout)
     def archive(self, ident):
         require(BACKUP_ID.fullmatch(ident or ''),'Invalid backup ID')
@@ -152,7 +162,7 @@ class Admin:
     def own_live(self):
         uid=pwd.getpwnam(self.p.user).pw_uid;gid=grp.getgrnam(self.p.user).gr_gid
         require(load(self.p.live/'installation.json')['installation_id']==self.p.identity(),'Live identity changed')
-        allowed={'installation.json','planner.db','planner.db-wal','planner.db-shm','planner.db.lock','data.json','categories.json'}
+        allowed={'installation.json','planner.db','planner.db-wal','planner.db-shm','planner.db.lock','data.json','categories.json','web-auth.json'}
         require(all(x.name in allowed for x in self.p.live.iterdir()),'Unknown live file preserved; inspect before ownership changes')
         for file in self.p.live.iterdir():regular(file)
         for p in [self.p.live,*self.p.live.iterdir()]:
@@ -391,7 +401,9 @@ class Admin:
                 source=Path(j['archive']);require(source.parent==self.p.state and source.name=='restore-source-'+j['id']+'.tar.gz' and sha(source)==j['archive_sha256'],'Initial archive changed')
                 self.backup_command('restore','--archive',source,'--data-dir',self.p.live,'--confirm',binary=release/'budget')
             else:self.run([release/'budget','admin','init','--data-dir',self.p.live,'--installation-id',self.p.identity(),'--confirm'],timeout=120)
-        self.own_live();self.backup('manual',False,False)
+        # Imported archives have no planner.db.lock. The first root maintenance
+        # backup creates it; assign ownership only after maintenance has closed.
+        self.backup('manual',False,False);self.own_live()
         self.save_journal(j,'trial');self.controller('start',self.p.identity());self.proxy('trial')
         return {'result':'awaiting_https_acceptance','request_id':j['id'],'version':j['version'],'installation_id':self.p.identity()}
     def tls_status(self):
@@ -593,7 +605,7 @@ def cleanup(a,request):
     require(a.service_state()=='stopped','Previous-data cleanup requires explicit maintenance stop')
     require(load(target/'installation.json')['installation_id']==p.identity(),'Previous-data identity mismatch')
     a.run([a.binary(),'admin','backup','verify','--archive',a.archive(a.backup_command('status')['latest']['manifest']['backup_id'])],timeout=900)
-    allowed={'installation.json','planner.db','planner.db-wal','planner.db-shm','planner.db.lock','data.json','categories.json'}
+    allowed={'installation.json','planner.db','planner.db-wal','planner.db-shm','planner.db.lock','data.json','categories.json','web-auth.json'}
     for child in target.iterdir():require(child.name in allowed,'Unknown previous-data file');regular(child)
     with lock(target/'planner.db.lock'):
         shutil.rmtree(target);sync_dir(p.state)

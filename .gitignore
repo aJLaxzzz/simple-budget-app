@@ -46,6 +46,9 @@
 /config.local.json
 /config.local.*
 /installation.json
+# Runtime browser session state is never source or a user backup.
+web-auth.json
+.metadata-*.tmp
 /deploy/production.env
 /.idea/workspace.xml
 /.idea/shelf/
@@ -81,3 +84,7 @@ __pycache__/
 /.simple-budget-pki/
 /*.dmg
 /deploy/*.local.json
+
+# Local agent instructions stay on this machine
+/AGENTS.md
+/agent.md

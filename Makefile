@@ -9,14 +9,15 @@ export ENV INSTANCE ARCHIVE DEVICE BACKUP_ID DECISION LOCAL_DATA NAME ALLOW_CORR
 
 .PHONY: help release-linux server-install initialize repair-initialization deploy migrate-data status logs backup fetch-backup restore rollback recover tls-status client-list client-issue client-renew client-add client-revoke pki-backup pki-export cleanup secure-page test-ops legacy-export acceptance acceptance-download acceptance-tls acceptance-http
 help:
-	@echo 'Server Manager: make server (starts with acceptance); AUTH=manual|keychain; SUDO_MODE=legacy|session'
+	@echo 'Server Manager: make server (production, SUDO_MODE=session); overrides: INSTANCE=acceptance SUDO_MODE=legacy; AUTH=manual|keychain'
 	@echo 'Keychain: keychain-build keychain-status keychain-register keychain-check keychain-delete; SECRET=app|client|pki'
 	@echo 'Local: make release-linux | test-ops | test-ops-native'
 	@echo 'Server (explicit ENV=production, default INSTANCE=acceptance):'
 	@echo '  server-install initialize repair-initialization deploy migrate-data status logs backup fetch-backup restore rollback recover'
 	@echo '  tls-status client-list client-add client-revoke pki-export cleanup secure-page acceptance-download acceptance-tls acceptance-http'
 	@echo 'PKI on Mac only: client-issue DEVICE=name | client-renew DEVICE=old NAME=new | pki-backup'
-	@echo 'See docs/SERVER-OPERATIONS.md. No network operation runs by default.'
+	@echo 'Direct commands retain INSTANCE=acceptance and SUDO_MODE=legacy defaults. No network operation runs by default.'
+	@echo 'Status shows local/server Git comparison; OUTPUT=json retains full SHAs and detailed server status.'
 release-linux server-install initialize repair-initialization deploy migrate-data status logs backup fetch-backup restore rollback recover tls-status client-list client-issue client-renew client-add client-revoke pki-backup pki-export cleanup secure-page acceptance acceptance-download acceptance-tls acceptance-http:
 	@$(PYTHON) scripts/ops/mac.py $@
 test-ops:
@@ -29,6 +30,14 @@ test-ops-native:
 	@$(PYTHON) tests/ops/cli_integration.py
 
 .PHONY: server keychain-build keychain-status keychain-register keychain-check keychain-delete
+# Override only the Makefile defaults for the menu. Explicit environment and
+# command-line choices still work; direct administrative targets are unchanged.
+ifeq ($(origin INSTANCE),file)
+server: INSTANCE = production
+endif
+ifeq ($(origin SUDO_MODE),file)
+server: SUDO_MODE = session
+endif
 server:
 	@$(PYTHON) scripts/ops/server_manager.py
 keychain-build:

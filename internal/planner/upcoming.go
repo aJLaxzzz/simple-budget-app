@@ -124,7 +124,9 @@ func (s *Service) recordCalculationError(ctx context.Context, id string, err err
 		value = &message
 	}
 	_ = s.store.Transaction(ctx, func(tx *sql.Tx) error {
-		_, e := tx.Exec("UPDATE series SET calculation_error=? WHERE id=?", value, id)
+		// Rechecking an unchanged projection must not produce a write notification:
+		// live clients materialize again when refreshing their calendar.
+		_, e := tx.Exec("UPDATE series SET calculation_error=? WHERE id=? AND calculation_error IS NOT ?", value, id, value)
 		return e
 	})
 }

@@ -261,6 +261,17 @@ func financialHandler(next http.Handler) http.Handler {
 		}
 		financialMu.Lock()
 		defer financialMu.Unlock()
+		hub, _ := r.Context().Value(syncContextKey{}).(*eventHub)
+		revision := func() string {
+			return fmt.Sprintf("\"%s:%d\"", hub.generation, hub.financeRevision)
+		}
+		if hub != nil {
+			w.Header().Set("X-Budget-Revision", revision())
+			if isWrite(r) && (r.URL.Path == "/api/categories" || strings.HasPrefix(r.URL.Path, "/api/months")) && r.Header.Get("If-Match") != revision() {
+				authError(w, 409, "Данные изменились на другом устройстве. Обновите данные и проверьте изменения перед повторным сохранением.")
+				return
+			}
+		}
 		if r.Method == http.MethodGet || r.Method == http.MethodHead {
 			next.ServeHTTP(w, r)
 			return
@@ -273,6 +284,30 @@ func financialHandler(next http.Handler) http.Handler {
 				store, expenseCategories, incomeCategories = previous, expense, income
 			}
 		}()
-		next.ServeHTTP(sw, r)
+		if hub == nil {
+			next.ServeHTTP(sw, r)
+			return
+		}
+		// Mutation responses are small; delay headers until the persisted revision is known.
+		capture := &mutationResponse{header: w.Header(), status: 200}
+		next.ServeHTTP(capture, r)
+		sw.status = capture.status
+		if capture.status < 400 {
+			hub.financeRevision++
+			w.Header().Set("X-Budget-Revision", revision())
+			hub.publish("finance")
+		}
+		w.WriteHeader(capture.status)
+		_, _ = w.Write(capture.body.Bytes())
 	})
 }
+
+type mutationResponse struct {
+	header http.Header
+	status int
+	body   bytes.Buffer
+}
+
+func (w *mutationResponse) Header() http.Header         { return w.header }
+func (w *mutationResponse) WriteHeader(status int)      { w.status = status }
+func (w *mutationResponse) Write(p []byte) (int, error) { return w.body.Write(p) }

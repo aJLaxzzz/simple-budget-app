@@ -625,3 +625,29 @@ class HTTPSReadinessDiagnosticsTests(unittest.TestCase):
         with patch.object(mac,'app_connection',return_value=(None,'synthetic')),patch.object(mac.http.client,'HTTPSConnection',return_value=c) as factory,patch.object(mac.getpass,'getpass',side_effect=KeyboardInterrupt),patch('builtins.print'):
             with self.assertRaises(KeyboardInterrupt):mac.https_accept({},'mac-1')
         factory.assert_called_once();c.close.assert_called_once()
+
+class WebSessionRestoreTests(unittest.TestCase):
+    def test_old_release_restore_drops_sessions_only_after_stopped_identity_gate(self):
+        from unittest.mock import Mock
+        with tempfile.TemporaryDirectory() as root:
+            p=Paths('acceptance',root)
+            for directory in (p.live,p.etc,p.backups):directory.mkdir(parents=True,exist_ok=True)
+            atomic(p.etc/'identity.json',{'instance':'acceptance','installation_id':'1'*32})
+            atomic(p.journal,{'installation_id':'1'*32})
+            secret=p.live/'web-auth.json';atomic(secret,{'sessions':[]})
+            runner=Mock(return_value=subprocess.CompletedProcess([],0,b'{}',b''));a=Admin(p,runner)
+            a.controller=Mock(side_effect=Refused('still running'))
+            with self.assertRaises(Refused):a.backup_command('restore','--data-dir',p.live,binary=Path('/synthetic/old/budget'))
+            self.assertTrue(secret.exists());runner.assert_not_called()
+            a.controller=Mock();a.backup_command('restore','--data-dir',p.live,binary=Path('/synthetic/old/budget'))
+            a.controller.assert_called_once_with('stopped','1'*32);self.assertFalse(secret.exists())
+    def test_restore_sidecar_symlink_is_not_followed(self):
+        from unittest.mock import Mock
+        with tempfile.TemporaryDirectory() as root:
+            p=Paths('acceptance',root)
+            for directory in (p.live,p.etc,p.backups):directory.mkdir(parents=True,exist_ok=True)
+            atomic(p.etc/'identity.json',{'instance':'acceptance','installation_id':'1'*32});atomic(p.journal,{'installation_id':'1'*32})
+            target=Path(root)/'untouched';target.write_text('synthetic');(p.live/'web-auth.json').symlink_to(target)
+            a=Admin(p,Mock());a.controller=Mock()
+            with self.assertRaises(Refused):a.backup_command('restore','--data-dir',p.live,binary=Path('/synthetic/old/budget'))
+            self.assertEqual(target.read_text(),'synthetic');a.run.assert_not_called()

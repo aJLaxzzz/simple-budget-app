@@ -13,6 +13,10 @@ import (
 // Explicit manifest: files accidentally placed in static are never published.
 // Assets are read once at startup, so later symlink swaps cannot expose data.
 var publicAssets = map[string]string{
+	"/js/live.js":                        "text/javascript; charset=utf-8",
+	"/login.html":                        "text/html; charset=utf-8",
+	"/js/login.js":                       "text/javascript; charset=utf-8",
+	"/css/login.css":                     "text/css; charset=utf-8",
 	"/js/planner/repeat-editor.js":       "text/javascript; charset=utf-8",
 	"/js/planner/beta3.js":               "text/javascript; charset=utf-8",
 	"/js/planner/beta2.js":               "text/javascript; charset=utf-8",
@@ -55,6 +59,8 @@ var publicAssets = map[string]string{
 //go:embed static/js/planner/views.js static/js/planner/editor.js static/index.html
 //go:embed static/css/style.css static/js/app.js static/js/api.js
 //go:embed static/js/planner/recurrence-form.js static/js/planner/series.js static/js/planner/occurrences.js
+//go:embed static/login.html static/js/login.js static/css/login.css
+//go:embed static/js/live.js
 var embeddedFrontend embed.FS
 
 func newStaticHandler(dir string) (http.Handler, error) {

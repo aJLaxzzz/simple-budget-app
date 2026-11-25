@@ -43,7 +43,7 @@ func liveContents(dir string) error {
 	if e != nil {
 		return e
 	}
-	allowed := map[string]bool{"planner.db": true, "planner.db-wal": true, "planner.db-shm": true, "planner.db.lock": true, "data.json": true, "categories.json": true, "installation.json": true}
+	allowed := map[string]bool{"planner.db": true, "planner.db-wal": true, "planner.db-shm": true, "planner.db.lock": true, "data.json": true, "categories.json": true, "installation.json": true, authFile: true}
 	for _, entry := range entries {
 		if !allowed[entry.Name()] {
 			return errors.New("unknown live file preserved: move it safely before restoring this directory")
@@ -152,6 +152,13 @@ func recoverRestore(ctx context.Context, o backupOptions, decision string) error
 	for _, dir := range []string{j.DataDir, j.stage(), j.previous()} {
 		if exists(dir) {
 			if _, e := storageguard.Resolve(dir); e != nil {
+				return e
+			}
+		}
+	}
+	for _, dir := range []string{j.DataDir, j.stage(), j.previous()} {
+		if exists(dir) {
+			if e := invalidateWebSessions(dir); e != nil {
 				return e
 			}
 		}
@@ -374,6 +381,11 @@ func restoreBackup(ctx context.Context, r backupRepository, o backupOptions, arc
 		return "", e
 	}
 	journalWritten = true
+	if exists(o.DataDir) {
+		if e = invalidateWebSessions(o.DataDir); e != nil {
+			return "", e
+		}
+	}
 	rollback := func(cause error) (string, error) {
 		if e := recoverRestore(context.Background(), o, "rollback"); e != nil {
 			safeResume = false
