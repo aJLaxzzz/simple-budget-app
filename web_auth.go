@@ -37,6 +37,7 @@ type authState struct {
 type webAuth struct {
 	mu       sync.Mutex
 	path     string
+	cookie   string
 	state    authState
 	failures failureBudget
 	now      func() time.Time
@@ -51,7 +52,10 @@ func randomToken() string {
 }
 func tokenHash(s string) string { b := sha256.Sum256([]byte(s)); return hex.EncodeToString(b[:]) }
 func newWebAuth(c serverConfig) (*webAuth, error) {
-	a := &webAuth{path: filepath.Join(c.DataDir, authFile), now: time.Now}
+	a := &webAuth{path: filepath.Join(c.DataDir, authFile), now: time.Now, cookie: sessionCookie}
+	if c.Instance == "acceptance" {
+		a.cookie = "__Host-budget-stg-session"
+	}
 	a.state = authState{Version: 1, Password: tokenHash(c.InstallationID + "\x00" + c.Password), Sessions: []webSession{}}
 	if _, err := os.Lstat(a.path); err == nil {
 		if err = storageguard.Regular(a.path, true); err != nil {
@@ -83,6 +87,12 @@ func newWebAuth(c serverConfig) (*webAuth, error) {
 	}
 	return a, nil
 }
+func (a *webAuth) cookieName() string {
+	if a.cookie == "" {
+		return sessionCookie
+	}
+	return a.cookie
+}
 func (a *webAuth) save() error { return privateJSON(a.path, a.state) }
 func (a *webAuth) prune() {
 	now := a.now()
@@ -95,7 +105,7 @@ func (a *webAuth) prune() {
 	a.state.Sessions = out
 }
 func (a *webAuth) session(r *http.Request) (webSession, bool) {
-	c, e := r.Cookie(sessionCookie)
+	c, e := r.Cookie(a.cookieName())
 	if e != nil || len(c.Value) > 128 {
 		return webSession{}, false
 	}
@@ -122,8 +132,8 @@ func (a *webAuth) session(r *http.Request) (webSession, bool) {
 	}
 	return webSession{}, false
 }
-func csrfToken(r *http.Request) string {
-	c, e := r.Cookie(sessionCookie)
+func (a *webAuth) csrfToken(r *http.Request) string {
+	c, e := r.Cookie(a.cookieName())
 	if e != nil {
 		return ""
 	}
@@ -144,11 +154,16 @@ func browserNavigation(r *http.Request) bool {
 	return r.Method == "GET" && (r.URL.Path == "/" || r.URL.Path == "/index.html" || r.URL.Path == "/login.html") && r.Header.Get("Sec-Fetch-Mode") == "navigate" && r.Header.Get("Sec-Fetch-Dest") == "document"
 }
 func loginAsset(p string) bool {
-	return p == "/login.html" || p == "/js/login.js" || p == "/css/login.css"
+	return p == "/js/environment.js" || p == "/login.html" || p == "/js/login.js" || p == "/css/login.css"
 }
 func (a *webAuth) handler(c serverConfig, assets, next http.Handler) http.Handler {
 	expected := sha256.Sum256([]byte(c.Password))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/environment" && r.Method == "GET" {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]bool{"staging": c.Instance == "acceptance"})
+			return
+		}
 		if loginAsset(r.URL.Path) && !isWrite(r) {
 			assets.ServeHTTP(w, r)
 			return
@@ -199,7 +214,7 @@ func (a *webAuth) handler(c serverConfig, assets, next http.Handler) http.Handle
 			s := webSession{ID: randomToken(), Hash: tokenHash(token), Created: a.now(), Active: a.now(), Expires: a.now().Add(duration)}
 			// A new login rotates the existing browser session, never adopts a supplied token.
 			old := a.state.Sessions
-			if ck, e := r.Cookie(sessionCookie); e == nil {
+			if ck, e := r.Cookie(a.cookieName()); e == nil {
 				h := tokenHash(ck.Value)
 				next := []webSession{}
 				for _, x := range old {
@@ -215,7 +230,7 @@ func (a *webAuth) handler(c serverConfig, assets, next http.Handler) http.Handle
 				authError(w, 500, "Не удалось сохранить сессию")
 				return
 			}
-			cookie := &http.Cookie{Name: sessionCookie, Value: token, Path: "/", HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode}
+			cookie := &http.Cookie{Name: a.cookieName(), Value: token, Path: "/", HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode}
 			if in.Remember {
 				cookie.MaxAge = int(duration.Seconds())
 				cookie.Expires = s.Expires
@@ -235,7 +250,7 @@ func (a *webAuth) handler(c serverConfig, assets, next http.Handler) http.Handle
 		}
 		if !ok {
 			// Machine requests explicitly opt in; browser cookies/fetch metadata cannot use this alternative.
-			_, cookieErr := r.Cookie(sessionCookie)
+			_, cookieErr := r.Cookie(a.cookieName())
 			if r.Header.Get("X-Budget-Admin") == "1" && cookieErr != nil && r.Header.Get("Sec-Fetch-Mode") == "" && r.Header.Get("Sec-Fetch-Site") == "" && !strings.HasPrefix(r.URL.Path, "/api/auth/") && r.URL.Path != "/api/events" {
 				user, password, basic := r.BasicAuth()
 				actual := sha256.Sum256([]byte(password))
@@ -257,7 +272,7 @@ func (a *webAuth) handler(c serverConfig, assets, next http.Handler) http.Handle
 			return // Never WWW-Authenticate: no browser Basic dialog.
 		}
 		if isWrite(r) {
-			csrf := csrfToken(r)
+			csrf := a.csrfToken(r)
 			if r.Header.Get("Origin") == "" || subtle.ConstantTimeCompare([]byte(r.Header.Get("X-CSRF-Token")), []byte(csrf)) != 1 {
 				authError(w, 403, "Проверка CSRF не пройдена")
 				return
@@ -276,7 +291,7 @@ func (a *webAuth) api(w http.ResponseWriter, r *http.Request, current webSession
 	a.prune()
 	switch {
 	case r.URL.Path == "/api/auth/session" && r.Method == "GET":
-		authJSON(w, 200, map[string]any{"enabled": true, "id": current.ID, "csrf": csrfToken(r), "expires": current.Expires})
+		authJSON(w, 200, map[string]any{"enabled": true, "id": current.ID, "csrf": a.csrfToken(r), "expires": current.Expires})
 	case r.URL.Path == "/api/auth/sessions" && r.Method == "GET":
 		rows := []map[string]any{}
 		for _, s := range a.state.Sessions {
@@ -310,7 +325,7 @@ func (a *webAuth) api(w http.ResponseWriter, r *http.Request, current webSession
 			return
 		}
 		if in.All || in.ID == current.ID {
-			http.SetCookie(w, &http.Cookie{Name: sessionCookie, Path: "/", MaxAge: -1, Secure: true, HttpOnly: true, SameSite: http.SameSiteStrictMode})
+			http.SetCookie(w, &http.Cookie{Name: a.cookieName(), Path: "/", MaxAge: -1, Secure: true, HttpOnly: true, SameSite: http.SameSiteStrictMode})
 		}
 		authJSON(w, 200, map[string]bool{"ok": true})
 	default:

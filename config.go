@@ -25,6 +25,7 @@ func validPasswordLength(value string) bool {
 type serverConfig struct {
 	Addr, DataDir, StaticDir, Password, CertFile, KeyFile string
 	BackupDir                                             string
+	Instance                                              string
 	AllowedHosts                                          map[string]bool
 	Local                                                 bool
 	Environment, PublicOrigin, ProxyMode, InstallationID  string
@@ -45,6 +46,13 @@ func readConfig(getenv func(string) string) (serverConfig, error) {
 	}
 	if c.Environment != "development" && c.Environment != "test" && c.Environment != "production" {
 		return c, errors.New("BUDGET_ENV must be development, test or production")
+	}
+	c.Instance = getenv("BUDGET_INSTANCE")
+	if c.Instance == "" {
+		c.Instance = "production"
+	}
+	if c.Instance != "production" && c.Instance != "acceptance" {
+		return c, errors.New("invalid BUDGET_INSTANCE")
 	}
 	c.PublicOrigin = getenv("BUDGET_PUBLIC_ORIGIN")
 	c.ProxyMode = getenv("BUDGET_PROXY_MODE")

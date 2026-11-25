@@ -108,10 +108,10 @@ async function main(){
         const command=JSON.parse(line);
         if(command.action==='prepare'){
           check(!matrix,'ALREADY_PREPARED');
-          const options={host:'171.22.237.16',port:443,servername:'',rejectUnauthorized:true,
+          const options={host:'171.22.237.16',port:8443,servername:'',rejectUnauthorized:true,
             cert:fs.readFileSync(command.cert),key:fs.readFileSync(command.key),passphrase:command.passphrase};
           if(fs.existsSync('/etc/ssl/cert.pem'))options.ca=fs.readFileSync('/etc/ssl/cert.pem');
-          matrix=new Matrix(options,'171.22.237.16');result=await matrix.prepare();
+          matrix=new Matrix(options,'171.22.237.16:8443');result=await matrix.prepare();
         }else if(command.action==='arm')result=matrix.arm();
         else if(command.action==='verify')result=await matrix.verify();
         else if(command.action==='close'){matrix?.close();break;}

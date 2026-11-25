@@ -26,10 +26,11 @@ type versionInfo struct {
 	Modified         bool   `json:"modified"`
 	Schema           int    `json:"schema_version"`
 	EmbeddedFrontend bool   `json:"embedded_frontend"`
+	StagingIsolation bool   `json:"staging_isolation"`
 }
 
 func currentVersion() versionInfo {
-	v := versionInfo{Application: "simple-budget-app", Go: runtime.Version(), Revision: "unknown", Schema: planner.SchemaVersion(), EmbeddedFrontend: true}
+	v := versionInfo{Application: "simple-budget-app", Go: runtime.Version(), Revision: "unknown", Schema: planner.SchemaVersion(), EmbeddedFrontend: true, StagingIsolation: true}
 	if b, ok := debug.ReadBuildInfo(); ok {
 		for _, s := range b.Settings {
 			switch s.Key {
@@ -119,6 +120,9 @@ func command(args []string, out io.Writer) error {
 	}
 	if args[1] == "backup" {
 		return backupCommand(args[2:], out)
+	}
+	if args[1] == "stg-fixture" {
+		return stagingFixture(args[2:], out)
 	}
 	action := args[1]
 	if action != "init" && action != "check" && action != "migrate" {

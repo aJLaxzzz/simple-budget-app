@@ -80,7 +80,7 @@ class VersionStatusTests(unittest.TestCase):
         with patch.dict(os.environ,{'OUTPUT':''}),contextlib.redirect_stdout(io.StringIO()) as out:
             mac.show_result('status',{'release':{'revision':B,'modified':False,'schema_version':14}},'production')
         text=out.getvalue()
-        for value in ('production',B[:12],A[:12],'Synthetic commit',DATE,'Незакоммиченные изменения: нет'):
+        for value in ('PROD',B[:12],A[:12],'Synthetic commit',DATE,'Незакоммиченные изменения: нет'):
             self.assertIn(value,text)
 
 

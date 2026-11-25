@@ -86,6 +86,6 @@ module.exports={runBrowser};
 if(require.main===module)(async()=>{
  let raw='';for await(const part of process.stdin){raw+=part;if(raw.length>32768)throw Error('bounded input');}
  const cfg=JSON.parse(raw);raw='';
- if(cfg.origin!=='https://171.22.237.16')throw Error('target');
+ if(cfg.origin!=='https://171.22.237.16:8443')throw Error('target');
  process.stdout.write(JSON.stringify(await runBrowser(cfg)));
 })().catch(()=>{process.stdout.write(JSON.stringify({passed:false,stage}));process.exitCode=1;});

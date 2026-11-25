@@ -23,7 +23,173 @@ class Admin:
     def __init__(self, paths, run=None):
         self.p=paths; self.run=run or Runner()
     def system(self, *args, check=True):
-        return self.run(['/usr/bin/systemctl',*args],check=check,timeout=90)
+        try:return self.run(['/usr/bin/systemctl',*args],check=check,timeout=90)
+        except Refused as error:
+            # Only fixed vocabulary, never raw command arguments, journal or stderr.
+            verb=args[0] if args and args[0] in ('start','stop','restart','reset-failed','disable','enable','show','is-active','is-enabled','daemon-reload') else 'operation'
+            units=[u for u in ('simple-budget.service','simple-budget-acceptance.service','caddy.service',
+                              'simple-budget-backup@production.timer','simple-budget-backup@acceptance.timer') if u in args]
+            raise Refused(str(error)+'; systemctl '+verb+(' '+','.join(units) if units else '')) from error
+    def stg_identity(self, request=None):
+        require(self.p.instance=='acceptance','STG operation cannot target PROD')
+        identity=load(self.p.etc/'identity.json')
+        require(identity.get('synthetic') is True and identity.get('instance')=='acceptance','Synthetic acceptance identity required')
+        if request is not None:require(request.get('installation_id')==self.p.identity(),'STG installation mismatch')
+        require(not self.p.journal.exists() and not (self.p.backups/'operation.json').exists()
+                and not (self.p.state/'.live.restore.json').exists(),'Pending operation: use status/recover')
+    def stg_disable_autostart(self):
+        self.system('disable',self.p.unit)
+        self.system('disable','--now','simple-budget-backup@acceptance.timer')
+    def stg_gate(self, mode):
+        require(mode in ('open','trial','closed','test-page'),'Unsupported STG route mode')
+        if mode in ('open','trial'):self.stg_capable(self.p.release())
+        if mode=='test-page':require(load(self.p.global_state/'stg-enabled.json').get('state')=='ready','Finish stg-setup first')
+        for name in ('open','trial','test-page'):
+            p=self.p.at('/etc/caddy/stg-access-'+name)
+            if p.exists() or p.is_symlink():regular(p);p.unlink();sync_dir(p.parent)
+        if mode!='closed':atomic(self.p.at('/etc/caddy/stg-access-'+mode),b'1\n',0o644)
+        atomic(self.p.state/'proxy.json',{'instance':'acceptance','mode':mode,'at':utc()})
+    def stg_capable(self, release):
+        enabled=self.p.global_state/'stg-enabled.json'
+        require(enabled.exists() and load(enabled).get('state')=='ready','Finish stg-setup before STG deployment/start')
+        version=json.loads(self.run([self.binary(release),'version']).stdout)
+        require(version.get('staging_isolation') is True,'Deploy a release supporting STG cookie isolation first')
+        env=self.config()
+        require(env.get('BUDGET_INSTANCE')=='acceptance' and env.get('BUDGET_PUBLIC_ORIGIN')=='https://'+IP+':8443'
+                and env.get('BUDGET_ALLOWED_HOSTS')==IP+':8443' and env.get('BUDGET_ADDR')=='127.0.0.1:3002',
+                'Run stg-setup before starting STG')
+    def stg_setup(self, request):
+        self.stg_identity(request);require(request.get('confirm') is True,'Explicit Caddy/firewall setup confirmation required')
+        decision=request.get('decision','finish')
+        require(decision in ('finish','rollback'),'Invalid STG setup decision')
+        if decision=='rollback':return self.stg_restore_proxy()
+        enabled=self.p.global_state/'stg-enabled.json'
+        if enabled.exists():
+            require(load(enabled).get('state')=='ready',
+                    'Interrupted STG setup: run stg-setup DECISION=rollback before retrying')
+        else:self.stg_save_proxy()
+        self.stg_gate('closed');self.controller('stop',self.p.identity());self.stg_disable_autostart()
+        # Keep the existing STG credential, identity and all synthetic data.
+        # Explicitly reject accidental password reuse with PROD, without disclosure.
+        prod=Paths('production',self.p.root)
+        credential=self.p.etc/'credentials/app-password'
+        if read(credential).strip()==read(prod.etc/'credentials/app-password').strip():
+            password=getpass.getpass('Отдельный пароль STG (минимум 12, рекомендуется 16): ')
+            require(12<=len(password) and len(password.encode('utf-8'))<=4096 and password==password.strip()
+                    and not any(c in password for c in '\r\n\0') and password==getpass.getpass('Повторите пароль STG: '),
+                    'Password mismatch or invalid characters/length')
+            require(password.encode()!=read(prod.etc/'credentials/app-password').strip(),'STG password must differ from PROD')
+            atomic(credential,(password+'\n').encode());del password
+        env=self.config();env.pop('PATH');env.pop('BUDGET_PASSWORD_FILE')
+        env.update(BUDGET_INSTANCE='acceptance',BUDGET_ADDR='127.0.0.1:3002',BUDGET_PUBLIC_ORIGIN='https://'+IP+':8443',BUDGET_ALLOWED_HOSTS=IP+':8443',GOMEMLIMIT='112MiB')
+        atomic(self.p.config,''.join(k+'='+v+'\n' for k,v in env.items()).encode())
+        require(self.staging_isolation()['passed'],'STG OS isolation or disabled timers check failed; inspect status')
+        # Idempotent setup; only this explicit operation changes Caddy/firewall.
+        if not enabled.exists():
+            atomic(enabled,{'format':1,'state':'preparing','at':utc()})
+            try:
+                Admin(prod,self.run).proxy('open')
+                self.run(['/usr/sbin/ufw','allow','8443/tcp'],timeout=30)
+                atomic(enabled,{'format':1,'state':'ready','at':utc()})
+            except Exception as error:
+                try:self.stg_restore_proxy()
+                except Exception as restore_error:
+                    raise Refused('STG setup failed; Caddy recovery incomplete. Run stg-setup DECISION=rollback; preserve setup snapshot') from restore_error
+                raise Refused('STG setup failed; previous Caddy configuration restored, STG stopped. TCP 8443 firewall rule may remain; no STG listener') from error
+        self.schedule()
+        return {'result':'stg_configured_stopped','instance':'acceptance','production_restarted':False}
+    def stg_save_proxy(self):
+        # Capture only fixed administrative configuration, never application data,
+        # credentials or certificate keys. The global operations lock is held.
+        prod=Paths('production',self.p.root)
+        require(not prod.journal.exists() and not (prod.state/'.live.restore.json').exists()
+                and not (prod.backups/'operation.json').exists(),'Finish PROD operation before Caddy setup')
+        proxy=load(self.p.global_state/'proxy.json')
+        config=self.p.at('/etc/caddy/simple-budget.json')
+        require(proxy.get('instance')=='production' and proxy.get('mode')=='open'
+                and proxy.get('config_sha256')==sha(config),'PROD must have the unchanged open route')
+        _,expected=self.registry()
+        before=read(config)
+        caddy_policy.validate(json.loads(before),expected,True)
+        require(not any(':8443' in s.get('listen',[]) for s in json.loads(before)['apps']['http']['servers'].values()),
+                'Untracked STG listener; refuse replacing recovery configuration')
+        drop=self.p.at('/etc/systemd/system/caddy.service.d/simple-budget.conf')
+        after=caddy_policy.render_dual(load(self.p.global_state/'caddy-base.json'),expected,'open')
+        snapshot={'format':1,'at':utc(),'registry_sha256':sha(self.p.global_state/'clients.json'),
+                  'installation_id':self.p.identity(),
+                  'config':before.decode(),'config_sha256':sha(config),
+                  'dual_sha256':hashlib.sha256((json.dumps(after,indent=2)+'\n').encode()).hexdigest(),
+                  'drop':read(drop).decode(),'proxy':proxy}
+        # Verify the captured configuration can be loaded before changing a listener.
+        self.run(['/usr/bin/caddy','validate','--config',config],timeout=30)
+        atomic(self.p.global_state/'stg-setup-recovery.json',snapshot)
+    def stg_restore_proxy(self):
+        prod=Paths('production',self.p.root)
+        require(not prod.journal.exists() and not (prod.state/'.live.restore.json').exists()
+                and not (prod.backups/'operation.json').exists(),'Finish PROD operation before Caddy recovery')
+        snap=load(self.p.global_state/'stg-setup-recovery.json',owner=0 if self.p.root==Path('/') else os.getuid())
+        require(snap.get('format')==1 and snap.get('installation_id')==self.p.identity()
+                and snap['registry_sha256']==sha(self.p.global_state/'clients.json'),
+                'Client registry changed since setup; refuse restoring an obsolete allowlist')
+        config=self.p.at('/etc/caddy/simple-budget.json');before=snap['config'].encode()
+        require(hashlib.sha256(before).hexdigest()==snap['config_sha256']
+                and sha(config) in (snap['config_sha256'],snap['dual_sha256']),
+                'Caddy configuration changed outside setup; refuse blind recovery')
+        _,expected=self.registry();caddy_policy.validate(json.loads(before),expected,True)
+        candidate=config.with_suffix('.recovery.json')
+        atomic(candidate,before,0o640)
+        if self.p.root==Path('/'):os.chown(candidate,0,grp.getgrnam('caddy').gr_gid)
+        self.run(['/usr/bin/caddy','validate','--config',candidate],timeout=30)
+        self.stg_gate('closed');self.controller('stop',self.p.identity());self.stg_disable_autostart()
+        enabled=self.p.global_state/'stg-enabled.json'
+        atomic(enabled,{'format':1,'state':'recovering','at':utc()})
+        os.replace(candidate,config);sync_dir(config.parent)
+        atomic(self.p.at('/etc/systemd/system/caddy.service.d/simple-budget.conf'),snap['drop'].encode(),0o644)
+        self.system('daemon-reload');self.system('restart','caddy.service')
+        require(self.system('is-active','caddy.service',check=False).returncode==0,'Caddy recovery failed')
+        atomic(self.p.global_state/'proxy.json',snap['proxy'])
+        enabled.unlink();sync_dir(enabled.parent)
+        return {'result':'stg_setup_rolled_back','production_restarted':False,'stg_service':'stopped',
+                'caddy_restored':True,'firewall_8443':'unchanged; any existing rule retained, no STG listener'}
+    def stg_switch(self, request, start):
+        self.stg_identity(request)
+        require((self.p.global_state/'stg-enabled.json').exists() and load(self.p.global_state/'stg-enabled.json').get('state')=='ready','Finish stg-setup first')
+        expected='stopped' if start else 'running'
+        require(self.service_state()==expected,'STG state changed; refresh menu before switching')
+        self.stg_disable_autostart();self.stg_gate('closed')
+        if start:
+            require(self.staging_isolation()['passed'],'STG isolation check failed; inspect status')
+            # An inactive disabled unit may have been garbage-collected by systemd.
+            # reset-failed addresses loaded units and is unnecessary after a clean stop.
+            raw=self.system('show',self.p.unit,'--property=LoadState,ActiveState').stdout.decode()
+            state=dict(line.split('=',1) for line in raw.splitlines() if '=' in line)
+            require(state.get('LoadState')=='loaded' and state.get('ActiveState') in ('inactive','failed'),
+                    'STG state changed before start; refresh status')
+            if state['ActiveState']=='failed':self.system('reset-failed',self.p.unit)
+            try:self.controller('start',self.p.identity());self.stg_gate('open')
+            except BaseException:self.system('stop',self.p.unit,check=False);raise
+        else:self.controller('stop',self.p.identity())
+        require(self.service_state()==('running' if start else 'stopped'),'STG state verification failed')
+        return {'result':'stg_started' if start else 'stg_stopped','service':self.service_state()}
+    def promote(self, request):
+        require(self.p.instance=='production' and request.get('confirm') is True,'Explicit PROD promotion required')
+        stg=Admin(Paths('acceptance',self.p.root),self.run);stg.stg_identity()
+        require(stg.service_state()=='running','STG must be running with the tested release')
+        release=stg.p.release();stg.stg_capable(release);stg.ready();manifest=stg.manifest(release)
+        require(manifest['files'][0]['sha256']==request.get('release_sha256'),'STG release changed since confirmation')
+        # Existing deployment consumes exactly the root-owned STG binary. No rebuild/data transfer.
+        return self.prepare(release,request)
+    def stg_reset(self, request):
+        self.stg_identity(request);require(request.get('confirm') is True,'Explicit synthetic reset confirmation required')
+        self.stg_capable(self.p.release())
+        with tempfile.TemporaryDirectory(prefix='.stg-fixture-',dir=self.p.state) as temporary:
+            live=Path(temporary)/'live';live.mkdir(mode=0o700)
+            self.run([self.binary(),'admin','stg-fixture','--data-dir',live,'--installation-id',self.p.identity(),'--confirm'],timeout=300)
+            # Use the established archive/verify/restore pipeline and journal.
+            result=json.loads(self.run([self.binary(),'admin','backup','create','--data-dir',live,'--backup-dir',self.p.backups,
+                '--installation-id',self.p.identity(),'--reason','manual'],timeout=300).stdout)
+        source=self.archive(result['manifest']['backup_id'])
+        return self.restore(source.parent,request)
     def config(self):
         raw=read(self.p.config,16384).decode(); env={'PATH':'/usr/sbin:/usr/bin:/sbin:/bin'}
         for line in raw.splitlines():
@@ -54,6 +220,7 @@ class Admin:
         if action=='stop':
             self.system('stop',self.p.unit);require(self.service_state()=='stopped','Service did not stop');return
         require(action=='start','Unknown controller action')
+        if self.p.instance=='acceptance' and (self.p.global_state/'stg-enabled.json').exists():self.stg_capable(self.p.release())
         self.startup_guard()
         self.run(['/usr/bin/systemd-analyze','verify',self.p.at('/etc/systemd/system')/self.p.unit],timeout=90)
         self.system('start',self.p.unit)
@@ -89,7 +256,10 @@ class Admin:
         found=[self.p.backups/c/ident/'backup.tar.gz' for c in ('daily','pre-update','manual') if (self.p.backups/c/ident/'receipt.json').exists()]
         require(len(found)==1,'Backup ID not unique or absent');regular(found[0]);return found[0]
     def schedule(self):
-        for instance in ('production','acceptance'):
+        # STG operations must not even rewrite PROD backup schedule metadata.
+        # The existing production schedule timer still observes both instances.
+        instances=('acceptance',) if self.p.instance=='acceptance' else ('production','acceptance')
+        for instance in instances:
             p=Paths(instance,self.p.root)
             if not p.config.exists() or not (p.backups/'repository.json').exists():continue
             a=Admin(p,self.run); timer='simple-budget-backup@'+instance+'.timer'
@@ -131,8 +301,10 @@ class Admin:
             require(record.get('state')=='revoked' and record.get('fingerprint')==intent['fingerprint'],'Incomplete device revocation blocks Caddy startup')
         return caddy_policy.validate(load(self.p.at('/etc/caddy/simple-budget.json')),expected,True)
     def proxy(self, mode):
+        if self.p.instance=='acceptance':
+            return self.stg_gate(mode)
         reg,expected=self.registry();base=load(self.p.global_state/'caddy-base.json')
-        config=caddy_policy.render(base,expected,mode,self.p.port)
+        config=(caddy_policy.render_dual(base,expected,mode) if (self.p.global_state/'stg-enabled.json').exists() else caddy_policy.render(base,expected,mode,self.p.port))
         p=self.p.at('/etc/caddy/simple-budget.json');candidate=p.with_suffix('.candidate.json')
         atomic(candidate,config,0o640);os.chown(candidate,0,grp.getgrnam('caddy').gr_gid) if self.p.root==Path('/') else None
         self.run(['/usr/bin/caddy','validate','--config',candidate],timeout=30)
@@ -192,11 +364,14 @@ class Admin:
             if stage.exists():shutil.rmtree(stage)
         return target,m
     def save_journal(self,j,phase):
+        stages={'backup':'Создание защищённой резервной копии','candidate':'Проверка совместимости релиза и копии','migrating':'Подготовка данных обновления','trial':'Запуск и проверка готовности'}
+        if getattr(self,'progress',False) and phase in stages:print(stages[phase],file=sys.stderr,flush=True)
         j['phase']=phase;j['updated_at']=utc();atomic(self.p.journal,j)
     def prepare(self, incoming, request):
         require(not self.p.journal.exists(),'Recover unfinished deployment before another operation')
         require(request['installation_id']==self.p.identity(),'Wrong installation ID')
         new,m=self.install_release(incoming);old=self.p.release()
+        if self.p.instance=='acceptance':self.stg_capable(new)
         if new==old:
             self.ready();return {'result':'already_current','version':m}
         previous=str(self.p.release('previous')) if (self.p.opt/'previous').exists() else None
@@ -238,8 +413,10 @@ class Admin:
     def finish_commit(self,j):
         atomic(self.p.state/'last-deployment.json',j)
         if j['old']!=j['new'] and j.get('backup_id'):atomic(self.p.state/'rollback-pair.json',j)
-        self.system('enable',self.p.unit,'simple-budget-backup@'+self.p.instance+'.timer')
-        self.system('start','simple-budget-backup@'+self.p.instance+'.timer')
+        if self.p.instance=='acceptance':self.stg_disable_autostart()
+        else:
+            self.system('enable',self.p.unit,'simple-budget-backup@'+self.p.instance+'.timer')
+            self.system('start','simple-budget-backup@'+self.p.instance+'.timer')
         self.schedule();self.prune_releases()
         if j.get('archive'):
             source=Path(j['archive'])
@@ -290,8 +467,9 @@ class Admin:
             require(j['phase'] in ('trial','rollback-trial'),'Incomplete data preparation; use explicit rollback')
             self.controller('start',self.p.identity());self.proxy('trial')
             return {'result':'awaiting_https_acceptance','request_id':j['id'],'version':j['version']}
-        self.proxy('closed');self.system('stop',self.p.unit)
         old=Path(j['old']);require(old.parent==self.p.opt/'releases','Invalid old release path')
+        if self.p.instance=='acceptance':self.stg_capable(old)
+        self.proxy('closed');self.system('stop',self.p.unit)
         op=self.p.backups/'operation.json'
         if op.exists():self.backup_command('recover','--data-dir',self.p.live,'--decision','rollback','--confirm',binary=old/'budget')
         if j.get('backup_id'):
@@ -343,7 +521,9 @@ class Admin:
         require(last.get('backup_id') and Path(last['old'])==self.p.release('previous'),'No retained compatible rollback pair')
         # This is an explicitly requested restoration, never an automatic post-commit rollback.
         require(not self.p.journal.exists(),'Recover unfinished operation first')
-        old=self.p.release('previous');target=self.archive(last['backup_id']);self.preflight_restore(old,target)
+        old=self.p.release('previous')
+        if self.p.instance=='acceptance':self.stg_capable(old)
+        target=self.archive(last['backup_id']);self.preflight_restore(old,target)
         j={'format':1,'id':request['request_id'],'installation_id':self.p.identity(),'old':str(self.p.release()),'new':str(old),'version':self.manifest(old),'backup_id':None,'kind':'explicit-rollback'}
         self.save_journal(j,'closing');self.proxy('closed');self.controller('stop',self.p.identity())
         j['backup_id']=self.backup('pre-update',True,False)['manifest']['backup_id'];self.save_journal(j,'restoring')
@@ -374,7 +554,7 @@ class Admin:
             atomic(credential,(password+'\n').encode());del password
         require(credential.stat().st_mode&0o077==0,'Unsafe credential permissions')
         identity={'instance':self.p.instance,'installation_id':request['installation_id'],'synthetic':self.p.instance=='acceptance'}
-        env={'BUDGET_ENV':'production','BUDGET_ADDR':'127.0.0.1:'+str(self.p.port),'BUDGET_PUBLIC_ORIGIN':'https://'+IP,'BUDGET_ALLOWED_HOSTS':IP,'BUDGET_PROXY_MODE':'loopback-https','BUDGET_MIGRATIONS':'check-only','TZ':'Europe/Moscow','BUDGET_INSTALLATION_ID':identity['installation_id'],'BUDGET_DATA_DIR':str(self.p.live),'BUDGET_BACKUP_DIR':str(self.p.backups),'GOMEMLIMIT':'256MiB','GOMAXPROCS':'1'}
+        env={'BUDGET_ENV':'production','BUDGET_ADDR':'127.0.0.1:'+str(self.p.port),'BUDGET_INSTANCE':self.p.instance,'BUDGET_PUBLIC_ORIGIN':'https://'+IP+(':8443' if self.p.instance=='acceptance' else ''),'BUDGET_ALLOWED_HOSTS':IP+(':8443' if self.p.instance=='acceptance' else ''),'BUDGET_PROXY_MODE':'loopback-https','BUDGET_MIGRATIONS':'check-only','TZ':'Europe/Moscow','BUDGET_INSTALLATION_ID':identity['installation_id'],'BUDGET_DATA_DIR':str(self.p.live),'BUDGET_BACKUP_DIR':str(self.p.backups),'GOMEMLIMIT':'256MiB','GOMAXPROCS':'1'}
         j={'format':1,'id':request['request_id'],'installation_id':identity['installation_id'],'old':str(release),'new':str(release),'version':m,'backup_id':None,'kind':'initialize','identity':identity,'configuration':env}
         if saved:j.update(archive=str(saved),archive_sha256=sha(saved))
         # Write recovery intent before any installation marker or live data is created.
@@ -443,20 +623,27 @@ class Admin:
                 counts['certificate_events'].append({'message':event['msg'],'timestamp':event.get('ts')})
         return counts
     def status(self):
-        d={'instance':self.p.instance,'ubuntu':read_os_release(self.p.root,owner=0 if self.p.root==Path('/') else os.getuid()).decode(),'uptime_seconds':read(self.p.at('/proc/uptime'),1024).decode().split()[0],'reboot_required':self.p.at('/var/run/reboot-required').exists(),'deployment_journal':self.p.journal.exists(),'restore_journal':(self.p.state/'.live.restore.json').exists(),'caddy_active':self.system('is-active','caddy.service',check=False).returncode==0}
+        d={'instance':self.p.instance,'observed_at':utc(),'ubuntu':read_os_release(self.p.root,owner=0 if self.p.root==Path('/') else os.getuid()).decode(),'uptime_seconds':read(self.p.at('/proc/uptime'),1024).decode().split()[0],'reboot_required':self.p.at('/var/run/reboot-required').exists(),'deployment_journal':self.p.journal.exists(),'restore_journal':(self.p.state/'.live.restore.json').exists(),'caddy_active':self.system('is-active','caddy.service',check=False).returncode==0}
         d['resources']={'memory':read(self.p.at('/proc/meminfo'),16384).decode(),'load':read(self.p.at('/proc/loadavg'),1024).decode()}
         st=os.statvfs(self.p.state);d['disk']={'free_bytes':st.f_bavail*st.f_frsize,'total_bytes':st.f_blocks*st.f_frsize,'free_inodes':st.f_favail}
         def observe(key,callback):
             try:d[key]=callback()
             except (Refused,OSError,ValueError,KeyError):d[key]={'status':'unavailable','error':'Check the service/configuration or pending operation; observation failed'}
+        observe('caddy_resources',lambda:dict(line.split('=',1) for line in self.system('show','caddy.service',
+            '--property=MainPID,MemoryCurrent,MemoryPeak,CPUUsageNSec,TasksCurrent').stdout.decode().splitlines() if '=' in line))
         if self.p.config.exists():
             d['installation_id']=self.p.identity()
             observe('service',self.service_state);observe('release',lambda:self.manifest(self.p.release()))
+            observe('service_resources',lambda:dict(line.split('=',1) for line in self.system('show',self.p.unit,
+                '--property=LoadState,ActiveState,SubState,Result,ExecMainCode,ExecMainStatus,NRestarts,MainPID,MemoryCurrent,MemoryPeak,CPUUsageNSec,TasksCurrent,MemoryMax,CPUWeight,Nice,UnitFileState').stdout.decode().splitlines() if '=' in line))
+            if self.p.instance=='acceptance':observe('staging_isolation',self.staging_isolation)
             observe('backup',lambda:self.backup_command('status'));observe('background_events',lambda:self.events(self.p.unit))
             d['sqlite_bytes']={n:(self.p.live/n).stat().st_size for n in ('planner.db','planner.db-wal') if (self.p.live/n).exists()}
             d['backup_counts']={c:len(list((self.p.backups/c).iterdir())) if (self.p.backups/c).exists() else 0 for c in ('daily','pre-update','manual','pins')}
         observe('clients',self.client_list);observe('tls',self.tls_status)
         d['backup_operation_pending']=(self.p.backups/'operation.json').exists()
+        enabled=self.p.global_state/'stg-enabled.json'
+        d['stg_setup_state']=load(enabled).get('state','unknown') if enabled.exists() else 'not_enabled'
         d['revocation_pending']=(self.p.global_state/'revocation-pending.json').exists()
         if self.p.journal.exists():
             journal=load(self.p.journal);d['deployment']={k:journal.get(k) for k in ('id','kind','phase','updated_at')}
@@ -464,7 +651,33 @@ class Admin:
         if (self.p.global_state/'proxy.json').exists():
             d['proxy']=load(self.p.global_state/'proxy.json')
             d['proxy']['configuration_matches']=d['proxy'].get('config_sha256')==sha(self.p.at('/etc/caddy/simple-budget.json'))
+        if self.p.instance=='acceptance' and (self.p.state/'proxy.json').exists():
+            d['proxy']={**load(self.p.state/'proxy.json'),'configuration_matches':d.get('proxy',{}).get('configuration_matches',False)}
         return d
+    def staging_isolation(self):
+        """Read-only OS checks through the same administrator, no private content."""
+        require(self.p.instance=='acceptance','STG check only')
+        prod=Paths('production',self.p.root)
+        checks={}
+        uid=pwd.getpwnam(self.p.user).pw_uid
+        require(uid!=0 and uid!=pwd.getpwnam(prod.user).pw_uid,'Distinct unprivileged STG user required')
+        probe=self.run(['/usr/sbin/runuser','-u',self.p.user,'--','/usr/bin/id','-u'],check=False)
+        require(probe.returncode==0 and probe.stdout.strip()==str(uid).encode(),'Cannot establish STG access probe identity')
+        for label,target in (('data',prod.state),('credentials',prod.etc),('runtime_credentials',prod.at('/run/credentials/'+prod.unit)),('backups',prod.backups)):
+            # runuser initializes the real supplementary groups. Check directory
+            # traversal as well as read/write access; no files are opened.
+            checks[label+'_inaccessible']=all(self.run(['/usr/sbin/runuser','-u',self.p.user,'--','/usr/bin/test',flag,target],check=False).returncode==1 for flag in ('-r','-w','-x'))
+        checks['autostart_disabled']=self.system('is-enabled',self.p.unit,check=False).stdout.strip()==b'disabled'
+        timer='simple-budget-backup@acceptance.timer'
+        checks['daily_disabled']=self.system('is-enabled',timer,check=False).stdout.strip()==b'disabled' and self.system('is-active',timer,check=False).stdout.strip()==b'inactive'
+        raw=self.system('show',self.p.unit,'--property=MemoryHigh,MemoryMax,MemorySwapMax,CPUWeight,Nice,User,Group,InaccessiblePaths').stdout.decode()
+        properties=dict(line.split('=',1) for line in raw.splitlines() if '=' in line)
+        checks['limits_configured']=all(properties.get(k)==v for k,v in {
+            'MemoryHigh':str(128<<20),'MemoryMax':str(192<<20),'MemorySwapMax':str(64<<20),
+            'CPUWeight':'20','Nice':'10','User':self.p.user,'Group':self.p.user}.items())
+        hidden={p.lstrip('-') for p in properties.get('InaccessiblePaths','').split()}
+        checks['systemd_prod_paths_hidden']={'/etc/simple-budget','/var/lib/simple-budget','/var/backups/simple-budget'}<=hidden
+        return {'passed':all(checks.values()),**checks}
     def client_list(self):
         reg=load(self.p.global_state/'clients.json');out=[]
         pending=load(self.p.global_state/'revocation-pending.json') if (self.p.global_state/'revocation-pending.json').exists() else {}
@@ -503,7 +716,7 @@ class Admin:
         if revoke:intent_path.unlink();sync_dir(self.p.global_state)
         return {'device':name,**reg['clients'][name],'connections_terminated':revoke,'resumption':'disabled; verify with device probe'}
 
-REQUEST_ACTIONS={'prepare','commit','initialize','restore','rollback','recover','client-add','client-revoke','fetch-backup','cleanup'}
+REQUEST_ACTIONS={'stg-reset','stg-setup','stg-start','stg-stop','promote','prepare','commit','initialize','restore','rollback','recover','client-add','client-revoke','fetch-backup','cleanup'}
 READ_ACTIONS={'access-stop','clean-incoming','status','logs','backup','daily','schedule','tls-status','client-list','startup-guard','proxy-guard','pki-export','secure-page'}
 
 def request_for(token,action,instance):
@@ -512,8 +725,9 @@ def request_for(token,action,instance):
     uid=pwd.getpwnam(ADMIN).pw_uid
     require(incoming.is_dir() and not incoming.is_symlink() and incoming.stat().st_uid==uid and incoming.stat().st_mode&0o077==0,'Unsafe incoming directory')
     request=load(incoming/'request.json',16384,uid)
-    allowed={'action','instance','request_id','installation_id','confirm','empty_installation','https_verified_revision','decision','scope','allow_corrupt_live','device','fingerprint','backup_id','kind','name','operation_id','operation'}
+    allowed={'action','instance','request_id','installation_id','confirm','empty_installation','https_verified_revision','decision','scope','allow_corrupt_live','device','fingerprint','backup_id','kind','name','operation_id','operation','release_sha256','quiet'}
     require(set(request)<=allowed and request.get('action')==action and request.get('instance')==instance and request.get('request_id')==token,'Request operation mismatch')
+    require('quiet' not in request or type(request['quiet']) is bool,'Invalid output option')
     return incoming,request
 
 def controller_main():
@@ -531,8 +745,10 @@ def controller_main():
 
 def main():
     try:
+        if sys.argv[1:]==['overview']:
+            print(json.dumps(overview()));return
         if sys.argv[1:]==['session-protocol']:
-            print('1');return
+            print('2');return
         if len(sys.argv)==4 and sys.argv[1]=='session':
             require(os.geteuid()==0 and platform.system()=='Linux','Session requires Linux root')
             from admin_session import serve
@@ -547,8 +763,13 @@ def main():
         if action in REQUEST_ACTIONS or len(sys.argv)==4:
             require(len(sys.argv)==4,'Request token required');incoming,request=request_for(sys.argv[3],action,instance)
         else:require(len(sys.argv)==3,'Unexpected arguments')
+        a.progress=bool(request and request.get('quiet'))
         with lock(p.global_state/'operations.lock'):
-            if action=='prepare':result=a.prepare(incoming,request)
+            if action=='stg-setup':result=a.stg_setup(request)
+            elif action=='stg-reset':result=a.stg_reset(request)
+            elif action in ('stg-start','stg-stop'):result=a.stg_switch(request,action=='stg-start')
+            elif action=='promote':result=a.promote(request)
+            elif action=='prepare':result=a.prepare(incoming,request)
             elif action=='commit':result=a.commit(request)
             elif action=='initialize':result=a.initialize(incoming,request)
             elif action=='restore':result=a.restore(incoming,request)
@@ -556,6 +777,7 @@ def main():
             elif action=='recover':result=a.recover(request)
             elif action in ('backup','daily'):
                 require(not p.journal.exists(),'Deployment unfinished')
+                require(not (action=='daily' and instance=='acceptance'),'STG daily backups disabled')
                 result=a.backup('daily' if action=='daily' else 'manual');a.schedule()
             elif action=='schedule':a.schedule();result={'result':'observed'}
             elif action=='status':result=a.status()
@@ -584,7 +806,7 @@ def main():
         if incoming is not None:
             atomic(incoming/'result.json',result)
             os.chown(incoming/'result.json',pwd.getpwnam(ADMIN).pw_uid,pwd.getpwnam(ADMIN).pw_gid)
-        print(json.dumps(result,ensure_ascii=False))
+        if not request or not request.get('quiet'):print(json.dumps(result,ensure_ascii=False))
         if action=='tls-status' and result['status']!='ok':sys.exit(2)
     except (Refused,OSError,ValueError,KeyError,TypeError) as e:
         # Do not print subprocess stderr, credentials, request bodies or stack locals.
@@ -610,5 +832,20 @@ def cleanup(a,request):
     with lock(target/'planner.db.lock'):
         shutil.rmtree(target);sync_dir(p.state)
     return {'result':'previous_data_removed','name':name}
+
+def overview(root='/',run=None):
+    """Unprivileged fixed read-only summary; no credentials, data or sudo."""
+    run=run or Runner();out={}
+    for instance in ('production','acceptance'):
+        a=Admin(Paths(instance,root),run);item={'service':'unknown','revision':None}
+        try:
+            item['service']=a.service_state()
+        except (Refused,OSError,ValueError,KeyError):pass
+        try:
+            release=a.manifest(a.p.release())
+            item.update(revision=release['revision'],sha256=release['files'][0]['sha256'])
+        except (Refused,OSError,ValueError,KeyError):pass
+        out[instance]=item
+    return out
 
 if __name__=='__main__':main()

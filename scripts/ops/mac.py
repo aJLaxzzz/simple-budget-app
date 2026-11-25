@@ -17,6 +17,7 @@ from common import *
 import secret_store
 import local_backups
 import version_status
+import terminal_ui as ui
 
 ROOT=Path(__file__).resolve().parents[2]
 LOCAL=Path.home()/'.simple-budget-admin'
@@ -33,27 +34,38 @@ class Transport:
         require(config.get('stricthostkeychecking') not in ('false','no','off'),'SSH config must not disable host-key verification')
         self.ssh=['/usr/bin/ssh','-o','StrictHostKeyChecking=yes','-o','ConnectTimeout=15','-o','ServerAliveInterval=15','-o','ServerAliveCountMax=3']
         self.scp=['/usr/bin/scp','-o','StrictHostKeyChecking=yes','-o','ConnectTimeout=15']
+        if not ui.verbose():
+            self.ssh+=['-o','LogLevel=ERROR'];self.scp+=['-q']
     def close(self):
         if self.session:self.session.close()
     def command(self,args,tty=False):
         return subprocess.run([*self.ssh,*(['-t'] if tty else []),'budget',shlex.join([str(x) for x in args])],check=True)
     def upload(self,path,token,name):
         require(ID.fullmatch(token) and re.fullmatch('[a-zA-Z0-9_.-]+',name),'Unsafe transfer name')
-        subprocess.run([*self.scp,str(path),'budget:.simple-budget-incoming/'+token+'/'+name],check=True)
+        scp=self.scp
+        if name in ('budget','backup.tar.gz'):
+            ui.stage('Загрузка обновления' if name=='budget' else 'Загрузка проверенного архива')
+            if ui.interactive() and os.environ.get('OUTPUT')!='json':scp=[x for x in scp if x!='-q']
+        subprocess.run([*scp,str(path),'budget:.simple-budget-incoming/'+token+'/'+name],check=True)
     def download(self,token,name,target):
         require(ID.fullmatch(token) and re.fullmatch('[a-zA-Z0-9_.-]+',name),'Unsafe transfer name')
         require(not Path(target).exists(),'Refusing overwrite of local file')
-        subprocess.run([*self.scp,'budget:.simple-budget-incoming/'+token+'/'+name,str(target)],check=True)
+        scp=self.scp
+        if name.endswith('.tar.gz') and ui.interactive() and os.environ.get('OUTPUT')!='json':scp=[x for x in scp if x!='-q']
+        subprocess.run([*scp,'budget:.simple-budget-incoming/'+token+'/'+name,str(target)],check=True)
         os.chmod(target,0o600)
     def request(self,action,instance,fields=None,files=None,token=None):
         token=token or uuid.uuid4().hex
         require(ID.fullmatch(token),'Invalid operation token')
         # Fixed user-level directory commands; no remote root shell or arbitrary root path.
         self.command(['mkdir','-p','-m','700','.simple-budget-incoming/'+token])
-        req={'action':action,'instance':instance,'request_id':token,**(fields or {})}
+        req={'action':action,'instance':instance,'request_id':token,'quiet':not ui.verbose(),**(fields or {})}
         with tempfile.TemporaryDirectory(prefix='budget-ops-') as tmp:
             f=Path(tmp)/'request.json';atomic(f,req);self.upload(f,token,'request.json')
             for name,path in (files or {}).items():self.upload(path,token,name)
+            if action!='clean-incoming':ui.stage(ui.STAGES.get(action,'Операция: '+action))
+            elif ui.verbose():ui.stage('Очистка служебных файлов')
+            else:ui.LAST_STAGE='Очистка служебных файлов'
             if action=='repair-initialization':
                 require(instance=='acceptance','Repair is synthetic-only')
                 self.command(['sudo','/usr/bin/python3','-I','/home/budgetadmin/.simple-budget-incoming/'+token+'/repair.py',token],tty=True)
@@ -76,7 +88,9 @@ def clean_tree():
             'Production requires a clean committed tree. Commit/push is never automatic.')
 
 def release():
+    ui.stage('Проверка версии и чистоты рабочего дерева')
     clean_tree()
+    ui.stage('Сборка Linux-релиза')
     p=subprocess.run(['/bin/bash',str(ROOT/'scripts/build-linux.sh')],cwd=ROOT,check=True,stdout=subprocess.PIPE,text=True)
     print(p.stdout,end='');line=next(x for x in p.stdout.splitlines() if x.startswith('Linux release: '))
     path=ROOT/line.split(': ',1)[1];m=load(path/'release.json');require(m['modified'] is False,'Dirty release refused')
@@ -109,15 +123,19 @@ def client_context(device='mac-1'):
 def app_connection(device='mac-1', password=None):
     return client_context(device),password or secret_store.password('app','Пароль приложения: ')
 
-def https_accept(expected,device):
+def https_accept(expected,device,instance='production'):
+    ui.stage('Проверка HTTPS и готовности приложения')
     context,password=app_connection(device)
     try:
         for attempt in range(1,4):
             # Retry only the read-only proof, never the administrative operation.
             # Reuse the unlocked TLS context; each HTTP connection is closed.
-            c=http.client.HTTPSConnection(IP,443,context=context,timeout=30)
+            require(instance in ('production','acceptance'),'Invalid HTTPS target')
+            port=8443 if instance=='acceptance' else 443
+            origin='https://'+IP+(':8443' if port==8443 else '')
+            c=http.client.HTTPSConnection(IP,port,context=context,timeout=30)
             try:
-                c.request('GET','/api/ready',headers={'X-Budget-Admin':'1','Authorization':'Basic '+base64.b64encode(('budget:'+password).encode()).decode(),'Origin':'https://'+IP})
+                c.request('GET','/api/ready',headers={'X-Budget-Admin':'1','Authorization':'Basic '+base64.b64encode(('budget:'+password).encode()).decode(),'Origin':origin})
                 r=c.getresponse()
                 if r.status==200:
                     data=json.loads(r.read(16384))
@@ -146,9 +164,9 @@ def acceptance(t,instance,device):
     context,password=app_connection(device)
     auth='Basic '+base64.b64encode(('budget:'+password).encode()).decode()
     def request(method,path,body=None,headers=None,ctx=context):
-        c=http.client.HTTPSConnection(IP,443,context=ctx,timeout=30)
+        c=http.client.HTTPSConnection(IP,8443,context=ctx,timeout=30)
         try:
-            h={'Host':IP,'X-Budget-Admin':'1','Authorization':auth,'Origin':'https://'+IP,'Content-Type':'application/json'};h.update(headers or {})
+            h={'Host':IP+':8443','X-Budget-Admin':'1','Authorization':auth,'Origin':'https://'+IP+':8443','Content-Type':'application/json'};h.update(headers or {})
             c.request(method,path,json.dumps(body).encode() if body is not None else None,h)
             r=c.getresponse();data=r.read(2<<20);return r.status,data
         finally:c.close()
@@ -190,10 +208,10 @@ def download_verified_backup(context,auth,ident,installation_id):
     destination=LOCAL/('acceptance-'+ident+'.tar.gz')
     partial=destination.with_suffix(destination.suffix+'.partial')
     require(not destination.exists() and not partial.exists(),'Download file already exists; verify it before retrying')
-    c=http.client.HTTPSConnection(IP,443,context=context,timeout=90)
+    c=http.client.HTTPSConnection(IP,8443,context=context,timeout=90)
     created=False
     try:
-        c.request('GET','/api/backups/'+ident+'/full',headers={'X-Budget-Admin':'1','Authorization':auth,'Host':IP})
+        c.request('GET','/api/backups/'+ident+'/full',headers={'X-Budget-Admin':'1','Authorization':auth,'Host':IP+':8443'})
         response=c.getresponse();require_download_response(response)
         with open(partial,'xb') as f:
             created=True;os.chmod(partial,0o600)
@@ -300,8 +318,14 @@ def _main(argv=None):
     if action=='release-linux':release();return
     if action in ('client-issue','client-renew','pki-backup'):
         import pki; pki.execute(action,args.device,args.name);return
+    ui.stage('Подключение к серверу') if action!='overview' else None
     t=Transport();t.operation=action;t.instance=args.instance
-    if (os.environ.get('SUDO_MODE') or 'legacy')=='session' and action not in ('server-install','repair-initialization'):
+    if action=='overview':
+        p=subprocess.run([*t.ssh,'budget','/usr/local/sbin/budget-admin overview'],capture_output=True,text=True,timeout=25)
+        if p.returncode and p.stderr:print(p.stderr.strip(),file=sys.stderr)
+        require(p.returncode==0,'Не удалось получить состояния окружений по SSH (exit '+str(p.returncode)+')')
+        print(json.dumps(json.loads(p.stdout)));return
+    if action not in ('server-install','repair-initialization'):
         from session_transport import check_protocol
         check_protocol(t) # before creating a pending operation or uploading any mutation request
     if action=='acceptance-http':
@@ -317,9 +341,25 @@ def _main(argv=None):
     state=load(statefile) if statefile.exists() else {}
     pending_file=LOCAL/('pending-'+args.instance+'.json')
     pending=load(pending_file) if pending_file.exists() else {}
-    if pending and action in ('deploy','initialize','migrate-data','restore','rollback'):
+    if pending and action in ('stg-setup','stg-start','stg-stop','deploy','promote','stg-reset','initialize','migrate-data','restore','rollback'):
         raise Refused('Reconcile the previous operation with status and recover before another change')
     fields={};files={};token=None;probe=None
+    if action in ('stg-setup','stg-start','stg-stop','stg-reset'):
+        require(args.instance=='acceptance','Выберите STG: INSTANCE=acceptance')
+        if action=='stg-setup':
+            require(args.decision in (None,'','finish','rollback'),'DECISION должен быть finish или rollback')
+            confirm(('Восстановить прежнюю конфигурацию Caddy и остановить STG' if args.decision=='rollback' else 'Настроить STG :8443 (Caddy и firewall)')+', ID '+str(state.get('installation_id'))+'? PROD останется на :443.')
+        if action=='stg-reset':confirm('Сбросить все синтетические данные STG? ID '+str(state.get('installation_id'))+'. Будет создан новый демонстрационный набор; PROD не меняется.')
+        fields={'installation_id':state.get('installation_id'),'confirm':True}
+        if action=='stg-setup':fields['decision']=args.decision or 'finish'
+    if action=='promote':
+        require(args.instance=='production','Продвижение допускается только в PROD')
+        p=subprocess.run([*t.ssh,'budget','/usr/local/sbin/budget-admin overview'],capture_output=True,text=True,timeout=25)
+        require(p.returncode==0,'Не удалось прочитать релиз STG')
+        stg=json.loads(p.stdout)['acceptance'];digest=stg.get('sha256','')
+        require(stg.get('service')=='running' and SHA.fullmatch(digest),'STG должен работать с проверенным релизом')
+        confirm('Установить в PROD ровно релиз STG '+str(stg.get('revision'))+' SHA-256 '+digest+'? ID '+str(state.get('installation_id'))+'. Подтвердите завершённую проверку STG.')
+        fields={'installation_id':state.get('installation_id'),'confirm':True,'release_sha256':digest}
     if action=='repair-initialization':
         require(args.instance=='acceptance' and pending.get('action')=='initialize' and pending.get('installation_id')==state.get('installation_id'),'Repair requires a pending synthetic initialization')
         confirm('Исправить release незавершённой acceptance-установки? Данные и пароль сохранятся.')
@@ -371,11 +411,11 @@ def _main(argv=None):
         if not args.backup_id:
             status,_=t.request('status',args.instance);args.backup_id=status['backup']['latest']['manifest']['backup_id']
         fields={'backup_id':args.backup_id}
-    require(action in {'repair-initialization','initialize','prepare','restore','rollback','recover','cleanup','client-add','client-revoke','fetch-backup','status','logs','backup','tls-status','client-list','pki-export','secure-page'},'Unknown action')
+    require(action in {'stg-reset','stg-setup','stg-start','stg-stop','promote','repair-initialization','initialize','prepare','restore','rollback','recover','cleanup','client-add','client-revoke','fetch-backup','status','logs','backup','tls-status','client-list','pki-export','secure-page'},'Unknown action')
     if state.get('installation_id'):fields['installation_id']=state['installation_id']
     token=uuid.uuid4().hex
     # Save token before SSH. Lost reply is reconciled, never blindly replayed.
-    stateful=action in ('initialize','prepare','restore','rollback','recover')
+    stateful=action in ('initialize','prepare','promote','stg-reset','restore','rollback','recover')
     if stateful and action!='recover':atomic(pending_file,{'action':action,'instance':args.instance,'request_id':token,'installation_id':state.get('installation_id')})
     try:result,token=t.request(action,args.instance,fields,files,token)
     except BaseException:
@@ -392,7 +432,7 @@ def _main(argv=None):
             t.request('access-stop',args.instance);raise
         result['device_probe']='old connection closed; new/resumption handshake rejected'
     if isinstance(result,dict) and result.get('result')=='awaiting_https_acceptance':
-        rev=https_accept(result['version'],args.device)
+        rev=https_accept(result['version'],args.device,args.instance)
         result,_=t.request('commit',args.instance,{'installation_id':state['installation_id'],'https_verified_revision':rev},token=result['request_id'])
     if action=='fetch-backup':
         dest=local_backups.archive_destination(args.instance,args.backup_id)
@@ -414,23 +454,36 @@ def _main(argv=None):
 def show_result(action,result,instance):
     if action=='status':
         result=dict(result,version_comparison=version_status.inspect(ROOT,result.get('release') or {}))
-    if os.environ.get('OUTPUT')=='json' or action in ('client-list','pki-export','logs'):
+    if os.environ.get('OUTPUT')=='json' or ui.verbose() or action in ('pki-export','logs'):
         print(json.dumps(result,ensure_ascii=False,indent=2));return
-    print('Сервер '+IP+' / '+instance)
+    print('Сервер '+IP+' / '+('PROD' if instance=='production' else 'STG'))
     if action=='status':
         print('Приложение: '+str(result.get('service','не инициализировано'))+'; Caddy: '+str(result.get('caddy_active')))
         version_status.display(result['version_comparison'],result.get('release') or {})
         print('Installation ID: '+str(result.get('installation_id','—')))
+        if instance=='acceptance' and 'staging_isolation' in result:
+            print('Изоляция STG: '+('проверена' if result['staging_isolation'].get('passed') is True else 'НЕ ПОДТВЕРЖДЕНА — проверьте OUTPUT=json'))
         backup=result.get('backup',{});latest=backup.get('latest') or {};manifest=latest.get('manifest',{})
         print('Последняя копия: '+str(manifest.get('backup_id','нет'))+'; автоматизация: '+str(backup.get('automatic','неизвестно'))+'; следующий запуск: '+str(backup.get('next_at','—')))
         if any(result.get(k) for k in ('deployment_journal','restore_journal','backup_operation_pending','revocation_pending')):
             print('Есть незавершённая операция. Проверьте OUTPUT=json и используйте штатный recover; не повторяйте изменение.')
+        if result.get('stg_setup_state') in ('preparing','recovering'):
+            print('Настройка STG прервана. Выполните stg-setup INSTANCE=acceptance DECISION=rollback перед повторной настройкой.')
         print('Свободно на диске: '+str(result.get('disk',{}).get('free_bytes','—'))+' байт; TLS: '+str(result.get('tls',{}).get('status','—')))
+    elif action=='client-list':
+        for item in result:
+            state={'allowed':'доступ разрешён','revoked':'отозвано'}.get(item.get('state'),'неизвестно')
+            print(str(item.get('device','—'))+' — '+state+'; до '+str(item.get('not_after','—')))
     elif action=='backup':
         print('Проверенная копия: '+str(result.get('manifest',{}).get('backup_id','—'))+'; размер: '+str(result.get('size','—')))
     elif action=='tls-status':
         print(json.dumps(result,ensure_ascii=False,indent=2))
-    else:print('Результат: '+str(result.get('result',result.get('state','выполнено'))))
+    else:
+        code=result.get('result',result.get('state','выполнено'))
+        labels={'stg_started':'STG запущен; автозапуск выключен','stg_stopped':'STG остановлен; release и данные сохранены','stg_configured_stopped':'STG настроен и остановлен; установите совместимый release','committed':'обновление подтверждено','already_current':'установлен этот же релиз'}
+        print('Результат: '+str(labels.get(code,code)))
+        if code=='stg_setup_rolled_back':
+            print('Прежняя конфигурация Caddy восстановлена; STG остановлен. Данные и PROD-сервис не изменены. Правило firewall 8443 сохранено, listener отсутствует.')
 
 def local_binary():
     # Isolated administrative helper. Never replaces the user's ./budget.
@@ -462,4 +515,7 @@ if __name__=='__main__':
     except (KeyboardInterrupt,EOFError):
         print('Операция отменена. Если началось изменение сервера, выполните status/recover.',file=sys.stderr);sys.exit(130)
     except (Refused,OSError,ValueError,KeyError,subprocess.CalledProcessError) as e:
-        print('Operation stopped: '+str(e),file=sys.stderr);sys.exit(1)
+        detail=str(e)
+        if isinstance(e,subprocess.CalledProcessError) and not ui.verbose():
+            detail=Path(e.cmd[0]).name+': код завершения '+str(e.returncode)+'. Диагностика команды показана выше.'
+        print('Ошибка. Этап: '+ui.LAST_STAGE+'. '+detail+'\nДля прерванного изменения: status, затем recover. Подробности: VERBOSE=1.',file=sys.stderr);sys.exit(1)

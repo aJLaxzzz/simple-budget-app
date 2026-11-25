@@ -36,8 +36,9 @@ test('month grid, December/January navigation, bounded single API and keyboard d
   page.on('request', req => { if (req.url().includes('/api/')) requests.push(new URL(req.url()).pathname + new URL(req.url()).search); });
   await open(page);
   await expect(page.locator('.pc-month-day')).toHaveCount(35);
-  // Protected image resources are assets; the calendar data still uses one bounded projection.
-  const dataRequests=requests.filter(path=>!/^\/api\/planner\/icons\/[^/]+\/image$/.test(path)&&!path.startsWith('/api/auth/')&&path!=='/api/events');
+  // Protected images and environment/auth metadata are not calendar data;
+  // the calendar still uses one bounded projection.
+  const dataRequests=requests.filter(path=>!/^\/api\/planner\/icons\/[^/]+\/image$/.test(path)&&!path.startsWith('/api/auth/')&&path!=='/api/events'&&path!=='/api/environment');
   expect(dataRequests.filter(path=>path!=='/api/planner/materialize')).toEqual(['/api/planner/attention?limit=1','/api/planner/calendar?from=2026-11-30&to=2027-01-03']);
   const pages=await Promise.all(batches);expect(pages.length).toBeGreaterThan(0);expect(pages.length).toBeLessThanOrEqual(100);
   for(const result of pages.slice(0,-1))expect(Boolean(result.pending||result.next_after_series_id)).toBeTruthy();

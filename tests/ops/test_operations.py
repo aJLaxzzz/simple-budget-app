@@ -111,6 +111,7 @@ class FakeAdmin(Admin):
         self.calls.append(name)
         if self.fail==name:raise Refused('injected '+name)
     def execute(self,args,**kw):self.hit('cli:'+('migrate' if 'migrate' in args else str(args[1])));return subprocess.CompletedProcess(args,0,b'{}',b'')
+    def stg_capable(self,release):pass
     def proxy(self,mode):self.hit('proxy:'+mode)
     def system(self,*args,**kw):self.hit('system:'+args[0]);return subprocess.CompletedProcess(args,0,b'',b'')
     def controller(self,action,ident):self.hit('controller:'+action);self.running=action=='start'
@@ -292,6 +293,10 @@ class InstallerTests(unittest.TestCase):
             unit=(root/'etc/systemd/system/simple-budget.service').read_text()
             self.assertIn('BUDGET', (root/'usr/local/lib/simple-budget/ops/remote.py').read_text())
             self.assertIn('/var/lib/simple-budget/live',unit);self.assertNotIn('simple-budget-production',unit)
+            staging=(root/'etc/systemd/system/simple-budget-acceptance.service').read_text()
+            for setting in ('MemoryHigh=128M','MemoryMax=192M','MemorySwapMax=64M','CPUWeight=20','Nice=10','-/etc/simple-budget -/var/lib/simple-budget -/var/backups/simple-budget'):
+                self.assertIn(setting,staging)
+            self.assertIn('MemoryMax=448M',unit);self.assertNotIn('Nice=10',unit)
             self.assertNotIn('NOPASSWD',''.join(x.read_text() for x in (root/'etc/systemd/system').iterdir() if x.is_file()))
     def test_client_revocation_records_first_and_failed_restart_stays_closed(self):
         with tempfile.TemporaryDirectory() as t:

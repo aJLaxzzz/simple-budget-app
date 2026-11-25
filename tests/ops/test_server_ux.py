@@ -151,7 +151,7 @@ class MenuTests(unittest.TestCase):
             self.assertEqual(menu.main(run=run),0)
         args,kw=run.call_args;self.assertEqual(args[0][-1],'status');self.assertEqual(kw['env']['INSTANCE'],'production');self.assertNotIn('ARCHIVE',kw['env'])
         self.assertEqual(kw['env']['SUDO_MODE'],'session')
-        self.assertIn('INSTANCE=production',output.getvalue());self.assertIn('SUDO_MODE=session',output.getvalue())
+        self.assertIn('Выбрано: PROD',output.getvalue());self.assertIn('SUDO_MODE=session',output.getvalue())
     def test_pending_no_automatic_mutation(self):
         with tempfile.TemporaryDirectory() as tmp,patch.object(Path,'home',return_value=Path(tmp)),patch('builtins.input',side_effect=['2','0']),contextlib.redirect_stdout(io.StringIO()):
             p=Path(tmp)/'.simple-budget-admin';p.mkdir();atomic(p/'pending-production.json',{})
@@ -187,7 +187,7 @@ class MenuTests(unittest.TestCase):
             self.assertEqual(menu.main(run=dispatch),0)
         transport.request.assert_not_called()
         self.assertTrue(any('ПОДТВЕРЖДАЮ' in call.args[0] for call in prompt.call_args_list))
-        self.assertIn('INSTANCE=production',output.getvalue());self.assertIn('ID '+'a'*32,output.getvalue())
+        self.assertIn('Выбрано: PROD',output.getvalue());self.assertIn('ID '+'a'*32,output.getvalue())
 
 class PKITests(unittest.TestCase):
     def fixture(self,p):
@@ -313,7 +313,7 @@ class PrivateTTYTests(unittest.TestCase):
         import pty
         t=Mock();t.ssh=['ssh'];s=st.Session(t,'status','acceptance','a'*32)
         process=Mock();process.poll.return_value=None
-        with patch.object(st.subprocess,'run',return_value=subprocess.CompletedProcess([],0,b'1\n',b'')),patch.object(st.subprocess,'Popen',return_value=process) as create,patch.object(sys.stdin,'isatty',return_value=True),patch.object(s,'wait'):
+        with patch.object(st.subprocess,'run',return_value=subprocess.CompletedProcess([],0,b'2\n',b'')),patch.object(st.subprocess,'Popen',return_value=process) as create,patch.object(sys.stdin,'isatty',return_value=True),patch.object(s,'wait'):
             s.start();kwargs=create.call_args.kwargs
             self.assertIsInstance(kwargs['stdin'],int);self.assertEqual(kwargs['stdin'],kwargs['stdout'])
             self.assertIsNotNone(s.master);s.close(abort=True)
@@ -324,9 +324,9 @@ class MakeCompatibility(unittest.TestCase):
         repo=Path(__file__).resolve().parents[2]
         with tempfile.TemporaryDirectory() as tmp:
             env=dict(os.environ,HOME=tmp,INSTANCE='production',AUTH='',SUDO_MODE='')
-            p=subprocess.run(['make','-s','server'],cwd=repo,env=env,input=b'0\n',stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=10)
+            p=subprocess.run(['make','-s','budget'],cwd=repo,env=env,input=b'0\n',stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=10)
             self.assertEqual(p.returncode,0,p.stderr)
-            self.assertIn(b'INSTANCE=production',p.stdout);self.assertIn(b'AUTH=manual; SUDO_MODE=session',p.stdout)
+            self.assertIn('Выбрано: PROD'.encode(),p.stdout);self.assertIn(b'AUTH=manual; SUDO_MODE=session',p.stdout)
     def test_make_menu_defaults_and_explicit_overrides(self):
         repo=Path(__file__).resolve().parents[2]
         cases=[([],{},'production','session'),
@@ -338,7 +338,7 @@ class MakeCompatibility(unittest.TestCase):
                 env.update(HOME=tmp,AUTH='manual',**extra)
                 p=subprocess.run(['make','--no-print-directory','-s','server',*args],cwd=repo,env=env,input=b'0\n',capture_output=True,timeout=10)
                 self.assertEqual(p.returncode,0,p.stderr)
-                self.assertIn(('INSTANCE='+instance).encode(),p.stdout)
+                self.assertIn(('Выбрано: '+('PROD' if instance=='production' else 'STG')).encode(),p.stdout)
                 self.assertIn(('SUDO_MODE='+sudo).encode(),p.stdout)
     def test_direct_mutation_make_defaults_remain_safe(self):
         repo=Path(__file__).resolve().parents[2]
@@ -354,11 +354,17 @@ class MakeCompatibility(unittest.TestCase):
 
 class SessionPreflight(unittest.TestCase):
     def test_protocol_failure_before_pending_or_release_upload(self):
-        with tempfile.TemporaryDirectory() as tmp,patch.object(mac,'LOCAL',Path(tmp)),patch.dict(os.environ,{'SUDO_MODE':'session','AUTH':'manual'}),patch.object(mac,'Transport',return_value=Mock()) as transport,patch.object(st,'check_protocol',side_effect=Refused('old wrapper')),patch.object(mac,'release') as release:
-            atomic(Path(tmp)/'acceptance.json',{'installation_id':'a'*32,'instance':'acceptance'})
-            with self.assertRaisesRegex(Refused,'old wrapper'):mac.main(['deploy'])
-            release.assert_not_called();transport.return_value.request.assert_not_called()
-            self.assertFalse((Path(tmp)/'pending-acceptance.json').exists())
+        for mode in ('session','legacy'):
+            with self.subTest(mode=mode),tempfile.TemporaryDirectory() as tmp,patch.object(mac,'LOCAL',Path(tmp)),patch.dict(os.environ,{'SUDO_MODE':mode,'AUTH':'manual'}),patch.object(mac,'Transport',return_value=Mock()) as transport,patch.object(st,'check_protocol',side_effect=Refused('old wrapper')),patch.object(mac,'release') as release:
+                atomic(Path(tmp)/'acceptance.json',{'installation_id':'a'*32,'instance':'acceptance'})
+                with self.assertRaisesRegex(Refused,'old wrapper'):mac.main(['deploy'])
+                release.assert_not_called();transport.return_value.request.assert_not_called()
+                self.assertFalse((Path(tmp)/'pending-acceptance.json').exists())
+    def test_v1_cannot_accept_new_request_contract(self):
+        transport=Mock();transport.ssh=['ssh']
+        with patch.object(st.subprocess,'run',return_value=subprocess.CompletedProcess([],0,b'1\n',b'')):
+            with self.assertRaisesRegex(Refused,'protocol v2 not installed'):st.check_protocol(transport)
+        self.assertIsNot(transport._session_protocol,True)
 
 class SecretPreflight(unittest.TestCase):
     def test_keychain_cancel_before_server_mutation(self):

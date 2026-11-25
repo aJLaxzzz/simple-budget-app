@@ -5,16 +5,18 @@ DEVICE ?= mac-1
 AUTH ?= manual
 SUDO_MODE ?= legacy
 SECRET ?= app
-export ENV INSTANCE ARCHIVE DEVICE BACKUP_ID DECISION LOCAL_DATA NAME ALLOW_CORRUPT_LIVE KIND AUTH SECRET PKI_ARCHIVE SUDO_MODE OUTPUT
+export VERBOSE ENV INSTANCE ARCHIVE DEVICE BACKUP_ID DECISION LOCAL_DATA NAME ALLOW_CORRUPT_LIVE KIND AUTH SECRET PKI_ARCHIVE SUDO_MODE OUTPUT
 
 .PHONY: help release-linux server-install initialize repair-initialization deploy migrate-data status logs backup fetch-backup restore rollback recover tls-status client-list client-issue client-renew client-add client-revoke pki-backup pki-export cleanup secure-page test-ops legacy-export acceptance acceptance-download acceptance-tls acceptance-http
 help:
-	@echo 'Server Manager: make server (production, SUDO_MODE=session); overrides: INSTANCE=acceptance SUDO_MODE=legacy; AUTH=manual|keychain'
+	@echo 'Server Manager: make budget (production, SUDO_MODE=session); overrides: INSTANCE=acceptance SUDO_MODE=legacy; AUTH=manual|keychain'
 	@echo 'Keychain: keychain-build keychain-status keychain-register keychain-check keychain-delete; SECRET=app|client|pki'
 	@echo 'Local: make release-linux | test-ops | test-ops-native'
 	@echo 'Server (explicit ENV=production, default INSTANCE=acceptance):'
 	@echo '  server-install initialize repair-initialization deploy migrate-data status logs backup fetch-backup restore rollback recover'
 	@echo '  tls-status client-list client-add client-revoke pki-export cleanup secure-page acceptance-download acceptance-tls acceptance-http'
+	@echo 'STG: stg-setup (one-time Caddy/firewall), stg-start, stg-stop, stg-reset; promote INSTANCE=production (exact STG binary)'
+	@echo 'Diagnostics: VERBOSE=1; OUTPUT=json; menu never requests sudo on redraw.'
 	@echo 'PKI on Mac only: client-issue DEVICE=name | client-renew DEVICE=old NAME=new | pki-backup'
 	@echo 'Direct commands retain INSTANCE=acceptance and SUDO_MODE=legacy defaults. No network operation runs by default.'
 	@echo 'Status shows local/server Git comparison; OUTPUT=json retains full SHAs and detailed server status.'
@@ -28,6 +30,11 @@ legacy-export:
 .PHONY: test-ops-native
 test-ops-native:
 	@$(PYTHON) tests/ops/cli_integration.py
+
+.PHONY: budget overview stg-setup stg-start stg-stop stg-reset promote
+budget: server
+overview stg-setup stg-start stg-stop stg-reset promote:
+	@$(PYTHON) scripts/ops/mac.py $@
 
 .PHONY: server keychain-build keychain-status keychain-register keychain-check keychain-delete
 # Override only the Makefile defaults for the menu. Explicit environment and
@@ -48,3 +55,7 @@ keychain-status keychain-register keychain-check keychain-delete:
 .PHONY: test-server-ux-native
 test-server-ux-native: keychain-build
 	@$(PYTHON) tests/ops/server_ux_native.py
+
+.PHONY: test-stg-proxy
+test-stg-proxy:
+	@$(PYTHON) tests/ops/caddy_staging_integration.py

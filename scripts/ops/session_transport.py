@@ -32,8 +32,9 @@ sys.exit(4)
 def check_protocol(transport):
     if getattr(transport,'_session_protocol',False) is True:return
     p=subprocess.run([*transport.ssh,'budget','/usr/local/sbin/budget-admin session-protocol'],stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
-    require(p.returncode==0 and p.stdout.strip()==b'1',
-            'Server session protocol not installed or SSH unavailable. Obtain approval for server-install, or use SUDO_MODE=legacy explicitly. No mutation started.')
+    if p.returncode and p.stderr:print(p.stderr.decode(errors='replace').strip(),file=sys.stderr)
+    require(p.returncode==0 and p.stdout.strip()==b'2',
+            'Administrative protocol v2 not installed or SSH unavailable. Obtain approval for server-install before using this CLI. No mutation started.')
     transport._session_protocol=True
 
 class Session:
@@ -74,6 +75,14 @@ class Session:
                             data.extend(os.read(waiter.stdout.fileno(),4096))
                             require(len(data)<=4096,'Oversized session reply')
                 data.extend(waiter.stdout.read(4097))
+                # The reply can arrive just before the last PTY error output.
+                # Flush available diagnostics before reporting its exit status.
+                drain_until=time.monotonic()+.2
+                while time.monotonic()<drain_until and select.select([self.master],[],[],.02)[0]:
+                    try:chunk=os.read(self.master,4096)
+                    except OSError:break
+                    if not chunk:break
+                    os.write(sys.stdout.fileno(),chunk)
                 require(waiter.returncode==0 and len(data)<=4096,'SSH session reply unavailable; check status/recover')
             finally:
                 if settings is not None:termios.tcsetattr(terminal,termios.TCSADRAIN,settings)
@@ -104,7 +113,7 @@ class Session:
         require(self.process.poll() is None,'Administrative TTY session ended; use status/recover')
         self.sequence+=1
         self.send({'sequence':self.sequence,'action':action,'token':token})
-        self.wait(interactive=action=='initialize')
+        self.wait(interactive=action in ('initialize','stg-setup'))
     def send(self,value):
         with tempfile.TemporaryDirectory() as tmp:
             path=Path(tmp)/'command.json';atomic(path,value)

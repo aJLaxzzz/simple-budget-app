@@ -14,7 +14,16 @@ test('100 projects, 1000 tasks and dense calendar remain usable with bounded req
   firstTask||=roots[0];await Promise.all(roots.map((r,i)=>create('tasks',{title:'Подзадача '+i,project_id:p.id,parent_task_id:r.id,planned_date:'2026-12-19'})));
  }));
  timings.seed_ms=Date.now()-seedStart;const sampleMemory=()=>timings.rss_samples_kib.push(Number(execFileSync('ps',['-o','rss=','-p',String(server.child.pid)],{encoding:'utf8'}).trim()));sampleMemory();
- await create('series',{request_id:randomUUID(),task:{title:'Сотни циклов'},first_date:'2026-01-01',rule:{schema_version:1,mode:'schedule',unit:'days',interval:1,allowed_days:{mode:'any'},adjustment:'none'}});
+ const series=await create('series',{request_id:randomUUID(),task:{title:'Сотни циклов'},first_date:'2026-01-01',rule:{schema_version:1,mode:'schedule',unit:'days',interval:1,allowed_days:{mode:'any'},adjustment:'none'}});
+ // Finish the historical fixture before measuring screen readiness. Otherwise
+ // each SSE reconciliation materializes another batch of old occurrences and
+ // the screen benchmark measures an ever-growing backfill as the date advances.
+ let settled=false;
+ for(let batch=0;batch<20;batch++){
+  const r=await request.post('/api/planner/series/'+series.id+'/ensure-upcoming',{data:{}});expect(r.ok()).toBeTruthy();
+  if((await r.json()).created===0){settled=true;break;}
+ }
+ expect(settled,'Synthetic recurrence fixture must converge before timing screens').toBeTruthy();
  for(const url of ['/tasks?status=active','/projects','/calendar?from=2026-12-01&to=2026-12-31']){
   const start=Date.now(),r=await request.get('/api/planner'+url),body=await r.body();expect(r.status()).toBe(200);timings.api.push({url,ms:Date.now()-start,bytes:body.length});
   if(url==='/tasks?status=active')expect(JSON.parse(body).items.filter(t=>t.project_id)).toHaveLength(1000);
@@ -44,6 +53,7 @@ test('100 projects, 1000 tasks and dense calendar remain usable with bounded req
  }
  await expect(page.locator('.pc-more').first()).toBeVisible();await page.locator('.pc-more').first().click();await expect(page.getByRole('button',{name:'День',exact:true})).toHaveAttribute('aria-pressed','true');await expect(page.locator('.pc-time-grid')).toBeVisible();await expect.poll(()=>page.evaluate(()=>window.budgetRequests||0)).toBe(0);expect(errors).toEqual([]);expect(timings.httpErrors).toEqual([]);expect(timings.requestFailures).toEqual([]);timings.sqlite_files_bytes={};for(const name of ['planner.db','planner.db-wal','planner.db-shm']){const file=path.join(server.dir,name);if(fs.existsSync(file))timings.sqlite_files_bytes[name]=fs.statSync(file).size;}
  }finally{
+  timings.browser_state=await page.evaluate(()=>({route:location.hash,sync:document.querySelector('#sync-status')?.textContent,requests:window.budgetRequests,readFailures:window.budgetReadFailures,started:window.budgetStarted,dirty:window.budgetDraftDirty,editing:!!document.querySelector('.pl-dialog, .pl-drawer-shell form, #modal-root form'),hidden:document.hidden})).catch(()=>null);
   fs.mkdirSync('artifacts/stage11',{recursive:true});fs.writeFileSync('artifacts/stage11/browser-performance.json',JSON.stringify(timings,null,2));await info.attach('load-metrics',{body:JSON.stringify(timings,null,2),contentType:'application/json'});await request.dispose();await server.stop();
  }
 });

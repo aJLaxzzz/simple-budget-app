@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -39,6 +40,7 @@ with tempfile.TemporaryDirectory(prefix='budget-ops-native-') as t:
     p=Paths('acceptance',t)
     for d in (p.etc/'credentials',p.state,p.backups,p.global_state,p.opt/'releases'/'one',p.opt/'releases'/'two'):d.mkdir(parents=True,mode=0o700)
     for name in ('one','two'):shutil.copy2(helper,p.opt/'releases'/name/'budget')
+    atomic(p.global_state/'stg-enabled.json',{'state':'ready'}) # OS/proxy setup mocked
     a=NativeAdmin(p,helper);request={'installation_id':'1'*32,'request_id':'2'*32,'confirm':True}
     with patch('getpass.getpass',return_value='Test-pass-12'):
         result=a.initialize(Path(t),request)
@@ -61,6 +63,22 @@ with tempfile.TemporaryDirectory(prefix='budget-ops-native-') as t:
     final=json.loads(a.run([helper,'admin','check','--data-dir',p.live,'--installation-id','1'*32]).stdout)
     assert final['schema_version']==14
     assert 'trial' in a.modes and 'closed' in a.modes
+    # The real native CLI is required: production markers are intentionally
+    # forbidden inside Go test processes. This tree is exclusively synthetic.
+    request['request_id']='5'*32
+    result=a.stg_reset(request)
+    assert result['result']=='awaiting_https_acceptance' and p.journal.exists()
+    assert load(p.journal)['backup_id']
+    a.commit(dict(request,https_verified_revision='a'*40))
+    with sqlite3.connect(p.live/'planner.db') as db:
+        for table,minimum in {'projects':3,'tasks':26,'sessions':1,'series':2,'history_events':1,'planner_icons':1}.items():
+            assert db.execute('SELECT count(*) FROM '+table).fetchone()[0]>=minimum,table
+    db.close()
+    before={f.name:sha(f) for f in p.live.iterdir()}
+    refused=a.run([helper,'admin','stg-fixture','--data-dir',p.live,'--installation-id','1'*32,'--confirm'],check=False)
+    assert refused.returncode!=0 and before=={f.name:sha(f) for f in p.live.iterdir()}
+    print('PASS: synthetic STG reset uses real archive/verify/restore, retains protected pre-update copy and commits through existing journal; existing-data fixture overwrite refused')
+    a.run([helper,'admin','check','--data-dir',p.live,'--installation-id','1'*32])
     # Exercise the real non-test Go binary: unit tests use environment=test and
     # would otherwise mask a VACUUM snapshot whose journal mode is still DELETE.
     legacy=Path(t)/'legacy-source';shutil.copytree(p.live,legacy)
@@ -69,8 +87,10 @@ with tempfile.TemporaryDirectory(prefix='budget-ops-native-') as t:
     atomic(legacy/'data.json',{'months':[{'id':'month-2040-12','year':2040,'month':12,'income':123,'incomes':[],'expenses':[]}]})
     source_hashes={f.name:sha(f) for f in legacy.iterdir()}
     transfer=Path(t)/'transfer';transfer.mkdir(mode=0o700)
-    exported=json.loads(a.run([helper,'admin','legacy-export','--source',legacy,'--backup-dir',transfer,
-                              '--installation-id','4'*32,'--confirm-stopped']).stdout)
+    process=a.run([helper,'admin','legacy-export','--source',legacy,'--backup-dir',transfer,
+                              '--installation-id','4'*32,'--confirm-stopped'],check=False)
+    assert process.returncode==0,process.stderr.decode()
+    exported=json.loads(process.stdout)
     archive=Path(exported['archive'])
     verified=json.loads(a.run([helper,'admin','backup','verify','--archive',archive]).stdout)
     assert verified['installation_id']=='4'*32 and verified['sqlite']['schema_version']==14

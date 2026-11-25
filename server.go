@@ -41,7 +41,7 @@ func accessHandler(c serverConfig, next http.Handler) http.Handler {
 			accessError(w, r, "HTTPS required", http.StatusForbidden)
 			return
 		}
-		if r.Header.Get("Sec-Fetch-Site") == "cross-site" && !browserNavigation(r) {
+		if (r.Header.Get("Sec-Fetch-Site") == "cross-site" || r.Header.Get("Sec-Fetch-Site") == "same-site") && !browserNavigation(r) {
 			accessError(w, r, "Cross-site access denied", http.StatusForbidden)
 			return
 		}

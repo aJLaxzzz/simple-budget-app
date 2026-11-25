@@ -108,6 +108,10 @@ def _install(bundle,run=None,root='/'):
     for inst in ('production','acceptance'):
         q=Paths(inst,root)
         text=template.replace('simple-budget-%i',q.name).replace('%i',inst).replace('User=budget\n','User='+q.user+'\n').replace('Group=budget\n','Group='+q.user+'\n')
+        if inst=='acceptance':
+            text=text.replace('MemoryHigh=320M','MemoryHigh=128M').replace('MemoryMax=448M','MemoryMax=192M').replace('MemorySwapMax=256M','MemorySwapMax=64M')
+            text=text.replace('TasksMax=64','CPUWeight=20\nNice=10\nTasksMax=64')
+            text=text.replace('InaccessiblePaths=/etc/caddy /var/lib/caddy','InaccessiblePaths=/etc/caddy /var/lib/caddy -/etc/simple-budget -/var/lib/simple-budget -/var/backups/simple-budget')
         atomic(units/q.unit,text.encode(),0o644)
     for file in (destination/'systemd').iterdir():
         if file.suffix in ('.service','.timer') and file.name!='simple-budget@.service':atomic(units/file.name,read(file),0o644)

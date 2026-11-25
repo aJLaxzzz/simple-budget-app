@@ -9,6 +9,8 @@ import time
 from common import *
 
 PLANS={
+ 'promote':{'promote','commit'},
+ 'stg-reset':{'stg-reset','commit'},
  'deploy':{'prepare','commit'}, 'initialize':{'initialize','commit'},
  'migrate-data':{'initialize','commit'}, 'restore':{'restore','commit'},
  'rollback':{'rollback','commit'}, 'recover':{'recover','commit'},
@@ -19,7 +21,7 @@ PLANS={
  'acceptance-http':{'status'},
  'acceptance-tls':{'status','client-add','client-revoke','access-stop','pki-export'},
 }
-for _action in ('status','logs','backup','tls-status','client-list','pki-export','cleanup','secure-page'):
+for _action in ('stg-setup','stg-start','stg-stop','status','logs','backup','tls-status','client-list','pki-export','cleanup','secure-page'):
     PLANS[_action]={_action}
 
 class SessionPolicy:
@@ -35,7 +37,7 @@ class SessionPolicy:
         require(request.get('installation_id',self.identity)==self.identity,'Session installation mismatch')
         if action in ('commit','clean-incoming'):require(token in self.tokens,'Unrelated operation token refused')
         # Only one data-changing deployment generation per session.
-        if action in ('initialize','prepare','restore','rollback','recover'):
+        if action in ('initialize','prepare','promote','stg-reset','restore','rollback','recover'):
             require(not self.changed,'Repeated mutation refused; use a new explicit recovery');self.changed=True
         self.tokens.add(token)
 
@@ -52,7 +54,7 @@ def serve(instance,token,root='/',run=subprocess.run,clock=time.monotonic,sleep=
     def reply(value):
         atomic(incoming/'reply.json',value);os.chown(incoming/'reply.json',uid,gid)
     started=clock();last=started;sequence=0
-    reply({'sequence':0,'exit':0,'state':'ready','protocol':1})
+    reply({'sequence':0,'exit':0,'state':'ready','protocol':2})
     try:
         while clock()-started<1800 and clock()-last<120:
             path=incoming/'command.json'
@@ -66,7 +68,8 @@ def serve(instance,token,root='/',run=subprocess.run,clock=time.monotonic,sleep=
                 reply({'sequence':sequence,'exit':0,'state':'closed'});return
             _,request=request_for(cmd.get('token',''),cmd.get('action',''),instance)
             policy.validate(cmd,request)
-            print('Этап: '+cmd['action']+' / '+instance,flush=True)
+            # Human-readable stages are emitted by the local command. Do not
+            # duplicate mailbox actions or tokens on the privileged TTY.
             result=run(['/usr/local/sbin/budget-admin',cmd['action'],instance,cmd['token']],timeout=2700,stdout=subprocess.PIPE)
             reply({'sequence':sequence,'exit':result.returncode,'state':'done'})
             if result.returncode==0:
