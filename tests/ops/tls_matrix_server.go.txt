@@ -1,0 +1,17 @@
+// Isolated local fixture, compiled on Mac only. Never uses real PKI/configuration.
+package main
+import("bufio";"crypto/tls";"crypto/x509";"fmt";"net";"net/http";"os")
+func main(){
+  var server *http.Server
+  addr:="127.0.0.1:0"
+  start:=func(ca string){
+    pool:=x509.NewCertPool(); raw,e:=os.ReadFile(ca);if e!=nil{panic(e)};if !pool.AppendCertsFromPEM(raw){panic("CA")}
+    l,e:=net.Listen("tcp",addr);if e!=nil{panic(e)};addr=l.Addr().String()
+    server=&http.Server{TLSConfig:&tls.Config{ClientAuth:tls.RequireAndVerifyClientCert,ClientCAs:pool,MinVersion:tls.VersionTLS12,SessionTicketsDisabled:true},Handler:http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){w.WriteHeader(401);fmt.Fprint(w,"Unauthorized\n")})}
+    go server.ServeTLS(l,os.Args[1],os.Args[2]);fmt.Println(addr)
+  }
+  start(os.Args[3])
+  scanner:=bufio.NewScanner(os.Stdin)
+  for scanner.Scan(){switch scanner.Text(){case "revoke":server.Close();start(os.Args[4]);case "stop":server.Close();fmt.Println("stopped");case "quit":server.Close();return}}
+  server.Close()
+}

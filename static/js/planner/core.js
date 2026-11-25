@@ -16,8 +16,11 @@
     return node;
   };
   P.button = (text, onclick, cls = '') => P.el('button', { type: 'button', class: 'pl-button ' + cls, onclick }, text);
+  // Reuse the formatter, never the date: large lists call this for each task,
+  // while an open tab must still observe the next Moscow calendar day.
+  const moscowDateFormatter = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Moscow', year: 'numeric', month: '2-digit', day: '2-digit' });
   P.today = function (date = new Date()) {
-    const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Moscow', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date);
+    const parts = moscowDateFormatter.formatToParts(date);
     const value = type => parts.find(p => p.type === type).value;
     return `${value('year')}-${value('month')}-${value('day')}`;
   };

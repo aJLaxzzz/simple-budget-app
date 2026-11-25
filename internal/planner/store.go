@@ -2,9 +2,11 @@
 package planner
 
 import (
+	"budget/internal/storageguard"
 	"context"
 	"database/sql"
 	"errors"
+	"flag"
 	"fmt"
 	"net/url"
 	"os"
@@ -27,15 +29,43 @@ type Store struct {
 }
 
 func Open(ctx context.Context, path string) (*Store, error) {
+	return openStore(ctx, path, "development", "", true)
+}
+
+// OpenProduction checks an existing installation without migrating or seeding it.
+func OpenProduction(ctx context.Context, path, id string) (*Store, error) {
+	return openStore(ctx, path, "production", id, false)
+}
+
+// OpenMaintenance owns the same exclusive lock as the server. It never creates a
+// database, starts a worker or edits financial files. Migration is explicit.
+func OpenMaintenance(ctx context.Context, path, id string, migrateSchema bool) (*Store, error) {
+	return openStore(ctx, path, "production", id, migrateSchema)
+}
+func openStore(ctx context.Context, path, environment, id string, applyMigrations bool) (*Store, error) {
 	path, e := filepath.Abs(path)
 	if e != nil {
 		return nil, e
 	}
-	dir, e := filepath.EvalSymlinks(filepath.Dir(path))
+	if flag.Lookup("test.v") != nil {
+		if e := storageguard.TestPath(filepath.Dir(path)); e != nil {
+			return nil, e
+		}
+	}
+	dir, e := storageguard.Check(filepath.Dir(path), environment, id)
 	if e != nil {
 		return nil, e
 	}
 	path = filepath.Join(dir, filepath.Base(path))
+	for _, suffix := range []string{"", "-wal", "-shm", ".lock"} {
+		if _, err := os.Lstat(path + suffix); err == nil {
+			if e := storageguard.Regular(path+suffix, false); e != nil {
+				return nil, e
+			}
+		} else if !os.IsNotExist(err) {
+			return nil, err
+		}
+	}
 	if info, e := os.Lstat(path); e == nil && !info.Mode().IsRegular() {
 		return nil, errors.New("planner database must be a regular file")
 	}
@@ -57,7 +87,16 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		f.Close()
 		return nil, fmt.Errorf("planner database already in use: %w", e)
 	}
-	databaseFile, e := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0600)
+	flags := os.O_RDWR | os.O_CREATE
+	if environment == "production" {
+		if e = storageguard.Regular(path, true); e != nil {
+			syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+			f.Close()
+			return nil, e
+		}
+		flags = os.O_RDWR
+	}
+	databaseFile, e := os.OpenFile(path, flags, 0600)
 	if e != nil {
 		syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
 		f.Close()
@@ -74,14 +113,39 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	if e != nil {
 		return fail(e)
 	}
-	if e = migrate(ctx, s.db, migrations); e != nil {
-		return fail(e)
+	if environment == "production" {
+		var appID, version int
+		if e = s.db.QueryRowContext(ctx, "PRAGMA application_id").Scan(&appID); e != nil {
+			return fail(e)
+		}
+		if e = s.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); e != nil {
+			return fail(e)
+		}
+		if appID != applicationID || version < 1 {
+			return fail(errors.New("production database is not initialized"))
+		}
 	}
-	if e = s.Transaction(ctx, func(tx *sql.Tx) error { return seedBuiltinIcons(ctx, tx) }); e != nil {
-		return fail(e)
-	}
-	if _, e = s.db.ExecContext(ctx, "PRAGMA journal_mode=WAL"); e != nil {
-		return fail(e)
+	if applyMigrations {
+		if e = migrate(ctx, s.db, migrations); e != nil {
+			return fail(e)
+		}
+		if e = s.Transaction(ctx, func(tx *sql.Tx) error { return seedBuiltinIcons(ctx, tx) }); e != nil {
+			return fail(e)
+		}
+		if _, e = s.db.ExecContext(ctx, "PRAGMA journal_mode=WAL"); e != nil {
+			return fail(e)
+		}
+	} else {
+		if e = validateSnapshot(ctx, s.db); e != nil {
+			return fail(e)
+		}
+		var journal string
+		if e = s.db.QueryRowContext(ctx, "PRAGMA journal_mode").Scan(&journal); e != nil {
+			return fail(e)
+		}
+		if journal != "wal" {
+			return fail(errors.New("production database requires WAL; use administrative migration"))
+		}
 	}
 	if e = checkIntegrity(ctx, s.db); e != nil {
 		return fail(e)
@@ -156,3 +220,21 @@ func transaction(ctx context.Context, db *sql.DB, fn func(*sql.Tx) error) error 
 	}
 	return e
 }
+
+// Ready uses the owned connection; it does not open another store or materialize.
+func (s *Store) Ready(ctx context.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return ErrClosed
+	}
+	var v int
+	if e := s.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&v); e != nil {
+		return e
+	}
+	if v != len(migrations) {
+		return errors.New("incompatible schema")
+	}
+	return nil
+}
+func SchemaVersion() int { return len(migrations) }

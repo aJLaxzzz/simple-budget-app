@@ -44,7 +44,7 @@
       preview.replaceChildren(meta('Рассчитываем даты…'));
       try {
         const rule=read();
-        const anchor=options.completedDate && rule.mode==='completion' ? {date:options.completedDate,cycle_index:0,kind:options.anchorKind||'completion'} : {date:first.value,cycle_index:0,kind:rule.mode==='schedule'?'schedule':'unconfirmed'};
+        const anchor=rule.mode==='schedule' ? {date:first.value,cycle_index:0,kind:'schedule'} : options.completedDate ? {date:options.completedDate,cycle_index:0,kind:options.anchorKind||'completion'} : {cycle_index:0,kind:'unconfirmed'};
         const result=options.changing ? await P.api('/recurrence/preview','POST',{rule,anchor,count:6,...(rule.mode==='schedule'?{start_cycle:0}:{})}) : await P.api('/series/preview','POST',{rule,first_date:first.value,count:6,...(options.taskID?{existing_task_id:options.taskID}:{})});
         if(own!==turn)return;
         preview.replaceChildren(el('h4',{},'Предпросмотр следующих дат'));

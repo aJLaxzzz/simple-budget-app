@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 // Never start the application against the repository's user data.
-process.env.PLANNER_TEST_DIR ||= fs.mkdtempSync(path.join(os.tmpdir(), 'budget-planner-ui-'));
+process.env.PLANNER_TEST_DIR = require('./tests/test-storage.cjs').configuredTestDir('budget-planner-ui-');
 module.exports = defineConfig({
   testDir: './tests/browser',
   fullyParallel: false,

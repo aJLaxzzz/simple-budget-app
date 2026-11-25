@@ -1,9 +1,11 @@
 package main
 
 import (
+	"budget/internal/storageguard"
 	"bytes"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -34,6 +36,16 @@ func decodeStoredJSON(raw []byte, dst any) error {
 }
 
 func loadData() error {
+	if _, e := os.Lstat(dataFile); e == nil {
+		if e = storageguard.Regular(dataFile, false); e != nil {
+			return e
+		}
+	}
+	if flag.Lookup("test.v") != nil {
+		if e := storageguard.TestPath(filepath.Dir(dataFile)); e != nil {
+			return e
+		}
+	}
 	raw, err := os.ReadFile(dataFile)
 	if errors.Is(err, os.ErrNotExist) {
 		// Do not create or rewrite files during loading. The first successful edit
@@ -71,6 +83,16 @@ func loadData() error {
 }
 
 func loadCategories() error {
+	if _, e := os.Lstat(categoriesFile); e == nil {
+		if e = storageguard.Regular(categoriesFile, false); e != nil {
+			return e
+		}
+	}
+	if flag.Lookup("test.v") != nil {
+		if e := storageguard.TestPath(filepath.Dir(categoriesFile)); e != nil {
+			return e
+		}
+	}
 	raw, err := os.ReadFile(categoriesFile)
 	if errors.Is(err, os.ErrNotExist) {
 		if _, e := os.Lstat(categoriesFile); !errors.Is(e, os.ErrNotExist) {
@@ -129,6 +151,11 @@ func atomicWriteFile(path string, data []byte) error {
 }
 
 func atomicReplaceFile(path string, write func(*os.File) error) error {
+	if flag.Lookup("test.v") != nil {
+		if e := storageguard.TestPath(filepath.Dir(path)); e != nil {
+			return e
+		}
+	}
 	mode := os.FileMode(0600)
 	if info, err := os.Lstat(path); err == nil {
 		if !info.Mode().IsRegular() {
@@ -167,13 +194,13 @@ func atomicReplaceFile(path string, write func(*os.File) error) error {
 	// A directory-sync failure occurs after commit. Do not report a rollback:
 	// the file has already changed. Log the reduced power-loss durability.
 	if err = dir.Sync(); err != nil {
-		log.Printf("WARNING: %s committed, directory sync failed: %v", path, err)
+		log.Printf("WARNING: financial write committed, directory sync failed (%T)", err)
 	}
 	return nil
 }
 
 func reportSaveError(w http.ResponseWriter, err error) {
-	log.Printf("Saving financial data failed: %v", err)
+	log.Printf("Saving financial data failed (%T)", err)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusInternalServerError)
 	_ = json.NewEncoder(w).Encode(map[string]string{"error": "Не удалось сохранить данные. Изменения не применены."})

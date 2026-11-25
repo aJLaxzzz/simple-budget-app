@@ -2,6 +2,7 @@ const { test, expect, revealAction } = require('../browser-fixtures.cjs');
 const { randomUUID } = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
+const { isolatedServer } = require('../isolated-server.cjs');
 async function post(request, route, data) {
   const r = await request.post('/api/planner/' + route, { data });
   expect(r.ok(), await r.text()).toBeTruthy(); return r.json();
@@ -11,17 +12,24 @@ test.afterAll(() => {
   expect(fs.readFileSync(path.join(process.env.PLANNER_TEST_DIR, 'data.json'), 'utf8')).toBe('{"months":[]}');
   expect(fs.readFileSync(path.join(process.env.PLANNER_TEST_DIR, 'categories.json'), 'utf8')).toBe('{"expense":[],"income":[]}');
 });
-test('future calendar materializes before GET and preserves existing task edits', async ({ page, request }) => {
+test('future calendar materializes before GET and preserves existing task edits', async ({ page, playwright }) => {
+  // This is a functional materialization test, not an unbounded fixture-load test.
+  // Earlier specs leave hundreds of projects whose unrelated cycles consume batches.
+  const server = await isolatedServer('budget-series-calendar-');
+  const request = await playwright.request.newContext({ baseURL: server.baseURL });
+  try {
   await page.route('https://**/*', route => route.abort());
   const project = await post(request, 'projects', { title: 'Recurring calendar ' + randomUUID() });
   const series = await post(request, 'series', { request_id: randomUUID(), task: { title: 'Haircut', project_id: project.id }, first_date: '2026-11-16', rule: rule('schedule') });
+  expect((await (await request.get('/api/planner/series')).json()).items).toHaveLength(1);
+  expect((await (await request.get('/api/planner/projects')).json()).items).toHaveLength(1);
   const first = series.occurrences[0].task;
   await post(request, 'tasks/' + first.id + '/reschedule', { expected_revision: first.revision, planned_date: '2027-02-10' });
   const before = await (await request.get('/api/planner/calendar?from=2027-05-01&to=2027-05-31')).json();
   expect(before.items.some(i => i.series_id === series.id && i.cycle_index === 4)).toBeFalsy();
   const requests = [];
   page.on('request', req => { if (/\/api\/planner\/(materialize|calendar)/.test(req.url())) requests.push([req.method(), new URL(req.url()).pathname]); });
-  await page.goto('/#/plans/calendar?mode=month&date=2027-05-15&project=' + project.id);
+  await page.goto(server.baseURL + '/#/plans/calendar?mode=month&date=2027-05-15&project=' + project.id);
   await expect(page.locator('.pc-calendar')).toBeVisible();
   expect(requests[0]).toEqual(['POST', '/api/planner/materialize']);
   expect(requests.at(-1)).toEqual(['GET', '/api/planner/calendar']);
@@ -34,6 +42,13 @@ test('future calendar materializes before GET and preserves existing task edits'
   await page.reload(); await expect(page.locator('.pc-calendar')).toBeVisible();
   current = await (await request.get('/api/planner/series/' + series.id)).json();
   expect(current.occurrences.map(o => o.id)).toEqual(ids);
+  } finally {
+    await page.goto('about:blank');
+    await request.dispose();
+    await server.stop();
+    expect(fs.readFileSync(path.join(server.dir, 'data.json'), 'utf8')).toBe('{"months":[]}');
+    expect(fs.readFileSync(path.join(server.dir, 'categories.json'), 'utf8')).toBe('{"expense":[],"income":[]}');
+  }
 });
 test('existing completion dialog promotes one current task and keeps dependent successors via real API', async ({ page, request }) => {
   await page.route('https://**/*', route => route.abort());

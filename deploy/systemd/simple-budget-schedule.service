@@ -1,0 +1,10 @@
+[Unit]
+Description=Observe installed Simple Budget backup timers
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/budget-admin schedule production
+UMask=0077
+NoNewPrivileges=true
+ProtectHome=true
+TimeoutStartSec=120

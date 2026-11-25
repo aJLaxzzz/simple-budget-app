@@ -1,6 +1,7 @@
 package planner
 
 import (
+	"budget/internal/storageguard"
 	"database/sql"
 	"encoding/json"
 	"net/http"
@@ -171,6 +172,17 @@ func TestBeta31PrivateSnapshot(t *testing.T) {
 	path := os.Getenv("BETA31_SNAPSHOT")
 	if path == "" {
 		t.Skip("private snapshot not supplied")
+	}
+	if _, e := storageguard.Check(filepath.Dir(path), "development", ""); e != nil {
+		t.Fatal(e)
+	}
+	if e := storageguard.Regular(path, false); e != nil {
+		t.Fatal(e)
+	}
+	for _, suffix := range []string{"-wal", "-shm"} {
+		if _, e := os.Lstat(path + suffix); !os.IsNotExist(e) {
+			t.Fatal("standalone snapshot required")
+		}
 	}
 	raw, e := os.ReadFile(path)
 	if e != nil {

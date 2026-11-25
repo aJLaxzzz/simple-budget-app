@@ -35,7 +35,7 @@ for(const width of [1440,1024,768,390,360])test('visual acceptance '+width,async
  await open('','plans');await open('inbox','inbox');await open('projects','projects');await open('projects/'+project.id,'project');
  for(const mode of ['month','week','day'])await open('calendar?mode='+mode+'&date=2026-12-19&project='+project.id,'calendar-'+mode);
  await open('tasks?task='+task.id,'task-sessions');await expect(page.getByRole('dialog',{name:'Редактор задачи',exact:true})).toBeVisible();await shot('editor');await page.getByRole('tab',{name:'Периоды работы',exact:true}).click();await page.locator('.pl-session').first().scrollIntoViewIfNeeded();await shot('sessions');
- await open('series','series');await open('series/'+series.id,'series-detail');await page.getByRole('button',{name:'Изменить правило',exact:true}).click();await expect(page.locator('.pl-preview-row').first()).toBeVisible();await shot('constructor');await page.keyboard.press('Escape');
+ await open('series','series');await open('series/'+series.id,'series-detail');await expect(page.getByRole('dialog',{name:'Настроить повторение',exact:true})).toBeVisible();await expect(page.locator('.pl-preview-row').first()).toBeVisible();await shot('constructor');await page.keyboard.press('Escape');
  await open('templates/'+template.id,'template');await page.getByRole('button',{name:'Редактировать шаблон',exact:true}).click();await shot('template-editor');await page.keyboard.press('Escape');
  await open('attention?tab=overdue','attention');await open('settings','settings');
  await open('inbox?q=нет-такого-названия-приёмка','empty');

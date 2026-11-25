@@ -1,6 +1,7 @@
 package planner
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -14,12 +15,17 @@ import (
 
 func WriteAPIError(w http.ResponseWriter, err error) {
 	var api *APIError
+	if errors.Is(err, context.Canceled) {
+		// A disconnected client is not an internal failure; no personal request data is logged.
+		writeJSON(w, 499, map[string]any{"error": &APIError{Status: 499, Code: "request_cancelled", Message: "Запрос отменён"}})
+		return
+	}
 	if !errors.As(err, &api) {
 		var sqliteErr *sqlite.Error
 		if errors.As(err, &sqliteErr) && sqliteErr.Code()&255 == 19 {
 			api = &APIError{Status: 422, Code: "constraint_violation", Message: "Изменение нарушает целостность данных"}
 		} else {
-			log.Printf("planner: %v", err)
+			log.Printf("planner internal error (%T)", err)
 			api = &APIError{Status: 500, Code: "internal_error", Message: "Не удалось выполнить операцию; изменения не применены"}
 		}
 	}

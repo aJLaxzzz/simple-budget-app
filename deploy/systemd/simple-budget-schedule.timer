@@ -1,0 +1,10 @@
+[Unit]
+Description=Refresh truthful Simple Budget timer status
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1h
+Unit=simple-budget-schedule.service
+
+[Install]
+WantedBy=timers.target

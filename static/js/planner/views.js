@@ -209,7 +209,7 @@
       else overview.append(el('p',{class:'pl-project-description'},project.description));
     }
     overview.append(progress(project));if(P.active(project)&&!project.preliminary&&!project.routines&&project.progress.total>0&&project.progress.completed===project.progress.total)overview.append(button("Завершить проект",()=>P.projectAction(project,"complete"),"pl-primary"));content.append(overview);P.projectRepeatPanel(content,project);
-    if(!project.repeat_series_id&&!project.archived_at&&!project.occurrence_id)overview.append(button('Повторять проект',()=>P.projectTemplateFlow(project,true)));
+    if(!project.repeat_series_id&&!project.archived_at&&!project.occurrence_id)dates.append(button('Повторять проект',()=>P.projectTemplateFlow(project,true)));
     const taskTools=el('div',{class:'pl-project-task-tools'},el('h3',{class:'pl-project-tasks-heading'},'Задачи проекта'));
     const projectList=el('div');const filterBox=el('div',{class:'pl-project-task-filters'});
     const sortKey='planner.project-sort:'+(project.repeat_series_id||project.id);let sortValue='planned';try{sortValue=localStorage.getItem(sortKey)||localStorage.getItem('planner.project-sort:'+project.id)||'planned';}catch(_){}

@@ -1,0 +1,48 @@
+[Unit]
+Description=Simple Budget (%i)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=budget
+Group=budget
+EnvironmentFile=/etc/simple-budget-%i/configuration
+LoadCredential=app-password:/etc/simple-budget-%i/credentials/app-password
+ExecStartPre=+/usr/local/sbin/budget-admin startup-guard %i
+ExecStart=/opt/simple-budget-%i/current/budget
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=60
+KillSignal=SIGTERM
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/simple-budget-%i/live
+ReadOnlyPaths=/var/backups/simple-budget-%i
+InaccessiblePaths=/etc/caddy /var/lib/caddy
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+AmbientCapabilities=
+MemoryHigh=320M
+MemoryMax=448M
+MemorySwapMax=256M
+TasksMax=64
+LimitNOFILE=4096
+LogRateLimitIntervalSec=60
+LogRateLimitBurst=100
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

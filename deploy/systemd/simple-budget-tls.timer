@@ -1,0 +1,11 @@
+[Unit]
+Description=Hourly Simple Budget certificate check
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+RandomizedDelaySec=60
+Unit=simple-budget-tls.service
+
+[Install]
+WantedBy=timers.target

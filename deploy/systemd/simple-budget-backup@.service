@@ -1,0 +1,16 @@
+[Unit]
+Description=Verified daily Simple Budget backup (%i)
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/budget-admin daily %i
+Nice=10
+IOSchedulingClass=idle
+UMask=0077
+TimeoutStartSec=45min
+MemoryHigh=256M
+MemoryMax=384M
+NoNewPrivileges=true
+ProtectHome=true
+PrivateTmp=true

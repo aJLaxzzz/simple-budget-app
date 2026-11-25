@@ -12,6 +12,18 @@ test('Moscow completion date remains fixed across UTC date boundary', () => {
   assert.equal(planner().today(new Date('2026-11-15T22:30:00Z')), '2026-11-16');
   assert.equal(planner().today(new Date('2026-11-15T20:30:00Z')), '2026-11-15');
 });
+test('one open planner observes Moscow midnight, new year and leap day without reload', () => {
+  let now = '2026-12-31T20:59:59.999Z';
+  class Clock extends Date { constructor(...args) { super(...(args.length ? args : [now])); } }
+  const context = { window: { addEventListener() {}, location: { hash: '#/plans/tasks' } }, URLSearchParams, Intl, Date: Clock };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../static/js/planner/core.js'), 'utf8'), context);
+  const p = context.window.Planner;
+  assert.equal(p.today(), '2026-12-31');
+  now = '2026-12-31T21:00:00.000Z'; assert.equal(p.today(), '2027-01-01');
+  now = '2028-02-28T21:00:00.000Z'; assert.equal(p.today(), '2028-02-29');
+  now = '2028-02-29T21:00:00.000Z'; assert.equal(p.today(), '2028-03-01');
+  assert.equal(p.today(new Date('2026-11-24T20:59:59Z')), '2026-11-24');
+});
 test('hash routes preserve task filters across opening and closing editor', () => {
   const p = planner('#/plans/tasks?status=completed&q=hello&project=abc');
   p.openTask('task-id');

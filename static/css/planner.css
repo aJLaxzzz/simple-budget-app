@@ -580,3 +580,8 @@ body.planner-page .header-search { display:none; }
 .pl-repeat-body.pl-dialog,.pl-repeat-body.pl-management-drawer{position:static;width:auto;max-width:none;max-height:none;padding:0;box-shadow:none;border:0}
 .pl-repeat-danger{border-top:1px solid #39404e;margin-top:16px;padding-top:12px;display:flex;flex-wrap:wrap;gap:8px}
 .pl-relative-hint{color:#b6c9e3;font-size:14px;margin:4px 0 12px}
+
+/* Prepared backup downloads: compact actions, no administrative web controls. */
+.pl-backups { max-width: 820px; }
+.pl-backup-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.pl-backups p { margin: 8px 0; }

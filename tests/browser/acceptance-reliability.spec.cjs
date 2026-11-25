@@ -1,15 +1,16 @@
+const {validateTestDir,createTestDir,testEnvironment}=require('../test-storage.cjs');
 const {test,expect}=require('../browser-fixtures.cjs');
 const {spawn,execFileSync}=require('node:child_process');
 const {once}=require('node:events');
 const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
 const {randomUUID}=require('node:crypto');
-const password='isolated-acceptance-test-password-123456789';
+const password='Test-pass-12'; // Synthetic credential: exercise the exact production minimum.
 const base='http://127.0.0.1:31372';
-function run(dir){return spawn(path.join(process.env.PLANNER_TEST_DIR,'budget-test-server'),[],{cwd:dir,env:{...process.env,BUDGET_ADDR:'127.0.0.1:31372',BUDGET_DATA_DIR:dir,BUDGET_STATIC_DIR:path.resolve('static'),BUDGET_PASSWORD:password,BUDGET_TLS_CERT:'',BUDGET_TLS_KEY:'',BUDGET_ALLOWED_HOSTS:''},stdio:['ignore','pipe','pipe']});}
+function run(dir){validateTestDir(dir);return spawn(path.join(process.env.PLANNER_TEST_DIR,'budget-test-server'),[],{cwd:dir,env:testEnvironment({BUDGET_ADDR:'127.0.0.1:31372',BUDGET_DATA_DIR:dir,BUDGET_PASSWORD:password,BUDGET_TLS_CERT:'',BUDGET_TLS_KEY:'',BUDGET_ALLOWED_HOSTS:''}),stdio:['ignore','pipe','pipe']});}
 async function ready(child){await new Promise((resolve,reject)=>{let output='';const timer=setTimeout(()=>reject(Error('Server startup timeout: '+output)),15000);child.stderr.on('data',b=>{output+=b;if(output.includes('Личный бюджет:')){clearTimeout(timer);resolve();}});child.once('exit',code=>{clearTimeout(timer);reject(Error('Server exited '+code+': '+output));});});}
 async function stop(child,signal='SIGTERM'){if(child.exitCode!==null)return;const exited=once(child,'exit');child.kill(signal);const [code,sig]=await exited;expect(code).toBe(0);expect(sig).toBeNull();}
 test('protected offline app: financial lifecycle, actual restart, recurrence replay, privacy and integrity',async({browser,playwright})=>{
- test.setTimeout(90000);const dir=fs.mkdtempSync(path.join(os.tmpdir(),'budget-acceptance-'));fs.writeFileSync(path.join(dir,'data.json'),'broken JSON');let child=run(dir);await once(child,'exit');expect(child.exitCode).not.toBe(0);expect(fs.readFileSync(path.join(dir,'data.json'),'utf8')).toBe('broken JSON');fs.writeFileSync(path.join(dir,'data.json'),'{"months":[]}');
+ test.setTimeout(90000);const dir=createTestDir('budget-acceptance-');fs.writeFileSync(path.join(dir,'data.json'),'broken JSON');let child=run(dir);await once(child,'exit');expect(child.exitCode).not.toBe(0);expect(fs.readFileSync(path.join(dir,'data.json'),'utf8')).toBe('broken JSON');fs.writeFileSync(path.join(dir,'data.json'),'{"months":[]}');
  const auth={username:'budget',password};const api=await playwright.request.newContext({baseURL:base,httpCredentials:auth});const anon=await playwright.request.newContext({baseURL:base});const context=await browser.newContext({baseURL:base,httpCredentials:auth});let page;
  async function req(method,url,data,code=200){const r=await api.fetch(url,{method,data,headers:{"Content-Type":"application/json"}});expect(r.status(),await r.text()).toBe(code);return code===204?null:r.json();}
  try{

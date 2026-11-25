@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"embed"
 	"fmt"
 	"net/http"
 	"os"
@@ -44,31 +45,53 @@ var publicAssets = map[string]string{
 	"/js/planner/occurrences.js":         "text/javascript; charset=utf-8",
 }
 
+//go:embed static/js/planner/repeat-editor.js static/js/planner/beta3.js static/js/planner/beta2.js
+//go:embed static/js/planner/icon-catalog.js static/js/planner/calendar-days.js static/js/planner/entity-templates.js
+//go:embed static/js/planner/appearance.js static/js/planner/task-groups.js static/js/planner/actions.js
+//go:embed static/js/planner/lifecycle.js static/js/planner/disclosure.js static/js/planner/navigation.js
+//go:embed static/vendor/chart.umd-4.4.0.js static/js/planner/production-calendar.js static/js/planner/attention.js
+//go:embed static/js/planner/templates.js static/js/planner/calendar-model.js static/js/planner/calendar.js
+//go:embed static/css/calendar.css static/css/planner.css static/js/planner/core.js
+//go:embed static/js/planner/views.js static/js/planner/editor.js static/index.html
+//go:embed static/css/style.css static/js/app.js static/js/api.js
+//go:embed static/js/planner/recurrence-form.js static/js/planner/series.js static/js/planner/occurrences.js
+var embeddedFrontend embed.FS
+
 func newStaticHandler(dir string) (http.Handler, error) {
-	dir = filepath.Clean(dir)
-	info, e := os.Lstat(dir)
-	if e != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-		return nil, fmt.Errorf("static directory missing or invalid: %s", dir)
-	}
 	assets := map[string][]byte{}
-	for path := range publicAssets {
-		file := filepath.Join(dir, filepath.FromSlash(path[1:]))
-		// Reject symlinks in every asset component.
-		for p := file; p != dir; p = filepath.Dir(p) {
-			info, e := os.Lstat(p)
-			if e != nil || info.Mode()&os.ModeSymlink != 0 {
-				return nil, fmt.Errorf("static asset missing or symlink: %s", path)
+	if dir == "" {
+		for path := range publicAssets {
+			b, e := embeddedFrontend.ReadFile("static" + path)
+			if e != nil {
+				return nil, e
 			}
+			assets[path] = b
 		}
-		info, e := os.Stat(file)
-		if e != nil || !info.Mode().IsRegular() {
-			return nil, fmt.Errorf("invalid static asset: %s", path)
+	} else {
+		dir = filepath.Clean(dir)
+		info, e := os.Lstat(dir)
+		if e != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+			return nil, fmt.Errorf("static directory missing or invalid: %s", dir)
 		}
-		b, e := os.ReadFile(file)
-		if e != nil {
-			return nil, fmt.Errorf("read static asset %s: %w", path, e)
+		for path := range publicAssets {
+			file := filepath.Join(dir, filepath.FromSlash(path[1:]))
+			// Reject symlinks in every asset component.
+			for p := file; p != dir; p = filepath.Dir(p) {
+				info, e := os.Lstat(p)
+				if e != nil || info.Mode()&os.ModeSymlink != 0 {
+					return nil, fmt.Errorf("static asset missing or symlink: %s", path)
+				}
+			}
+			info, e := os.Stat(file)
+			if e != nil || !info.Mode().IsRegular() {
+				return nil, fmt.Errorf("invalid static asset: %s", path)
+			}
+			b, e := os.ReadFile(file)
+			if e != nil {
+				return nil, fmt.Errorf("read static asset %s: %w", path, e)
+			}
+			assets[path] = b
 		}
-		assets[path] = b
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "GET" && r.Method != "HEAD" {

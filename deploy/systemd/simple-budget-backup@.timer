@@ -1,0 +1,11 @@
+[Unit]
+Description=Simple Budget daily backup at 03:30 Moscow (%i)
+
+[Timer]
+OnCalendar=*-*-* 03:30:00 Europe/Moscow
+Persistent=true
+AccuracySec=1min
+Unit=simple-budget-backup@%i.service
+
+[Install]
+WantedBy=timers.target

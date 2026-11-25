@@ -208,7 +208,7 @@ func (s *Service) Materialize(ctx context.Context, in MaterializeInput) (Materia
 			if errors.As(recurrenceAPIError(e), &api) {
 				one.Error = api
 			} else {
-				log.Printf("planner materialize series %s: %v", id, e)
+				log.Printf("planner materialization failed (%T)", e)
 				one.Error = &APIError{Status: 500, Code: "materialization_failed", Message: "Не удалось материализовать серию; текущая порция полностью отменена"}
 			}
 		}
@@ -234,11 +234,11 @@ func (s *Service) RunMaterializer(ctx context.Context, interval time.Duration) {
 			return
 		}
 		if e != nil {
-			log.Printf("planner materializer: %v", e)
+			log.Printf("planner materializer failed (%T)", e)
 		}
 		for _, v := range result.Results {
 			if v.Error != nil {
-				log.Printf("planner series %s: %s", v.SeriesID, v.Error.Message)
+				log.Printf("planner calculation failed: %s", v.Error.Code)
 			}
 		}
 		pending = pending || result.Pending

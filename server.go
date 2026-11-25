@@ -2,6 +2,7 @@ package main
 
 import (
 	"budget/internal/planner"
+	"budget/internal/storageguard"
 	"context"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -15,90 +16,13 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
 )
 
-type serverConfig struct {
-	Addr, DataDir, StaticDir, Password, CertFile, KeyFile string
-	AllowedHosts                                          map[string]bool
-	Local                                                 bool
-}
-
-func readConfig(getenv func(string) string) (serverConfig, error) {
-	c := serverConfig{Addr: getenv("BUDGET_ADDR"), DataDir: getenv("BUDGET_DATA_DIR"), StaticDir: getenv("BUDGET_STATIC_DIR"), Password: getenv("BUDGET_PASSWORD"), CertFile: getenv("BUDGET_TLS_CERT"), KeyFile: getenv("BUDGET_TLS_KEY")}
-	if c.Addr == "" {
-		c.Addr = "127.0.0.1:3001"
-	}
-	host, port, e := net.SplitHostPort(c.Addr)
-	if e != nil {
-		return c, fmt.Errorf("BUDGET_ADDR: expected IP:port: %w", e)
-	}
-	n, e := strconv.Atoi(port)
-	if e != nil || n < 1 || n > 65535 {
-		return c, errors.New("BUDGET_ADDR: port must be 1..65535")
-	}
-	if host == "localhost" {
-		host = "127.0.0.1"
-		c.Addr = net.JoinHostPort(host, port)
-	}
-	ip := net.ParseIP(host)
-	if ip == nil {
-		return c, errors.New("BUDGET_ADDR: use a literal IP address")
-	}
-	c.Local = ip.IsLoopback()
-	if c.Password != "" && len(c.Password) < 32 {
-		return c, errors.New("BUDGET_PASSWORD: use at least 32 characters")
-	}
-	if (c.CertFile == "") != (c.KeyFile == "") {
-		return c, errors.New("both BUDGET_TLS_CERT and BUDGET_TLS_KEY are required")
-	}
-	if !c.Local && (c.Password == "" || c.CertFile == "") {
-		return c, errors.New("external binding requires BUDGET_PASSWORD and TLS certificate/key")
-	}
-	c.AllowedHosts = map[string]bool{}
-	if raw := getenv("BUDGET_ALLOWED_HOSTS"); raw != "" {
-		for _, h := range strings.Split(raw, ",") {
-			h = strings.ToLower(strings.TrimSpace(h))
-			u, e := url.Parse("https://" + h)
-			if e != nil || u.Host != h || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" || u.Hostname() == "" || strings.ContainsAny(h, "*\\ \t\r\n") {
-				return c, errors.New("BUDGET_ALLOWED_HOSTS: expected exact host[:port], no wildcards")
-			}
-			c.AllowedHosts[h] = true
-		}
-	} else {
-		if ip.IsUnspecified() {
-			return c, errors.New("wildcard binding requires BUDGET_ALLOWED_HOSTS")
-		}
-		c.AllowedHosts[strings.ToLower(c.Addr)] = true
-		if c.Local {
-			c.AllowedHosts[net.JoinHostPort("localhost", port)] = true
-		}
-	}
-	if c.DataDir == "" {
-		c.DataDir = "."
-	}
-	if c.StaticDir == "" {
-		c.StaticDir = "static"
-	}
-	c.DataDir, e = filepath.Abs(c.DataDir)
-	if e != nil {
-		return c, e
-	}
-	c.StaticDir, e = filepath.Abs(c.StaticDir)
-	if e != nil {
-		return c, e
-	}
-	info, e := os.Stat(c.DataDir)
-	if e != nil || !info.IsDir() {
-		return c, fmt.Errorf("BUDGET_DATA_DIR must be an existing directory: %s", c.DataDir)
-	}
-	return c, nil
-}
-
 func accessHandler(c serverConfig, next http.Handler) http.Handler {
+	budget := &failureBudget{}
 	expected := sha256.Sum256([]byte(c.Password))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Budget-App", "simple-budget-app")
@@ -116,7 +40,7 @@ func accessHandler(c serverConfig, next http.Handler) http.Handler {
 			accessError(w, r, "Local access only", http.StatusForbidden)
 			return
 		}
-		// Forwarded headers are deliberately not trusted. TLS terminates here.
+		// Forwarded headers never establish identity, origin or TLS trust.
 		if c.CertFile != "" && r.TLS == nil {
 			accessError(w, r, "HTTPS required", http.StatusForbidden)
 			return
@@ -131,7 +55,13 @@ func accessHandler(c serverConfig, next http.Handler) http.Handler {
 			if r.TLS != nil {
 				scheme = "https"
 			}
-			if e != nil || u.Scheme != scheme || !strings.EqualFold(u.Host, r.Host) || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" {
+			originHost := r.Host
+			if c.ProxyMode == "loopback-https" {
+				canonical, _ := url.Parse(c.PublicOrigin)
+				scheme = "https"
+				originHost = canonical.Host
+			}
+			if e != nil || u.Scheme != scheme || !strings.EqualFold(u.Host, originHost) || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" {
 				accessError(w, r, "Origin is not allowed", http.StatusForbidden)
 				return
 			}
@@ -140,6 +70,11 @@ func accessHandler(c serverConfig, next http.Handler) http.Handler {
 			user, password, ok := r.BasicAuth()
 			actual := sha256.Sum256([]byte(password))
 			if !ok || user != "budget" || subtle.ConstantTimeCompare(actual[:], expected[:]) != 1 {
+				if r.Header.Get("Authorization") != "" && !budget.allow(time.Now()) {
+					w.Header().Set("Retry-After", "1")
+					accessError(w, r, "Too many failed authentication attempts", http.StatusTooManyRequests)
+					return
+				}
 				w.Header().Set("WWW-Authenticate", `Basic realm="Local budget", charset="UTF-8"`)
 				accessError(w, r, "Authentication required", http.StatusUnauthorized)
 				return
@@ -177,6 +112,9 @@ func prepareServer(c serverConfig) (http.Handler, error) {
 }
 
 func prepareApplication(c serverConfig, store *planner.Store) (http.Handler, error) {
+	if _, e := storageguard.Check(c.DataDir, c.Environment, c.InstallationID); e != nil {
+		return nil, e
+	}
 	assets, e := newStaticHandler(c.StaticDir)
 	if e != nil {
 		return nil, e
@@ -192,11 +130,13 @@ func prepareApplication(c serverConfig, store *planner.Store) (http.Handler, err
 	base := newFinancialHandler(assets)
 	if store != nil {
 		mux := http.NewServeMux()
+		mux.Handle("/api/ready", readyHandler(store))
+		mux.Handle("/api/backups/", backupHandler(c))
 		mux.Handle("/api/planner/", planner.NewHandler(planner.NewService(store)))
 		mux.Handle("/", base)
 		base = mux
 	}
-	return accessHandler(c, base), nil
+	return accessHandler(c, limitFinancialBody(base)), nil
 }
 
 func serveUntilCancelled(ctx context.Context, listener net.Listener, handler http.Handler) error {
@@ -225,6 +165,28 @@ func serveUntilCancelled(ctx context.Context, listener net.Listener, handler htt
 }
 
 func run(ctx context.Context, c serverConfig) error {
+	// This restriction applies to the web process, not to read-only admin
+	// readiness probes running as the repository's administrative owner.
+	if c.Environment == "production" && c.BackupDir != "" {
+		uid, _, err := fileOwner(c.BackupDir)
+		if err != nil {
+			return err
+		}
+		if uid == os.Geteuid() {
+			return errors.New("production backup repository must be owned by a different administrative user")
+		}
+	}
+	lease, err := storageguard.ParentLease(c.DataDir, false)
+	if err != nil {
+		return err
+	}
+	defer lease.Close()
+	if err = storageguard.CheckRecovery(c.DataDir); err != nil {
+		return err
+	}
+	if _, e := storageguard.Check(c.DataDir, c.Environment, c.InstallationID); e != nil {
+		return e
+	}
 	var tlsConfig *tls.Config
 	if c.CertFile != "" {
 		pair, e := tls.LoadX509KeyPair(c.CertFile, c.KeyFile)
@@ -242,7 +204,12 @@ func run(ctx context.Context, c serverConfig) error {
 	if _, e := newStaticHandler(c.StaticDir); e != nil {
 		return e
 	}
-	plannerStore, e := planner.Open(ctx, filepath.Join(c.DataDir, "planner.db"))
+	var plannerStore *planner.Store
+	if c.Environment == "production" {
+		plannerStore, e = planner.OpenProduction(ctx, filepath.Join(c.DataDir, "planner.db"), c.InstallationID)
+	} else {
+		plannerStore, e = planner.Open(ctx, filepath.Join(c.DataDir, "planner.db"))
+	}
 	if e != nil {
 		return fmt.Errorf("planner storage: %w", e)
 	}
@@ -256,7 +223,7 @@ func run(ctx context.Context, c serverConfig) error {
 		listener = tls.NewListener(listener, tlsConfig)
 		scheme = "https"
 	}
-	log.Printf("Личный бюджет: %s://%s (данные: %s)", scheme, c.Addr, c.DataDir)
+	log.Printf("Личный бюджет: %s listener ready (%s)", scheme, c.Environment)
 	workerCtx, stopWorker := context.WithCancel(ctx)
 	workerDone := make(chan struct{})
 	go func() {
@@ -270,13 +237,27 @@ func run(ctx context.Context, c serverConfig) error {
 }
 
 func main() {
+	if len(os.Args) > 1 && !strings.HasPrefix(os.Args[1], "-test.") {
+		if e := command(os.Args[1:], os.Stdout); e != nil {
+			log.Print(e)
+			os.Exit(1)
+		}
+		return
+	}
 	c, e := readConfig(os.Getenv)
 	if e != nil {
 		log.Fatal(e)
 	}
+	if c.Environment == "production" {
+		time.Local, _ = time.LoadLocation("Europe/Moscow")
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if e = run(ctx, c); e != nil {
+		if c.Environment == "production" {
+			log.Printf("production startup/runtime failed (%T); use administrative checks while stopped", e)
+			os.Exit(1)
+		}
 		log.Fatal(e)
 	}
 }

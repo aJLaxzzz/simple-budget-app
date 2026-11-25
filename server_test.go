@@ -34,7 +34,7 @@ func testAssets(t *testing.T) string {
 }
 func configForTest(t *testing.T, overrides map[string]string) serverConfig {
 	t.Helper()
-	env := map[string]string{"BUDGET_DATA_DIR": t.TempDir(), "BUDGET_STATIC_DIR": testAssets(t)}
+	env := map[string]string{"BUDGET_ENV": "development", "BUDGET_DATA_DIR": t.TempDir(), "BUDGET_STATIC_DIR": testAssets(t)}
 	for k, v := range overrides {
 		env[k] = v
 	}
@@ -151,7 +151,7 @@ func TestAuthenticationCoversAllRoutes(t *testing.T) {
 		for _, method := range []string{"GET", "POST", "PATCH", "DELETE", "PUT"} {
 			for _, bad := range []string{"", "wrong"} {
 				w := accessRequest(h, method, path, c.Addr, "192.0.2.5:1234", "", bad, true)
-				if w.Code != 401 || w.Header().Get("WWW-Authenticate") == "" {
+				if (w.Code != 401 && w.Code != 429) || (w.Code == 401 && w.Header().Get("WWW-Authenticate") == "") {
 					t.Fatalf("unprotected %s %s: %d", method, path, w.Code)
 				}
 			}
@@ -335,11 +335,11 @@ func TestSIGINTAndSIGTERM(t *testing.T) {
 			putFile(t, filepath.Join(dir, "data.json"), original)
 			cmd := exec.Command(os.Args[0], "-test.run=^TestSignalServerHelper$")
 			for _, env := range os.Environ() {
-				if !strings.HasPrefix(env, "BUDGET_") {
+				if !strings.HasPrefix(env, "BUDGET_") && !strings.HasPrefix(env, "CREDENTIALS_DIRECTORY=") {
 					cmd.Env = append(cmd.Env, env)
 				}
 			}
-			cmd.Env = append(cmd.Env, "BUDGET_TEST_HELPER=1", "BUDGET_ADDR="+addr, "BUDGET_DATA_DIR="+dir, "BUDGET_STATIC_DIR="+assets)
+			cmd.Env = append(cmd.Env, "BUDGET_TEST_HELPER=1", "BUDGET_ENV=development", "BUDGET_ADDR="+addr, "BUDGET_DATA_DIR="+dir, "BUDGET_STATIC_DIR="+assets)
 			pipe, e := cmd.StdoutPipe()
 			if e != nil {
 				t.Fatal(e)
@@ -456,7 +456,7 @@ func TestPlannerAPIProtectedAndFinanceUntouched(t *testing.T) {
 	for _, path := range []string{"/api/planner/task-templates", "/api/planner/task-templates/id", "/api/planner/task-templates/id/versions", "/api/planner/task-templates/id/archive", "/api/planner/task-templates/id/instantiate", "/api/planner/projects/id/template-preview", "/api/planner/projects/id/save-template", "/api/planner/icons", "/api/planner/icons/id", "/api/planner/icons/lucide:house/image", "/api/planner/attention/id?type=task", "/api/planner/attention", "/api/planner/occurrences/id", "/api/planner/series/preview", "/api/planner/templates/id/projects", "/api/planner/production-calendar", "/api/planner/production-calendar/bundled/2026", "/api/planner/production-calendar/preview", "/api/planner/production-calendar/import", "/api/planner/templates", "/api/planner/templates/id", "/api/planner/templates/id/versions", "/api/planner/templates/id/archive", "/api/planner/templates/id/instantiate", "/api/planner/templates/id/preview", "/api/planner/series/id/change-template", "/api/planner/series/id/preview", "/api/planner/series/id/change-rule", "/api/planner/series/id/pause", "/api/planner/series/id/resume", "/api/planner/series/id/archive", "/api/planner/series/id/reanchor", "/api/planner/incidents", "/api/planner/occurrences/id/skip", "/api/planner/occurrences/id/review", "/api/planner/occurrences/id/restore", "/api/planner/occurrences/id/complete", "/api/planner/occurrences/id/cancel", "/api/planner/occurrences/id/reschedule", "/api/planner/series", "/api/planner/series/id", "/api/planner/materialize", "/api/planner/recurrence/preview", "/api/planner/calendar?from=2026-11-01&to=2026-11-30", "/api/planner/tasks/id/context", "/api/planner/projects", "/api/planner/projects/id", "/api/planner/projects/id/archive", "/api/planner/tasks", "/api/planner/tasks/id/complete", "/api/planner/tasks/id/cancel", "/api/planner/tasks/id/restore", "/api/planner/tasks/id/reschedule", "/api/planner/history", "/api/planner/sessions", "/api/planner/sessions/id", "/api/planner/sessions/id/complete", "/api/planner/sessions/id/cancel", "/api/planner/sessions/id/restore", "/api/planner/sessions/id/reschedule"} {
 		for _, method := range []string{"GET", "POST", "PATCH"} {
 			w := accessRequest(h, method, path, c.Addr, "127.0.0.1:1234", "", "", false)
-			if w.Code != 401 || !strings.Contains(w.Body.String(), `"error"`) {
+			if (w.Code != 401 && w.Code != 429) || !strings.Contains(w.Body.String(), `"error"`) {
 				t.Fatalf("unprotected %s %s: %d", method, path, w.Code)
 			}
 		}

@@ -45,6 +45,8 @@
 /*.p12
 /config.local.json
 /config.local.*
+/installation.json
+/deploy/production.env
 /.idea/workspace.xml
 /.idea/shelf/
 
@@ -73,3 +75,9 @@
 __pycache__/
 *.pyc
 *.pyo
+
+# Administrative exports remain outside Git even if accidentally copied here
+/.simple-budget-admin/
+/.simple-budget-pki/
+/*.dmg
+/deploy/*.local.json

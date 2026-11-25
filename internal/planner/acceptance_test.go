@@ -2,6 +2,7 @@ package planner
 
 import (
 	"budget/internal/planner/recurrence"
+	"budget/internal/storageguard"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -192,6 +193,26 @@ func TestAcceptanceLoad(t *testing.T) {
 	series := createSeries(t, h, seriesInput("load-series", "2026-01-01", recurrence.Schedule, 1))
 	drainSeries(t, s, MaterializeInput{SeriesID: series.ID})
 	results := map[string]float64{}
+	// Same production SQL projection, measured separately from HTTP/JSON/DOM.
+	// Includes driver decoding and row scanning; it is not a pure SQLite VM timer.
+	if e := st.Transaction(ctx, func(tx *sql.Tx) error {
+		start := time.Now()
+		rows, err := listTasks(tx, "WHERE status IN ('planned','in_progress')")
+		results["sql_tasks_query_and_scan"] = float64(time.Since(start).Microseconds()) / 1000
+		if err != nil {
+			return err
+		}
+		start = time.Now()
+		for i := range rows {
+			if err := decorateTask(tx, &rows[i]); err != nil {
+				return err
+			}
+		}
+		results["sql_task_children_decoration"] = float64(time.Since(start).Microseconds()) / 1000
+		return nil
+	}); e != nil {
+		t.Fatal(e)
+	}
 	for _, route := range []string{"/projects", "/tasks", "/calendar?from=2026-11-01&to=2026-11-30", "/history?object_type=task&object_id=load-t0-0&limit=50", "/attention?limit=50", "/series"} {
 		start := time.Now()
 		apiCall(t, h, "GET", route, nil, 200)
@@ -199,6 +220,14 @@ func TestAcceptanceLoad(t *testing.T) {
 	}
 	t.Logf("100 projects, %d tasks, %d occurrences, %d history: latency ms %#v", count(t, st, "tasks"), count(t, st, "occurrences"), count(t, st, "history_events"), results)
 	if file := os.Getenv("PLANNER_PERF_REPORT"); file != "" {
+		if e := storageguard.TestPath(filepath.Dir(file)); e != nil {
+			t.Fatal(e)
+		}
+		if _, e := os.Lstat(file); e == nil {
+			if e = storageguard.Regular(file, false); e != nil {
+				t.Fatal(e)
+			}
+		}
 		raw, _ := json.MarshalIndent(results, "", "  ")
 		if e := os.WriteFile(file, raw, 0600); e != nil {
 			t.Fatal(e)

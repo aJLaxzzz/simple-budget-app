@@ -1,0 +1,378 @@
+#!/usr/bin/env python3
+"""Mac entrypoint. No network operation runs without explicit ENV=production."""
+import argparse
+import base64
+import getpass
+import http.client
+import json
+import os
+from pathlib import Path
+import shlex
+import ssl
+import subprocess
+import sys
+import tempfile
+import uuid
+from common import *
+
+ROOT=Path(__file__).resolve().parents[2]
+LOCAL=Path.home()/'.simple-budget-admin'
+
+class Transport:
+    def __init__(self):
+        require(os.environ.get('ENV')=='production','Select the server explicitly: ENV=production')
+        raw=subprocess.check_output(['/usr/bin/ssh','-G','budget'],text=True)
+        config=dict(line.split(' ',1) for line in raw.splitlines() if ' ' in line)
+        require(config.get('hostname')==IP and config.get('user')==ADMIN,'SSH alias budget must resolve to budgetadmin@'+IP)
+        require(config.get('stricthostkeychecking') not in ('false','no','off'),'SSH config must not disable host-key verification')
+        self.ssh=['/usr/bin/ssh','-o','StrictHostKeyChecking=yes','-o','ConnectTimeout=15','-o','ServerAliveInterval=15','-o','ServerAliveCountMax=3']
+        self.scp=['/usr/bin/scp','-o','StrictHostKeyChecking=yes','-o','ConnectTimeout=15']
+    def command(self,args,tty=False):
+        return subprocess.run([*self.ssh,*(['-t'] if tty else []),'budget',shlex.join([str(x) for x in args])],check=True)
+    def upload(self,path,token,name):
+        require(ID.fullmatch(token) and re.fullmatch('[a-zA-Z0-9_.-]+',name),'Unsafe transfer name')
+        subprocess.run([*self.scp,str(path),'budget:.simple-budget-incoming/'+token+'/'+name],check=True)
+    def download(self,token,name,target):
+        require(ID.fullmatch(token) and re.fullmatch('[a-zA-Z0-9_.-]+',name),'Unsafe transfer name')
+        require(not Path(target).exists(),'Refusing overwrite of local file')
+        subprocess.run([*self.scp,'budget:.simple-budget-incoming/'+token+'/'+name,str(target)],check=True)
+        os.chmod(target,0o600)
+    def request(self,action,instance,fields=None,files=None,token=None):
+        token=token or uuid.uuid4().hex
+        require(ID.fullmatch(token),'Invalid operation token')
+        # Fixed user-level directory commands; no remote root shell or arbitrary root path.
+        self.command(['mkdir','-p','-m','700','.simple-budget-incoming/'+token])
+        req={'action':action,'instance':instance,'request_id':token,**(fields or {})}
+        with tempfile.TemporaryDirectory(prefix='budget-ops-') as tmp:
+            f=Path(tmp)/'request.json';atomic(f,req);self.upload(f,token,'request.json')
+            for name,path in (files or {}).items():self.upload(path,token,name)
+            if action=='repair-initialization':
+                require(instance=='acceptance','Repair is synthetic-only')
+                self.command(['sudo','/usr/bin/python3','-I','/home/budgetadmin/.simple-budget-incoming/'+token+'/repair.py',token],tty=True)
+            else:self.command(['sudo','/usr/local/sbin/budget-admin',action,instance,token],tty=True)
+            if action=='clean-incoming':return {'result':'removed'}
+            result=Path(tmp)/'result.json';self.download(token,'result.json',result)
+            return load(result),token
+
+def clean_tree():
+    require(subprocess.check_output(['git','status','--porcelain','--untracked-files=normal'],cwd=ROOT)==b'',
+            'Production requires a clean committed tree. Commit/push is never automatic.')
+
+def release():
+    clean_tree()
+    p=subprocess.run(['/bin/bash',str(ROOT/'scripts/build-linux.sh')],cwd=ROOT,check=True,stdout=subprocess.PIPE,text=True)
+    print(p.stdout,end='');line=next(x for x in p.stdout.splitlines() if x.startswith('Linux release: '))
+    path=ROOT/line.split(': ',1)[1];m=load(path/'release.json');require(m['modified'] is False,'Dirty release refused')
+    require(sha(path/'budget')==m['files'][0]['sha256'],'Release checksum failed');return path,m
+
+def local_state(instance):
+    LOCAL.mkdir(mode=0o700,exist_ok=True);require(LOCAL.stat().st_mode&0o077==0 and not LOCAL.is_symlink(),'Private local administration directory required')
+    return LOCAL/(instance+'.json')
+
+def client_context(device='mac-1'):
+    require(NAME.fullmatch(device),'Invalid device')
+    pki=Path.home()/'.simple-budget-pki'
+    for name in (device+'.crt',device+'.key'):
+        regular(pki/name,64<<10)
+    require((pki/(device+'.key')).stat().st_mode&0o077==0,'Client key must be private')
+    ca='/etc/ssl/cert.pem' if Path('/etc/ssl/cert.pem').exists() else None
+    context=ssl.create_default_context(cafile=ca);context.minimum_version=ssl.TLSVersion.TLSv1_2
+    context.load_cert_chain(pki/(device+'.crt'),pki/(device+'.key'),password=lambda:getpass.getpass('Пароль закрытого ключа '+device+': '))
+    return context
+
+def app_connection(device='mac-1', password=None):
+    return client_context(device),password or getpass.getpass('Пароль приложения: ')
+
+def https_accept(expected,device):
+    context,password=app_connection(device)
+    try:
+        for attempt in range(1,4):
+            # Retry only the read-only proof, never the administrative operation.
+            # Reuse the unlocked TLS context; each HTTP connection is closed.
+            c=http.client.HTTPSConnection(IP,443,context=context,timeout=30)
+            try:
+                c.request('GET','/api/ready',headers={'Authorization':'Basic '+base64.b64encode(('budget:'+password).encode()).decode(),'Origin':'https://'+IP})
+                r=c.getresponse()
+                if r.status==200:
+                    data=json.loads(r.read(16384))
+                    require(data['revision']==expected['revision'] and data['schema_version']==expected['schema_version'] and data['modified'] is False,'HTTPS release/schema mismatch')
+                    return expected['revision']
+                reason={401:'application authentication rejected; check the application password (not the SSH or client-key password)',
+                        403:'Host/Origin or access policy rejected the request',
+                        429:'authentication attempts are rate limited',
+                        502:'proxy could not reach the application',
+                        503:'application is not ready or access remains in maintenance'}.get(r.status,'unexpected HTTP response')
+                if r.status!=401 or attempt==3:
+                    raise Refused('Protected HTTPS readiness failed: HTTP '+str(r.status)+'; '+reason)
+            finally:c.close()
+            print('Пароль приложения не принят (HTTP 401). Операция сохранена; повторите только пароль приложения.',file=sys.stderr)
+            password=getpass.getpass('Пароль приложения (попытка '+str(attempt+1)+' из 3): ')
+    finally:del password
+
+
+
+def acceptance(t,instance,device):
+    require(instance=='acceptance','Synthetic checks must never target production')
+    state=load(local_state(instance));status,_=t.request('status',instance)
+    require(status.get('synthetic') is True and status['installation_id']==state['installation_id'],'Synthetic installation identity required')
+    proxy=status.get('proxy',{})
+    require(proxy.get('instance')=='acceptance' and proxy.get('mode')=='open' and proxy.get('configuration_matches') is True,'Public route must select the synthetic installation')
+    context,password=app_connection(device)
+    auth='Basic '+base64.b64encode(('budget:'+password).encode()).decode()
+    def request(method,path,body=None,headers=None,ctx=context):
+        c=http.client.HTTPSConnection(IP,443,context=ctx,timeout=30)
+        try:
+            h={'Host':IP,'Authorization':auth,'Origin':'https://'+IP,'Content-Type':'application/json'};h.update(headers or {})
+            c.request(method,path,json.dumps(body).encode() if body is not None else None,h)
+            r=c.getresponse();data=r.read(2<<20);return r.status,data
+        finally:c.close()
+    code,data=request('GET','/api/ready');require(code==200,'HTTPS readiness failed')
+    require(request('GET','/api/ready',headers={'Authorization':'Basic aW52YWxpZDppbnZhbGlk'})[0]==401,'App password bypass')
+    require(request('POST','/api/planner/tasks',{'title':'must-not-exist'},headers={'Origin':'https://foreign.invalid'})[0]==403,'Foreign Origin accepted')
+    require(request('GET','/api/ready',headers={'Host':'foreign.invalid','X-Forwarded-Host':IP})[0] in (403,404,421),'Foreign Host accepted')
+    no_cert=ssl.create_default_context(cafile='/etc/ssl/cert.pem' if Path('/etc/ssl/cert.pem').exists() else None)
+    try:
+        request('GET','/api/ready',ctx=no_cert)
+    except (ssl.SSLError,ConnectionResetError):pass
+    else:raise Refused('Server accepted a request without a client certificate')
+    code,data=request('POST','/api/planner/projects',{'title':'Synthetic VPS acceptance '+uuid.uuid4().hex[:8]});require(code in (200,201),'Synthetic project creation failed')
+    project=json.loads(data)
+    code,data=request('POST','/api/planner/tasks',{'title':'Synthetic calendar check','project_id':project['id'],'planned_date':'2026-12-04'});require(code in (200,201),'Synthetic task creation failed')
+    task=json.loads(data);require(request('GET','/api/planner/tasks/'+task['id'])[0]==200,'Synthetic task read failed')
+    backup,_=t.request('backup',instance);ident=backup['manifest']['backup_id']
+    code,_=request('GET','/api/backups/status');require(code==200,'Backup metadata failed')
+    destination=download_verified_backup(context,auth,ident,state['installation_id'])
+    del password
+    atomic(LOCAL/'acceptance-result.json',{'at':utc(),'installation_id':state['installation_id'],'project_id':project['id'],'task_id':task['id'],'archive':str(destination),'checks':['https-mtls','app-password','host-origin','synthetic-get-post','backup-stop-start','http-download']})
+    print('Synthetic HTTPS checks passed. Linux reboot/rollback, Android and automatic certificate renewal remain separate acceptance gates.')
+
+def require_download_response(response):
+    # Caddy and the upstream can each emit no-store. HTTPResponse.getheader
+    # combines these fields as "no-store, no-store"; retain the same policy,
+    # allowing repetitions/case/OWS only, never a missing or weaker directive.
+    raw=response.getheader('Cache-Control') or ''
+    directives=[x.strip().lower() for x in raw.split(',')]
+    require(response.status==200 and directives and all(x=='no-store' for x in directives),
+            'Protected download failed: HTTP '+str(response.status)+'; Cache-Control='+repr(raw[:160]))
+    require((response.getheader('Content-Disposition') or '').split(';',1)[0].strip().lower()=='attachment',
+            'Backup response must be an attachment')
+
+
+def download_verified_backup(context,auth,ident,installation_id):
+    require(BACKUP_ID.fullmatch(ident or ''),'Invalid backup ID')
+    require(ID.fullmatch(installation_id or ''),'Invalid installation ID')
+    destination=LOCAL/('acceptance-'+ident+'.tar.gz')
+    partial=destination.with_suffix(destination.suffix+'.partial')
+    require(not destination.exists() and not partial.exists(),'Download file already exists; verify it before retrying')
+    c=http.client.HTTPSConnection(IP,443,context=context,timeout=90)
+    created=False
+    try:
+        c.request('GET','/api/backups/'+ident+'/full',headers={'Authorization':auth,'Host':IP})
+        response=c.getresponse();require_download_response(response)
+        with open(partial,'xb') as f:
+            created=True;os.chmod(partial,0o600)
+            while True:
+                chunk=response.read(1024*1024)
+                if not chunk:break
+                f.write(chunk)
+            f.flush();os.fsync(f.fileno())
+        metadata=json.loads(subprocess.check_output([str(local_binary()),'admin','backup','verify','--archive',str(partial)]))
+        require(metadata.get('installation_id')==installation_id and metadata.get('backup_id')==ident,'Downloaded archive identity mismatch')
+        # Publish without overwriting another download; unlink the temporary
+        # name immediately, leaving a normal single-link verified archive.
+        os.link(partial,destination);partial.unlink();created=False
+        atomic(LOCAL/('download-'+ident+'.json'),{'at':utc(),'installation_id':installation_id,'backup_id':ident,'archive':str(destination),'size':destination.stat().st_size,'sha256':sha(destination),'checks':['https-mtls','authenticated-download','no-store','attachment','archive-integrity','installation-id','backup-id']})
+        print('Verified HTTPS archive:',destination)
+        return destination
+    finally:
+        c.close()
+        if created:partial.unlink(missing_ok=True)
+
+
+def acceptance_download(instance,device,ident):
+    require(instance=='acceptance','Download retry targets the synthetic installation only')
+    state=load(local_state(instance));require(state.get('instance')=='acceptance','Synthetic local identity required')
+    context,password=app_connection(device)
+    auth='Basic '+base64.b64encode(('budget:'+password).encode()).decode()
+    try:download_verified_backup(context,auth,ident,state['installation_id'])
+    finally:del password
+
+
+class RevocationProbe:
+    def __init__(self, context, pending=False):
+        import socket
+        self.socket=None;self.session=None;self.context=context
+        if pending:return
+        self.context=context
+        self.socket=context.wrap_socket(socket.create_connection((IP,443),timeout=15),server_hostname=IP)
+        self.socket.sendall(('GET /api/ready HTTP/1.1\r\nHost: '+IP+'\r\nConnection: keep-alive\r\n\r\n').encode())
+        response=http.client.HTTPResponse(self.socket);response.begin();response.read(65536)
+        require(response.status in (200,401,503),'Device is not currently accepted')
+        self.session=self.socket.session
+        require(not self.session.has_ticket,'Unexpected TLS tickets: inspect live Caddy before revocation')
+    def verify_revoked(self):
+        import socket
+        try:
+            if self.socket is not None:self.socket.sendall(b'GET / HTTP/1.1\r\nHost: '+IP.encode()+b'\r\n\r\n')
+            if self.socket is not None:require(not self.socket.recv(1),'Old authenticated TLS connection survived revocation')
+        except (ConnectionResetError,BrokenPipeError):pass
+        except OSError as e:raise Refused('Old TLS connection closure was not proven') from e
+        finally:
+            if self.socket is not None:self.socket.close()
+        for session in (None,self.session):
+            try:
+                with self.context.wrap_socket(socket.create_connection((IP,443),timeout=15),server_hostname=IP,session=session) as s:
+                    s.sendall(b'GET / HTTP/1.1\r\nHost: '+IP.encode()+b'\r\n\r\n')
+                    data=s.recv(1024)
+                    raise Refused('Revoked certificate was accepted' if data else 'TLS peer closed without a certificate rejection alert')
+            except ssl.SSLError as e:
+                require(re.search(r'ALERT_(BAD_CERTIFICATE|UNKNOWN_CA|CERTIFICATE_UNKNOWN|CERTIFICATE_REQUIRED|ACCESS_DENIED)$',str(getattr(e,'reason',''))),
+                        'TLS failure did not prove revoked-certificate rejection')
+                continue
+            # A TCP reset/timeout/refusal does not prove correct mTLS revocation.
+            except OSError as e:raise Refused('Could not verify revoked-device TLS refusal') from e
+
+def install(t):
+    clean_tree()
+    with tempfile.TemporaryDirectory(prefix='budget-infrastructure-') as tmp:
+        bundle=Path(tmp);manifest={}
+        names=['common.py','remote.py','bootstrap.py','caddy_policy.py']
+        for sub,paths in [('ops',[ROOT/'scripts/ops'/x for x in names]),('systemd',list((ROOT/'deploy/systemd').iterdir()))]:
+            for source in paths:
+                name=sub+'/'+source.name;manifest[name]=sha(source)
+        token=uuid.uuid4().hex;t.command(['mkdir','-p','-m','700','.simple-budget-incoming/'+token+'/ops','.simple-budget-incoming/'+token+'/systemd'])
+        for name in manifest:
+            source=ROOT/('scripts/'+name if name.startswith('ops/') else 'deploy/'+name)
+            # Only fixed allowlisted source names from our clean repository are transferred.
+            subprocess.run([*t.scp,str(source),'budget:.simple-budget-incoming/'+token+'/'+name],check=True)
+        atomic(bundle/'bundle.json',manifest);t.upload(bundle/'bundle.json',token,'bundle.json')
+        t.command(['sudo','/usr/bin/python3','/home/budgetadmin/.simple-budget-incoming/'+token+'/ops/bootstrap.py'],tty=True)
+
+def confirm(label):
+    require(input(label+'\nВведите ПОДТВЕРЖДАЮ: ')=='ПОДТВЕРЖДАЮ','Cancelled')
+
+def main():
+    parser=argparse.ArgumentParser()
+    parser.add_argument('action');parser.add_argument('--instance',default=os.environ.get('INSTANCE') or 'acceptance',choices=['acceptance','production'])
+    parser.add_argument('--archive',default=os.environ.get('ARCHIVE') or None);parser.add_argument('--device',default=os.environ.get('DEVICE') or 'mac-1')
+    parser.add_argument('--backup-id',default=os.environ.get('BACKUP_ID') or None);parser.add_argument('--decision',default=os.environ.get('DECISION') or None)
+    parser.add_argument('--source',default=os.environ.get('LOCAL_DATA') or None);parser.add_argument('--name',default=os.environ.get('NAME') or None)
+    args=parser.parse_args();action=args.action
+    if action=='release-linux':release();return
+    if action in ('client-issue','client-renew','pki-backup'):
+        import pki; pki.execute(action,args.device,args.name);return
+    t=Transport()
+    if action=='acceptance-http':
+        import http_acceptance
+        http_acceptance.execute(t,args.instance,args.device);return
+    if action=='acceptance-tls':
+        import tls_acceptance
+        tls_acceptance.execute(t,args.instance,args.device);return
+    if action=='server-install':install(t);return
+    if action=='acceptance':acceptance(t,args.instance,args.device);return
+    if action=='acceptance-download':acceptance_download(args.instance,args.device,args.backup_id);return
+    statefile=local_state(args.instance)
+    state=load(statefile) if statefile.exists() else {}
+    pending_file=LOCAL/('pending-'+args.instance+'.json')
+    pending=load(pending_file) if pending_file.exists() else {}
+    if pending and action in ('deploy','initialize','migrate-data','restore','rollback'):
+        raise Refused('Reconcile the previous operation with status and recover before another change')
+    fields={};files={};token=None;probe=None
+    if action=='repair-initialization':
+        require(args.instance=='acceptance' and pending.get('action')=='initialize' and pending.get('installation_id')==state.get('installation_id'),'Repair requires a pending synthetic initialization')
+        confirm('Исправить release незавершённой acceptance-установки? Данные и пароль сохранятся.')
+        rel,m=release();files={'budget':rel/'budget','release.json':rel/'release.json','repair.py':ROOT/'scripts/ops/repair_initialization.py'}
+        fields={'confirm':True,'operation_id':pending['request_id']}
+    elif action in ('initialize','migrate-data'):
+        if state.get('installation_id'):require(action=='initialize','Existing local identity: use status/recover rather than importing over it')
+        confirm('Создать отдельную '+args.instance+' установку на '+IP+'?')
+        rel,m=release();files={'budget':rel/'budget','release.json':rel/'release.json'}
+        if action=='migrate-data':
+            require(args.instance=='production' and args.archive,'Use production and ARCHIVE from explicit offline legacy-export')
+            # Verify locally with a separate native helper, never ./budget.
+            native=local_binary();v=json.loads(subprocess.check_output([str(native),'admin','backup','verify','--archive',str(Path(args.archive).resolve())]))
+            ident=v['installation_id'];files['backup.tar.gz']=Path(args.archive).resolve()
+        else:ident=state.get('installation_id') or uuid.uuid4().hex
+        fields={'installation_id':ident,'confirm':True}
+        state={'installation_id':ident,'instance':args.instance};atomic(statefile,state)
+        action='initialize'
+    elif action=='deploy':
+        require(state.get('installation_id'),'Initialize/import first');rel,m=release();files={'budget':rel/'budget','release.json':rel/'release.json'};action='prepare'
+    elif action in ('restore','rollback','recover','cleanup'):
+        if action=='restore':
+            require(args.archive and state.get('installation_id'),'ARCHIVE and existing installation required')
+            metadata=json.loads(subprocess.check_output([str(local_binary()),'admin','backup','verify','--archive',str(Path(args.archive).resolve())]))
+            require(metadata['installation_id']==state['installation_id'],'Archive installation ID mismatch')
+            summary={k:metadata.get(k) for k in ('backup_id','installation_id','created_at','reason')}
+            summary['schema_version']=metadata['sqlite']['schema_version']
+            print(json.dumps(summary,ensure_ascii=False,indent=2))
+        confirm('Операция '+action+' для '+args.instance+'; восстановление заменяет данные выбранным поколением.')
+        fields={'confirm':True}
+        if action=='restore':
+            require(args.archive,'ARCHIVE required');files={'backup.tar.gz':Path(args.archive).resolve()}
+            if os.environ.get('ALLOW_CORRUPT_LIVE')=='yes':
+                confirm('Разрешить восстановление повреждённой базы, если свежая копия live не создаётся? Прежний каталог будет сохранён.')
+                fields['allow_corrupt_live']=True
+        if action=='recover':
+            require(args.decision in ('finish','rollback'),'DECISION=finish|rollback required');fields['decision']=args.decision
+            if pending:fields['operation_id']=pending['request_id']
+        if action=='cleanup':fields.update({'kind':os.environ.get('KIND','backup'),'backup_id':args.backup_id,'name':args.name})
+    elif action=='client-add':
+        require(NAME.fullmatch(args.device),'Invalid device');files={'client.crt':Path.home()/'.simple-budget-pki'/(args.device+'.crt')};fields={'device':args.device}
+    elif action=='client-revoke':
+        listing,_=t.request('client-list',args.instance);record=next((x for x in listing if x['device']==args.device),None)
+        require(record and (record['state']=='allowed' or record.get('revocation_pending')),'Device not allowed or pending')
+        confirm('Отозвать '+args.device+' SHA-256 '+record['fingerprint']+'? Все текущие HTTPS-соединения будут закрыты.')
+        fields={'device':args.device,'fingerprint':record['fingerprint'],'confirm':True}
+        probe=RevocationProbe(client_context(args.device),record.get('revocation_pending',False))
+    elif action=='fetch-backup':
+        if not args.backup_id:
+            status,_=t.request('status',args.instance);args.backup_id=status['backup']['latest']['manifest']['backup_id']
+        fields={'backup_id':args.backup_id}
+    require(action in {'repair-initialization','initialize','prepare','restore','rollback','recover','cleanup','client-add','client-revoke','fetch-backup','status','logs','backup','tls-status','client-list','pki-export','secure-page'},'Unknown action')
+    if state.get('installation_id'):fields['installation_id']=state['installation_id']
+    token=uuid.uuid4().hex
+    # Save token before SSH. Lost reply is reconciled, never blindly replayed.
+    stateful=action in ('initialize','prepare','restore','rollback','recover')
+    if stateful and action!='recover':atomic(pending_file,{'action':action,'instance':args.instance,'request_id':token,'installation_id':state.get('installation_id')})
+    try:result,token=t.request(action,args.instance,fields,files,token)
+    except BaseException:
+        if probe is not None and probe.socket is not None:probe.socket.close()
+        raise
+    if action=='repair-initialization':
+        t.request('clean-incoming',args.instance,token=token)
+        print(json.dumps(result,ensure_ascii=False,indent=2))
+        print('Release repaired; continue with make recover ENV=production INSTANCE=acceptance DECISION=finish DEVICE='+args.device)
+        return
+    if probe is not None:
+        try:probe.verify_revoked()
+        except BaseException:
+            t.request('access-stop',args.instance);raise
+        result['device_probe']='old connection closed; new/resumption handshake rejected'
+    if isinstance(result,dict) and result.get('result')=='awaiting_https_acceptance':
+        rev=https_accept(result['version'],args.device)
+        result,_=t.request('commit',args.instance,{'installation_id':state['installation_id'],'https_verified_revision':rev},token=result['request_id'])
+    if action=='fetch-backup':
+        dest=LOCAL/(args.backup_id+'.tar.gz');t.download(token,'download.tar.gz',dest)
+        require(sha(dest)==result['sha256'],'Downloaded checksum mismatch')
+        subprocess.run([str(local_binary()),'admin','backup','verify','--archive',str(dest)],check=True)
+        print('Verified external copy:',dest)
+    if action in ('client-add','client-revoke'):
+        registry_result,_=t.request('pki-export',args.instance);atomic(LOCAL/'device-registry.json',registry_result)
+    if action=='pki-export':
+        registry=LOCAL/'device-registry.json';atomic(registry,result);print('Public PKI registry:',registry)
+    print(json.dumps(result,ensure_ascii=False,indent=2))
+    if stateful:pending_file.unlink(missing_ok=True)
+    t.request('clean-incoming',args.instance,token=token)
+
+def local_binary():
+    # Isolated administrative helper. Never replaces the user's ./budget.
+    LOCAL.mkdir(mode=0o700,exist_ok=True)
+    path=LOCAL/'budget-admin-helper'
+    subprocess.run(['go','build','-o',str(path),'.'],cwd=ROOT,check=True)
+    return path
+
+if __name__=='__main__':
+    try:main()
+    except (Refused,OSError,ValueError,KeyError,subprocess.CalledProcessError) as e:
+        print('Operation stopped: '+str(e),file=sys.stderr);sys.exit(1)

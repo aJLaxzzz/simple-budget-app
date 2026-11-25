@@ -2,11 +2,12 @@ package planner
 
 // Test-only visual fixture host. No production clock or server configuration is changed.
 import (
+	"budget/internal/storageguard"
 	"context"
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
+
 	"testing"
 	"time"
 )
@@ -16,8 +17,8 @@ func TestFinalReviewServer(t *testing.T) {
 	if dir == "" {
 		t.Skip("only run by the isolated visual review runner")
 	}
-	if !strings.HasPrefix(filepath.Base(dir), "budget-planner-ui-") {
-		t.Fatal("temporary data directory required")
+	if _, e := storageguard.Check(dir, "test", ""); e != nil {
+		t.Fatal(e)
 	}
 	store, err := Open(context.Background(), filepath.Join(dir, "planner.sqlite"))
 	if err != nil {

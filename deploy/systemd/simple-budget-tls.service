@@ -1,0 +1,15 @@
+[Unit]
+Description=Check serving Simple Budget IP certificate
+After=caddy.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/budget-admin tls-status production
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/simple-budget-admin
+PrivateTmp=true
+ProtectHome=true
+MemoryMax=96M
+TimeoutStartSec=60
