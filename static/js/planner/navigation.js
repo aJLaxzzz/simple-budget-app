@@ -11,13 +11,14 @@
     }, 'pl-primary pl-icon'); add.setAttribute('aria-label','Создать');
     const settings = el('a', {class:'pl-button pl-icon',href:'#/plans/settings','aria-label':'Настройки планировщика',title:'Настройки планировщика'}, '⚙');
     page.append(el('div', {class:'pl-heading'}, el('div', {}, el('h1',{},'Планы')), el('div',{class:'pl-header-actions'},add,settings)),nav);
-    P.updateAttentionCount?.(nav);
+    const ready = P.updateAttentionCount?.(nav);
     if (group==='tasks' || group==='projects') {
       const project = group==='projects';
       const entries = project ? [['#/plans/projects','Все проекты','all'],['#/plans/projects?view=regular','Регулярные проекты','regular']] : [['#/plans/tasks','Все задачи','all'],['#/plans/tasks?view=regular','Регулярные','regular'],['#/plans/tasks?view=undated','Без даты','undated']];
       const current = ['templates','task-templates'].includes(route.view)?'templates':route.view==='series'?'regular':route.params.get('view')||'all';
       page.append(el('nav', {class:'pl-subnav','aria-label':project?'Представления проектов':'Представления задач'}, entries.map(([href,title,key]) => el('a',{href,...(current===key && route.view!=='inbox'?{'aria-current':'page',class:'is-active'}:{})},title))));
     }
+    return ready;
   };
   P.compactTask = async function (route = P.route()) {
     const date = route.view==='calendar' ? route.params.get('date') || P.today() : '';

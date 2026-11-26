@@ -6,6 +6,7 @@ import getpass
 import http.client
 import json
 import os
+import re
 from pathlib import Path
 import shlex
 import ssl
@@ -115,7 +116,11 @@ def client_context(device='mac-1'):
             context.load_cert_chain(pki/(device+'.crt'),pki/(device+'.key'),password=lambda:secret_store.password('client',prompt,device))
             return context
         except ssl.SSLError as e:
-            if getattr(e,'reason',None) not in ('PEM_LIB','BAD_DECRYPT'):raise
+            reason=(getattr(e,'reason',None) or '').upper().replace(' ','_')
+            # Some Python/OpenSSL builds expose this error only as text (reason=None).
+            # Match that specific load_cert_chain failure, never arbitrary TLS errors.
+            pem_text=re.fullmatch(r'\[SSL\] PEM lib(?: \(_ssl\.c:\d+\))?',str(e))
+            if reason not in ('PEM_LIB','BAD_DECRYPT') and not (not reason and pem_text):raise
             if not manual or attempt==3:
                 raise Refused('Не удалось открыть клиентский ключ '+device+'. Проверьте его пароль и файл ключа. Если операция уже началась, продолжите через status/recover.') from None
             print('Не удалось открыть клиентский ключ. Повторите именно пароль ключа '+device+' (не sudo и не пароль приложения).',file=sys.stderr)

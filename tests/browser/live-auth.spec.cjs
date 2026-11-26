@@ -12,7 +12,10 @@ test('keyboard calendar control retains focus after an external live refresh',as
   const group=page.locator('.pc-dense-group');await expect(group).toContainText('5 дел');await group.focus();
   const original=await group.elementHandle();
   expect((await machine.post('/api/planner/tasks',{data:{title:'Внешнее изменение при клавиатурном фокусе'}})).status()).toBe(201);
-  await expect.poll(()=>original.evaluate(n=>n.isConnected)).toBe(false);
+  // The external undated task does not change this calendar's payload.
+  await expect(page.locator('#sync-status')).toHaveText('Синхронизация');
+  await expect(page.locator('#sync-status')).toHaveText('Синхронизировано');
+  expect(await original.evaluate(n=>n.isConnected)).toBe(true);
   await expect(page.locator('#sync-status')).toHaveText('Синхронизировано');await expect(group).toBeFocused();
   await page.keyboard.press('Enter');await expect(page.getByRole('dialog',{name:/Одновременные события/}).locator('.pc-event')).toHaveCount(5);
  }finally{await context.close();await machine.dispose();await server.close()}

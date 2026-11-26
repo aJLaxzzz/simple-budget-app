@@ -1,6 +1,6 @@
 (function(P){
  'use strict';const {el,button,meta}=P;
- P.updateAttentionCount=async nav=>{try{const result=await P.api('/attention?limit=1');if(!nav.isConnected)return;const link=nav.querySelector('[href="#/plans/attention"]');if(link){link.replaceChildren(document.createTextNode('Внимание'),el('span',{class:'pl-attention-count','aria-label':'Необработанных проблем: '+result.count},String(result.count)));}}catch{/* The view exposes retry and details; navigation stays usable. */}};
+ P.updateAttentionCount=async nav=>{try{const result=await P.api('/attention?limit=1');const link=nav.querySelector('[href="#/plans/attention"]');if(link){link.replaceChildren(document.createTextNode('Внимание'),el('span',{class:'pl-attention-count','aria-label':'Необработанных проблем: '+result.count},String(result.count)));}}catch{/* The view exposes retry and details; navigation stays usable. */}};
  P.renderAttention=async function(host,route){
    const tab=route.params.get('tab')||'needs_decision';const series=route.params.get('series_id');
    host.replaceChildren(el('div',{class:'pl-section-head'},el('div',{},el('h2',{},'Требуют внимания'),meta('Пропущенное не исчезает. Выберите, что делать дальше.'))));

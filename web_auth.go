@@ -154,7 +154,7 @@ func browserNavigation(r *http.Request) bool {
 	return r.Method == "GET" && (r.URL.Path == "/" || r.URL.Path == "/index.html" || r.URL.Path == "/login.html") && r.Header.Get("Sec-Fetch-Mode") == "navigate" && r.Header.Get("Sec-Fetch-Dest") == "document"
 }
 func loginAsset(p string) bool {
-	return p == "/js/environment.js" || p == "/login.html" || p == "/js/login.js" || p == "/css/login.css"
+	return p == "/favicon.ico" || p == "/favicon.svg" || p == "/favicon-16.png" || p == "/favicon-32.png" || p == "/js/environment.js" || p == "/login.html" || p == "/js/login.js" || p == "/css/login.css"
 }
 func (a *webAuth) handler(c serverConfig, assets, next http.Handler) http.Handler {
 	expected := sha256.Sum256([]byte(c.Password))

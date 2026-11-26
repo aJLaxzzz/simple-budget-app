@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -69,6 +70,14 @@ type serverShutdownKey struct{}
 
 func withSync(h *eventHub, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Snapshot before the handler reads storage, never after it. This is a
+		// conservative lower bound for the data returned by a successful GET.
+		if r.Method == http.MethodGet {
+			h.mu.Lock()
+			w.Header().Set("X-Budget-Sync-Generation", h.generation)
+			w.Header().Set("X-Budget-Sync-Revision", strconv.FormatUint(h.revision, 10))
+			h.mu.Unlock()
+		}
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), syncContextKey{}, h)))
 	})
 }

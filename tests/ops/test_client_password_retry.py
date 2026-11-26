@@ -1,5 +1,7 @@
 import contextlib
 import ssl
+import shutil
+import subprocess
 from pathlib import Path
 import sys
 import tempfile
@@ -52,6 +54,28 @@ class ClientPasswordRetryTests(unittest.TestCase):
             self.assertIn('status/recover', str(raised.exception))
             self.assertNotIn('synthetic-secret', str(raised.exception))
             self.assertEqual(prompt.call_count, 3); self.assertEqual(factory.call_count, 3)
+
+    def test_openssl_text_without_reason_retries_but_other_errors_do_not(self):
+        error=ssl.SSLError(524297,'[SSL] PEM lib (_ssl.c:4065)');error.reason=None
+        with self.fixture([error,None]) as (contexts,prompt,_,_):
+            self.assertIs(mac.client_context(),contexts[1]);self.assertEqual(prompt.call_count,2)
+        for text in ('[SSL] unknown error (_ssl.c:4065)','PEM lib in an unrelated message'):
+            error=ssl.SSLError(text);error.reason=None
+            with self.fixture([error]) as (_,prompt,_,_):
+                with self.assertRaises(ssl.SSLError):mac.client_context()
+                prompt.assert_called_once()
+
+    @unittest.skipUnless(shutil.which('openssl'),'openssl required for encrypted synthetic key')
+    def test_native_encrypted_key_wrong_password_then_success(self):
+        with tempfile.TemporaryDirectory(prefix='budget-client-retry-') as tmp:
+            pki=Path(tmp)/'.simple-budget-pki';pki.mkdir(mode=0o700)
+            key=pki/'mac-1.key';cert=pki/'mac-1.crt'
+            subprocess.run(['openssl','req','-x509','-newkey','rsa:2048','-keyout',str(key),'-out',str(cert),'-days','1','-subj','/CN=synthetic-retry-test','-passout','stdin'],input=b'synthetic-correct-passphrase\n',stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,check=True)
+            key.chmod(0o600)
+            with patch.object(mac.Path,'home',return_value=Path(tmp)),patch.object(mac.secret_store,'SESSION',SimpleNamespace(mode='manual')),patch.object(mac.secret_store,'password',side_effect=['synthetic-wrong-passphrase','synthetic-wrong-passphrase','synthetic-correct-passphrase']) as prompt,patch('builtins.print') as output:
+                self.assertIsInstance(mac.client_context(),ssl.SSLContext)
+                self.assertEqual(prompt.call_count,3)
+                self.assertNotIn('synthetic-correct-passphrase',str(output.call_args_list))
 
     def test_keychain_error_never_falls_back_to_manual(self):
         with self.fixture([self.error()], 'keychain') as (_, prompt, factory, _):

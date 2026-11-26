@@ -7,8 +7,9 @@
   notice.style.cssText = 'background:#fff7dc;color:#332e1b;border:1px solid #c9b77a;padding:12px;border-radius:8px';(document.querySelector('header') || document.body).after(notice);
   let stream, retry, connectTurn = 0, pending = false, running = false, failed = false, connected = false, delay = 1000, scope = 'all', lastActivity = Date.now(), generation, revision, nextReconcile = 0, reconcileDelay = 1000;
   let pointerDown = false, dragging = false, keyboardDown = false, interactionUntil = 0;
-  document.addEventListener('pointerdown', () => { pointerDown = true; }, true);
-  document.addEventListener('dragstart', () => { dragging = true; }, true);
+  const interacted = () => { window.budgetInteractionEpoch = (window.budgetInteractionEpoch || 0) + 1; };
+  document.addEventListener('pointerdown', () => { interacted(); pointerDown = true; }, true);
+  document.addEventListener('dragstart', () => { interacted(); dragging = true; }, true);
   const releasePointer = () => { pointerDown = false; interactionUntil = Date.now() + 250; };
   window.addEventListener('pointerup', releasePointer, true);
   window.addEventListener('pointercancel', releasePointer, true);
@@ -16,7 +17,7 @@
   window.addEventListener('dragend', releaseDrag, true);
   window.addEventListener('drop', releaseDrag, true);
   document.addEventListener('focusin', () => { interactionUntil = Date.now() + 250; }, true);
-  document.addEventListener('keydown', () => { keyboardDown = true; }, true);
+  document.addEventListener('keydown', () => { interacted(); keyboardDown = true; }, true);
   window.addEventListener('keyup', () => { keyboardDown = false; interactionUntil = Date.now() + 250; }, true);
   window.addEventListener('blur', () => { keyboardDown = false; releaseDrag(); });
   const state = text => { indicator.textContent = text; };
@@ -37,12 +38,14 @@
     notice.append(button);notice.hidden = false;
   }
   async function reconcile(force) {
-    if (!pending || running || failed || !connected || Date.now() < nextReconcile || Date.now() - (window.budgetLastWrite || 0) < 300) return;
+    if (!pending || running || failed || !connected || Date.now() < nextReconcile) return;
+    if (window.budgetViews?.covers({generation, revision})) { pending=false;notice.hidden=true;state('Синхронизировано');return; }
     const plansView=location.hash.startsWith('#/plans');
     if(scope!=='all'&&((scope==='planner'&&!plansView)||(scope==='finance'&&plansView))){pending=false;state('Синхронизировано');return;}
     // Replacing calendar nodes during a native drag loses its drop target.
     if(pointerDown || dragging || keyboardDown || Date.now() < interactionUntil){state('Синхронизация');return;}
-    if (!force && (editing() || window.budgetRequests > 0)) { state('Синхронизация'); if (editing()) conflict(); return; }
+    if (window.budgetRequests > 0 || window.budgetViews?.busy) {state('Синхронизация');return;}
+    if (!force && editing()) { state('Синхронизация'); if (editing()) conflict(); return; }
     running = true; pending = false;state('Синхронизация');
     const hash = location.hash, x = scrollX, y = scrollY, readFailures = window.budgetReadFailures || 0;
     const active = document.activeElement;
@@ -53,7 +56,8 @@
     try {
       const plans = hash.startsWith('#/plans');
       if ((scope === 'all' || scope === 'planner' && plans || scope === 'finance' && !plans) && window.budgetRefreshView) {
-        if(plans) await window.Planner.refresh(); else await window.budgetRefreshView();
+        const applied = plans ? await window.Planner.refresh(true) : await window.budgetRefreshView(true);
+        if (applied === false) return;
       }
       if ((window.budgetReadFailures || 0) !== readFailures) throw new Error('Сверка не завершена');
       if(hash===location.hash){
@@ -66,10 +70,12 @@
     } catch(e){pending=true;nextReconcile=Date.now()+reconcileDelay;reconcileDelay=Math.min(reconcileDelay*2,30000);state(navigator.onLine?'Переподключение':'Нет соединения');}
     finally{running=false;}
   }
+  window.addEventListener('budget-view-ready',()=>{if(pending && window.budgetViews?.covers({generation,revision})){pending=false;notice.hidden=true;if(connected&&!failed)state('Синхронизировано');}});
+  window.addEventListener('budget-view-stale',()=>{pending=true;scope='all';});
   const dirty = target => {
     if(target.closest('.pl-filters')||target.matches('[type=search],#search-input'))return;
     if(target.closest('#modal-root,.pl-dialog,.pl-drawer-shell,.categories-page,form:not(.pl-filters)')||target.id==='income-input'){
-      window.budgetDraftDirty=true;window.budgetDraftNode=target.closest('.categories-page')?document.getElementById('root'):target;
+      window.budgetEditEpoch=(window.budgetEditEpoch||0)+1;window.budgetDraftDirty=true;window.budgetDraftNode=target.closest('.categories-page')?document.getElementById('root'):target;
     }
   };
   document.addEventListener('input',e=>dirty(e.target));

@@ -2,45 +2,81 @@
   'use strict';
   const { el, button, meta } = P;
   let generation = 0;
-  let host;
+  let host, mountedHash;
+  const screenKey = hash => { const [path, query] = (hash || '').split('?'); const params = new URLSearchParams(query); ['task','new','edit'].forEach(k => params.delete(k)); return path + '?' + params; };
   P.unmount = function () {
     P.guardActive = null; P.deferNavigation = null;
     generation++;
     document.querySelectorAll('.pl-drawer-shell, .pl-dialog').forEach(n => n.remove());
     document.body.classList.remove('planner-open', 'planner-page', 'planner-calendar');
   };
-  P.refresh = async () => {
+  P.refresh = async (background = false) => {
     if (!window.location.hash.startsWith('#/plans')) return;
     const task = P.route().params.get('task');
     const selected = document.querySelector('.pl-editor-tabs [aria-selected="true"]')?.id;
-    await P.mount(host);
+    if (await P.mount(host, background === true) === false) return false;
     // Refresh the same open card after a command without sending the user back to Main.
     // Opening another card still starts on Main and does not fetch its history.
     if (task && task === P.route().params.get('task') && selected) {
       const tab = document.getElementById(selected); tab?.click();
       if (selected !== 'task-tab-main') tab?.focus();
     }
+    return true;
   };
-  P.mount = async function (root) {
-    P.unmount(); host = root;
+  P.mount = (root, background = false) => window.budgetViews.run(() => mount(root, background === true), background === true);
+  async function mount(root, background) {
+    const sameView = host === root && screenKey(mountedHash) === screenKey(location.hash) && root.querySelector('.planner');
+    if (sameView) generation++; else P.unmount();
+    host = root;
+    const tx = window.budgetViews.capture();
+    const previousPanels = sameView ? [...document.querySelectorAll('.pl-drawer-shell,.pl-dialog')] : [];
+    // Keep the old view visible while a local save is read back, but do not
+    // offer commands captured from its previous revision. Background SSE reads
+    // stay interactive and are discarded if the user starts interacting.
+    const held = sameView && !background ? [root.querySelector('.planner'), ...previousPanels].map(n => [n, n.inert]) : [];
+    held.forEach(([n]) => { n.inert = true; });
     const turn = generation;
     document.body.classList.add('planner-page');
     const route = P.route();if(route.view!=='series'||!route.id)P.repeatAutoOpenedRoute=null;
     const page = el('section', { class: 'planner', 'aria-label': 'Планы' });
-    const chrome=el('div',{class:'pl-navigation'}); P.navigation(chrome, route); page.append(chrome);
+    const chrome=el('div',{class:'pl-navigation'}); const navReady = P.navigation(chrome, route); page.append(chrome);
     const content = el('div', { class: 'pl-content', 'aria-live': 'polite' }, el('p', { class: 'pl-loading', role: 'status' }, 'Загружаем планы…'));
-    page.append(content); root.replaceChildren(page);
+    page.append(content);
+    const previous = sameView ? root.querySelector('.planner') : null;
+    if (!previous) root.replaceChildren(page);
+    let committed = false;
+    const commit = async () => {
+      await navReady;
+      window.budgetViews.check(tx);
+      if (committed || generation !== turn) return;
+      committed = true;
+      mountedHash = location.hash;
+      if (sameView) {
+        previousPanels.forEach(n => n.remove());
+        if (!document.querySelector('.pl-drawer-shell')) document.body.classList.remove('planner-open');
+      }
+      if (previous?.isConnected) {
+        P.reuseRows(previous, page);
+        const oldChrome = previous.querySelector('.pl-navigation');
+        if (sameView && oldChrome?.isEqualNode(chrome)) chrome.replaceWith(oldChrome);
+        root.replaceChildren(page);
+      }
+    };
     try {
       if (route.view === 'calendar') {
         document.body.classList.add('planner-calendar');
         const ready = await P.renderCalendar(content, route, () => generation === turn);
-        if (generation !== turn || ready === false) return;
+        if (generation !== turn) return;
+        await commit();
+        content.budgetAfterMount?.();
+        if (ready === false) return;
         if (route.params.has('task') || route.params.get('new') === 'task') await P.taskEditor(route, () => generation === turn);
         return;
       }
       if (['series','templates','task-templates','attention','settings'].includes(route.view) || (['tasks','projects'].includes(route.view) && route.params.get('view')==='regular')) {
         const render = route.params.get('view')==='regular' ? P.renderSeries : {series:P.renderSeries, templates:P.renderTemplates, 'task-templates':P.renderTaskTemplates, attention:P.renderAttention, settings:P.renderCalendarSettings}[route.view];
         await render(content, route);
+        await commit();
         if (generation === turn && (route.params.has('task')||route.params.get('new')==='task')) {
           const [tasks,projects,archive]=await Promise.all([P.api('/tasks?status=active'),P.api('/projects'),P.api('/projects?archived=true')]);
           if(generation!==turn)return; P.data={tasks:tasks.items||[],projects:[...(projects.items||[]),...(archive.items||[])]};
@@ -63,7 +99,20 @@
         if(added)P.data.tasks=(await P.api('/tasks?status=active')).items;
         if(generation!==turn)return;
       }
-      if (route.view === 'projects' && route.id) {
+      if (!route.params.has('task') && !route.params.has('new') && P.updateTaskList?.connected() && P.updateTaskList.key === location.hash && P.updateTaskList.projects === JSON.stringify(P.data.projects) && previous?.isConnected) {
+        await navReady;
+        window.budgetViews.check(tx);
+        P.updateTaskList.draw();
+        const oldChrome = previous.querySelector('.pl-navigation');
+        if (!oldChrome.isEqualNode(chrome)) oldChrome.replaceWith(chrome);
+        committed = true; mountedHash = location.hash;
+      } else if (route.view === 'projects' && !route.id && !route.params.has('new') && P.updateProjects?.key === location.hash && P.updateProjects.connected()) {
+        await navReady;
+        window.budgetViews.check(tx);
+        P.updateProjects.draw(); committed = true; mountedHash = location.hash;
+        const oldChrome = previous.querySelector('.pl-navigation');
+        if (!oldChrome.isEqualNode(chrome)) oldChrome.replaceWith(chrome);
+      } else if (route.view === 'projects' && route.id) {
         const project = await P.api('/projects/' + encodeURIComponent(route.id));
         if (generation !== turn) return;
         P.data.tasks = project.tasks;
@@ -71,11 +120,23 @@
       } else if (route.view === 'projects') renderProjects(content);
       else renderTasks(content, route);
       if (generation !== turn) return;
+      await commit();
       if (route.params.has('task') || route.params.get('new') === 'task') await P.taskEditor(route, () => generation === turn);
       if (route.params.get('edit') === 'project' || route.params.get('new') === 'project') P.projectEditor(route);
     } catch (error) {
+      if (error.superseded) throw error;
       if (generation !== turn) return;
       content.replaceChildren(el('div', { class: 'pl-empty' }, el('h2', {}, 'Не удалось загрузить планы'), el('p', {}, error.message), button('Попробовать снова', P.refresh)));
+      await commit();
+    } finally { held.forEach(([n, inert]) => { n.inert = inert; }); }
+  };
+  // Only reuse self-contained rows with identical command inputs, including
+  // expected_revision. Never graft new handlers onto an old captured closure.
+  P.reuseRows = (before, after) => {
+    const rows = new Map([...before.querySelectorAll('[data-task-id],.pc-event[data-event-id]')].map(n => [n.dataset.taskId || n.dataset.eventId, n]));
+    for (const n of after.querySelectorAll('[data-task-id],.pc-event[data-event-id]')) {
+      const old = rows.get(n.dataset.taskId || n.dataset.eventId);
+      if (old?.budgetIdentity && old.budgetIdentity === n.budgetIdentity && old.isEqualNode(n)) n.replaceWith(old);
     }
   };
   P.empty = (title, text) => el('div', { class: 'pl-empty' }, el('span', { class: 'pl-empty-symbol', 'aria-hidden': 'true' }, '◇'), el('h3', {}, title), el('p', {}, text));
@@ -98,6 +159,7 @@
   };
   P.taskRow = function (task, child = false, context = '') {
     const row = el('div', { class: 'pl-task' + (child ? ' pl-child' : '') + (P.active(task) ? '' : ' pl-terminal'), 'data-task-id': task.id });
+    row.budgetIdentity = JSON.stringify([task, child, context, P.data.projects.find(p => p.id === task.project_id)]);
     const complete = button(task.status === 'completed' ? '✓' : task.status === 'cancelled' ? '−' : '', () => P.runAction(task, 'complete'), 'pl-check');
     complete.setAttribute('aria-label', 'Завершить: ' + task.title);
     complete.disabled = task.project_pending || !P.active(task) || Boolean(P.data.projects.find(p => p.id === task.project_id)?.archived_at);
@@ -136,8 +198,12 @@
       let tasks = P.data.tasks.filter(t => (!t.project_pending || !P.active(t)) && (!inbox || (!t.project_id && !t.planned_date)) && (!undated || (!t.planned_date && !t.due_date)));
       tasks = tasks.filter(t => (status.value === 'all' || (status.value === 'active' ? P.active(t) : t.status === status.value)) && t.title.toLocaleLowerCase('ru').includes(search.value.toLocaleLowerCase('ru')) && (!project || project.value === 'all' || (project.value === 'none' ? !t.project_id : t.project_id === project.value)));
       const total=tasks.length;tasks=P.limitUpcoming(tasks,inbox||showAll.value==='all');
-      results.replaceChildren(el('p', { class: 'pl-list-count' }, 'Задач: ' + tasks.length), tasks.length ? (inbox ? P.taskTree(tasks) : P.groupedTasks(tasks,Boolean(search.value.trim()))) : P.empty(inbox ? 'Входящие разобраны' : 'Задач не найдено', inbox ? 'Новая идея? Добавьте её одной строкой выше.' : 'Измените фильтры или создайте первую задачу.'));
+      const fresh = el('div');
+      fresh.replaceChildren(el('p', { class: 'pl-list-count' }, 'Задач: ' + tasks.length), tasks.length ? (inbox ? P.taskTree(tasks) : P.groupedTasks(tasks,Boolean(search.value.trim()))) : P.empty(inbox ? 'Входящие разобраны' : 'Задач не найдено', inbox ? 'Новая идея? Добавьте её одной строкой выше.' : 'Измените фильтры или создайте первую задачу.'));
+      P.reuseRows(results, fresh);
+      results.replaceChildren(...fresh.childNodes);
     };
+    P.updateTaskList = {key: location.hash, projects: JSON.stringify(P.data.projects), connected: () => results.isConnected, draw};
     let loadedStatus = status.value, loadTurn = 0;
     filters.addEventListener('input', async () => {
       const params = new URLSearchParams(window.location.hash.split('?')[1] || '');
@@ -188,12 +254,16 @@
     const grid = el('div', { class: 'pl-project-grid' });
     function draw() {
       const projects = P.projectCards(P.data.projects.filter(p => Boolean(p.archived_at) === (archive.value === 'archived') && (!status.value || p.status === status.value)));
+      const oldCards = new Map([...grid.querySelectorAll('.pl-project-card')].map(n => [n.getAttribute('href'), n]));
       grid.replaceChildren(...projects.map(project => {
         const count = project.task_count ?? project.tasks?.length ?? 0;
-        return P.paint(el('a', { class: 'pl-project-card', href: '#/plans/projects/' + encodeURIComponent(project.id) }, el('div', { class: 'pl-card-top' }, P.appearanceIcon(project,true), P.status(project)), el('h3', {}, project.title), project.description?el('p', { class: 'pl-card-description' }, project.description):null, project.start_date?el('p',{class:'pl-project-date'},(project.occurrence_id?'↻ Выполнение · ':'Начало · ')+P.projectDateLabel(project)):null, progress(project), el('div', { class: 'pl-card-bottom' }, project.repeat_series_id&&!project.occurrence_id?meta('↻ Повторение'):null,project.due_date ? el('span', { class: P.overdue(project) ? 'pl-overdue' : 'pl-muted' }, (P.overdue(project) ? 'Просрочен · ' : 'До ') + P.date(project.due_date)) : meta('Без крайнего срока'))),project);
+        const card = P.paint(el('a', { class: 'pl-project-card', href: '#/plans/projects/' + encodeURIComponent(project.id) }, el('div', { class: 'pl-card-top' }, P.appearanceIcon(project,true), P.status(project)), el('h3', {}, project.title), project.description?el('p', { class: 'pl-card-description' }, project.description):null, project.start_date?el('p',{class:'pl-project-date'},(project.occurrence_id?'↻ Выполнение · ':'Начало · ')+P.projectDateLabel(project)):null, progress(project), el('div', { class: 'pl-card-bottom' }, project.repeat_series_id&&!project.occurrence_id?meta('↻ Повторение'):null,project.due_date ? el('span', { class: P.overdue(project) ? 'pl-overdue' : 'pl-muted' }, (P.overdue(project) ? 'Просрочен · ' : 'До ') + P.date(project.due_date)) : meta('Без крайнего срока'))),project);
+        const old = oldCards.get(card.getAttribute('href'));
+        return old?.isEqualNode(card) ? old : card;
       }));
       if (!projects.length) grid.append(P.empty('Здесь появятся ваши проекты', 'Создайте проект и добавляйте задачи в удобном темпе.'));
     }
+    P.updateProjects = {key: location.hash, connected: () => grid.isConnected, draw};
     filters.addEventListener('change', draw); content.append(filters, grid); draw();
   }
   function renderProject(content, project) {

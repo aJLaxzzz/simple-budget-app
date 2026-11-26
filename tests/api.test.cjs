@@ -49,3 +49,12 @@ test('failed reconciliation read is observable and does not report success',asyn
  const context={window:{},fetch:async()=>({ok:false,status:503,json:async()=>({error:'maintenance'})})};vm.runInNewContext(source,context);
  await assert.rejects(context.window.budgetAPI('/api/months'),/maintenance/);assert.equal(context.window.budgetReadFailures,1);assert.equal(context.window.budgetRequests,0);
 });
+
+test('cancelled refresh of the same finance view retains the displayed snapshot revision',async()=>{
+ const requests=[];let failed=false;
+ const context={window:{},fetch:async(url,opts)=>{requests.push({url,opts});if(failed&&!opts.method)throw Error('offline');return {ok:true,status:200,headers:{get:()=> 'generation:1'},json:async()=>({})}}};vm.runInNewContext(source,context);
+ const w=context.window;w.budgetFinanceView('/api/months/m');await w.budgetAPI('/api/months/m');
+ w.budgetFinanceView('/api/months/m');failed=true;await assert.rejects(w.budgetAPI('/api/months/m'));
+ w.budgetDraftDirty=true;await w.budgetAPI('/api/months/m/income',{method:'PATCH'});
+ assert.equal(requests.at(-1).opts.headers['If-Match'],'generation:1');
+});

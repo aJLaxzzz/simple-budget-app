@@ -33,6 +33,7 @@
   }
 
   function showAPIError(error) {
+    if (error.superseded) return;
     alert(error.message || 'Не удалось выполнить запрос. Проверь соединение с приложением.');
   }
 
@@ -43,10 +44,11 @@
   }
 
   // ——— Home ———
-  function renderHome() {
+  function renderHome(background = false) { return window.budgetViews.run(() => renderHomeData(), background === true); }
+  function renderHomeData() {
     window.budgetFinanceView('/api/months');
     if (parseHash().page !== 'home') return;
-    root.innerHTML = '<div class="home"><p class="muted">Загрузка...</p></div>';
+    if (!root.firstElementChild) window.budgetHTML(root, '<div class="home"><p class="muted">Загрузка...</p></div>');
     return Promise.all([api('/now'), api('/months')]).then(function (results) {
       if (parseHash().page !== 'home') return;
       var now = results[0] || {};
@@ -89,7 +91,7 @@
       homeSelectedYear = selectedYear;
       var monthsInYear = months.filter(function (m) { return m.year === selectedYear; });
 
-      root.innerHTML = '<div class="home">' +
+      window.budgetHTML(root, '<div class="home">' +
         (newMonthCreated ? '<div class="toast-new-month" id="toast-new-month">Создан новый месяц: ' + newMonthCreated + '</div>' : '') +
         '<p class="home-greeting">Здарова, Тимка!</p>' +
         '<h1>Месячные бюджеты</h1>' +
@@ -129,8 +131,9 @@
               '</ul>' +
             '</section>'
           : '<section class="months-list"><h2>Все месяцы</h2><p class="muted">Пока нет ни одного месяца. Создай первый выше.</p></section>') +
-        '</div>';
+        '</div>');
 
+      destroyCharts(true);
       if (newMonthCreated) {
         setTimeout(function () {
           var el = document.getElementById('toast-new-month');
@@ -169,15 +172,31 @@
 
   var chartInstances = [];
 
-  function destroyCharts() {
-    chartInstances.forEach(function (c) { if (c && c.destroy) c.destroy(); });
-    chartInstances = [];
+  function destroyCharts(detachedOnly = false) {
+    chartInstances = [...new Set(chartInstances)].filter(c => {
+      if (detachedOnly && c.canvas?.isConnected) return true;
+      c.destroy(); return false;
+    });
+  }
+  function updateChart(ctx, config) {
+    config.options = {...config.options, animation: false};
+    const existing = Chart.getChart(ctx.canvas);
+    const signature = JSON.stringify(config);
+    if (existing) {
+      if (existing.budgetSignature !== signature) {
+        existing.data = config.data; existing.options = config.options;
+        existing.budgetSignature = signature; existing.update('none');
+      }
+      return existing;
+    }
+    const chart = new Chart(ctx, config); chart.budgetSignature = signature; return chart;
   }
 
-  function renderMonthPage(monthId) {
+  function renderMonthPage(monthId, background = false) { return window.budgetViews.run(() => renderMonthPageData(monthId), background === true); }
+  function renderMonthPageData(monthId) {
     window.budgetFinanceView('/api/months/' + monthId);
     if (parseHash().page !== 'month') return;
-    root.innerHTML = '<div class="month-page"><p class="muted">Загрузка...</p></div>';
+    if (!root.firstElementChild) window.budgetHTML(root, '<div class="month-page"><p class="muted">Загрузка...</p></div>');
     return Promise.all([
       api('/months/' + monthId),
       api('/categories')
@@ -188,11 +207,11 @@
       var expenseCats = cats.expense || [];
       var incomeCats = cats.income || [];
       if (!month) {
-        root.innerHTML = '<div class="month-page"><p class="muted">Месяц не найден.</p><a href="#/">На главную</a></div>';
+        window.budgetHTML(root, '<div class="month-page"><p class="muted">Месяц не найден.</p><a href="#/">На главную</a></div>');
         return;
       }
 
-      destroyCharts();
+      destroyCharts(true);
 
       var expenses = month.expenses || [];
       var incomes = month.incomes || [];
@@ -285,8 +304,7 @@
       var dayOptions = [];
       for (var d = 1; d <= daysInMonth; d++) dayOptions.push('<option value="' + d + '">' + d + '</option>');
 
-      root.innerHTML =
-        '<div class="month-page">' +
+      window.budgetHTML(root, '<div class="month-page">' +
           '<nav class="breadcrumb">' +
             '<a href="#/">Месяцы</a><span class="sep">/</span>' +
             '<span>' + MONTH_NAMES[month.month] + ' ' + month.year + '</span>' +
@@ -365,8 +383,9 @@
           (subcategoryAnalytics.length > 0 ? '<section class="section"><h2>Топ подкатегорий</h2><div class="chart-bar"><div class="chart-container chart-container-hbar" style="height:' + hbarHeight + 'px"><canvas id="chart-hbar"></canvas></div></div></section>' : '') +
           (barLabels.length > 0 ? '<section class="section"><h2>Динамика расходов по дням</h2><div class="chart-bar"><div class="chart-container" style="height:200px"><canvas id="chart-line"></canvas></div></div></section>' : '') +
           '<p class="year-link"><a href="#/year/' + month.year + '">Аналитика за ' + month.year + ' год →</a></p>' +
-        '</div>';
+        '</div>');
 
+      destroyCharts(true);
       document.getElementById('btn-delete-month').onclick = function () {
         if (!confirm('Удалить весь месяц и все данные? Это нельзя отменить.')) return;
         api('/months/' + monthId, { method: 'DELETE' }).then(function () { navigateTo('#/'); }).catch(showAPIError);
@@ -464,7 +483,7 @@
       if (categoryAnalytics.length > 0 && typeof Chart !== 'undefined') {
         var pieCtx = document.getElementById('chart-pie');
         if (pieCtx) {
-          chartInstances.push(new Chart(pieCtx.getContext('2d'), {
+          chartInstances.push(updateChart(pieCtx.getContext('2d'), {
             type: 'pie',
             data: {
               labels: categoryAnalytics.map(function (a) { return a.name + ' ' + a.percent + '%'; }),
@@ -481,7 +500,7 @@
       if (barLabels.length > 0 && typeof Chart !== 'undefined') {
         var barCtx = document.getElementById('chart-bar');
         if (barCtx) {
-          chartInstances.push(new Chart(barCtx.getContext('2d'), {
+          chartInstances.push(updateChart(barCtx.getContext('2d'), {
             type: 'bar',
             data: {
               labels: barLabels.map(function (d) { return d.slice(5); }),
@@ -495,7 +514,7 @@
       if (subcategoryAnalytics.length > 0 && typeof Chart !== 'undefined') {
         var hbarCtx = document.getElementById('chart-hbar');
         if (hbarCtx) {
-          chartInstances.push(new Chart(hbarCtx.getContext('2d'), {
+          chartInstances.push(updateChart(hbarCtx.getContext('2d'), {
             type: 'bar',
             data: {
               labels: subcategoryAnalytics.map(function (a) { return a.subcategoryName + ' (' + a.categoryName + ')'; }),
@@ -526,7 +545,7 @@
       if (barLabels.length > 0 && typeof Chart !== 'undefined') {
         var lineCtx = document.getElementById('chart-line');
         if (lineCtx) {
-          chartInstances.push(new Chart(lineCtx.getContext('2d'), {
+          chartInstances.push(updateChart(lineCtx.getContext('2d'), {
             type: 'line',
             data: {
               labels: barLabels.map(function (d) { return d.slice(5); }),
@@ -669,18 +688,19 @@
     modalEl.querySelector('.modal').onclick = function (e) { e.stopPropagation(); };
   }
 
-  function renderYearPage(year) {
+  function renderYearPage(year, background = false) { return window.budgetViews.run(() => renderYearPageData(year), background === true); }
+  function renderYearPageData(year) {
     window.budgetFinanceView('/api/years/' + year);
     if (parseHash().page !== 'year') return;
     if (!year) year = new Date().getFullYear();
-    root.innerHTML = '<div class="year-page"><p class="muted">Загрузка...</p></div>';
+    if (!root.firstElementChild) window.budgetHTML(root, '<div class="year-page"><p class="muted">Загрузка...</p></div>');
     return api('/years/' + year).then(function (data) {
       if (parseHash().page !== 'year' || parseHash().year !== year) return;
       if (!data) {
-        root.innerHTML = '<div class="year-page"><p class="muted">Нет данных за этот год.</p><a href="#/">На главную</a></div>';
+        window.budgetHTML(root, '<div class="year-page"><p class="muted">Нет данных за этот год.</p><a href="#/">На главную</a></div>');
         return;
       }
-      destroyCharts();
+      destroyCharts(true);
 
       var totalIncome = data.totalIncome || 0;
       var totalExpenses = data.totalExpenses || 0;
@@ -696,8 +716,7 @@
       var curYear = new Date().getFullYear();
       for (var y = curYear; y >= curYear - 5; y--) yearList.push(y);
 
-      root.innerHTML =
-        '<div class="year-page">' +
+      window.budgetHTML(root, '<div class="year-page">' +
           '<nav class="breadcrumb">' +
             '<a href="#/">Месяцы</a><span class="sep">/</span>' +
             '<span>Аналитика за год</span>' +
@@ -733,8 +752,9 @@
           '</div></section>' +
           '<section class="section"><h2>Доходы и расходы по месяцам</h2><div class="chart-bar"><div class="chart-container" style="height:280px"><canvas id="chart-year-bars"></canvas></div></div></section>' +
           (byCategory.length > 0 ? '<section class="section"><h2>Структура расходов за год</h2><div class="chart-pie"><div class="chart-container" style="height:260px"><canvas id="chart-year-pie"></canvas></div></div></section>' : '') +
-        '</div>';
+        '</div>');
 
+      destroyCharts(true);
       document.getElementById('year-select').onchange = function () {
         navigateTo('#/year/' + this.value);
       };
@@ -752,7 +772,7 @@
       if (typeof Chart !== 'undefined') {
         var yearBarCtx = document.getElementById('chart-year-bars');
         if (yearBarCtx) {
-          chartInstances.push(new Chart(yearBarCtx.getContext('2d'), {
+          chartInstances.push(updateChart(yearBarCtx.getContext('2d'), {
             type: 'bar',
             data: {
               labels: labels,
@@ -773,7 +793,7 @@
         if (byCategory.length > 0) {
           var yearPieCtx = document.getElementById('chart-year-pie');
           if (yearPieCtx) {
-            chartInstances.push(new Chart(yearPieCtx.getContext('2d'), {
+            chartInstances.push(updateChart(yearPieCtx.getContext('2d'), {
               type: 'pie',
               data: {
                 labels: byCategory.map(function (a) { return a.name + ' ' + Math.round(a.percent) + '%'; }),
@@ -787,10 +807,11 @@
     }).catch(showAPIError);
   }
 
-  function renderCategoriesPage() {
+  function renderCategoriesPage(background = false) { return window.budgetViews.run(() => renderCategoriesPageData(), background === true); }
+  function renderCategoriesPageData() {
     window.budgetFinanceView('/api/categories');
     if (parseHash().page !== 'categories') return;
-    root.innerHTML = '<div class="categories-page"><p class="muted">Загрузка...</p></div>';
+    if (!root.firstElementChild) window.budgetHTML(root, '<div class="categories-page"><p class="muted">Загрузка...</p></div>');
     return api('/categories').then(function (data) {
       if (parseHash().page !== 'categories') return;
       var expense = (data && data.expense) ? data.expense.slice() : [];
@@ -890,8 +911,7 @@
       }
 
       function render() {
-        root.innerHTML =
-          '<div class="categories-page">' +
+        window.budgetHTML(root, '<div class="categories-page">' +
             '<nav class="breadcrumb"><a href="#/">Месяцы</a><span class="sep">/</span><span>Категории</span></nav>' +
             '<p class="categories-intro">Здесь можно добавлять, удалять и редактировать категории расходов и доходов. Они сразу появятся в формах добавления трат и доходов.</p>' +
             '<span class="categories-saved" aria-live="polite">Сохранено</span>' +
@@ -933,8 +953,9 @@
               '<button type="button" class="btn-add-cat" id="add-income-cat">+ Категория дохода</button>' +
             '</section>' +
             '<div class="categories-actions"><button type="button" class="btn-primary" id="save-categories">Сохранить категории</button></div>' +
-          '</div>';
+          '</div>');
 
+        destroyCharts(true);
         document.getElementById('add-expense-cat').onclick = addExpenseCat;
         document.getElementById('add-income-cat').onclick = addIncomeCat;
         document.getElementById('save-categories').onclick = collectAndSave;
@@ -959,22 +980,22 @@
     }).catch(showAPIError);
   }
 
-  function render() {
+  function render(background = false) {
     if (window.Planner?.deferNavigation?.(render)) return;
     var route = parseHash();
     if (route.page === 'plans') {
       destroyCharts();
-      return window.Planner.mount(root);
+      return window.Planner.mount(root, background === true);
     }
     if (window.Planner) window.Planner.unmount();
     if (route.page === 'month') {
-      return renderMonthPage(route.monthId);
+      return renderMonthPage(route.monthId, background);
     } else if (route.page === 'year') {
-      return renderYearPage(route.year);
+      return renderYearPage(route.year, background);
     } else if (route.page === 'categories') {
-      return renderCategoriesPage();
+      return renderCategoriesPage(background);
     } else {
-      return renderHome();
+      return renderHome(background);
     }
   }
 

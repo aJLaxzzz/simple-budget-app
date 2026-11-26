@@ -31,6 +31,7 @@
   function actions(item) { P.objectMenu(item); }
   function eventCard(item, compact = false) {
     const card = el('div', { class: 'pc-event pc-kind-' + item.type + (P.active(item) ? '' : ' pc-closed'), 'data-event-id': item.type + ':' + item.id, 'data-event-date': item.date });
+    card.budgetIdentity = JSON.stringify([item, compact, mobile()]);
     const label = [(item.dynamic||item.project_pending)&&P.active(item)?'Предварительно запланировано':null,kind[item.type], item.start_time ? item.start_time + (item.end_time ? '–' + item.end_time : '') : null, item.title, P.labels[item.status], item.project_title].filter(Boolean).join(' · ');
     const open = button((item.status === 'completed' ? '✓ ' : item.status === 'cancelled' ? '− ' : item.status === 'in_progress' ? '• ' : '') + (item.priority === 'high' ? '↑ ' : '') + (item.parent_task_id ? '↳ ' : '') + (item.start_time ? item.start_time + ' ' : '') + (item.type === 'deadline' ? '⚑ ' : item.type === 'planning' ? '◇ ' : item.type === 'session' ? '◷ ' : '') + ((item.dynamic||item.project_pending)&&P.active(item) ? '≈ ' : '') + (item.series_id ? '↻ ' : '') + item.title, () => P.openTask(item.task_id), 'pc-event-title');
     P.paint(card,item);open.prepend(P.appearanceIcon(item));
@@ -207,12 +208,14 @@
     // Canonical URL also preserves responsive defaults when opening the editor.
     const current = new URLSearchParams(route.params); current.set('mode', value.mode); current.set('date', value.date);
     window.history.replaceState(null, '', '#/plans/calendar?' + current);
+    window.budgetViews.rekey();
     let data, recurrenceErrors;
     try {
       recurrenceErrors = await P.materializeCalendar(range.to, isCurrent);
       if (!isCurrent()) return false;
       data = await P.api('/calendar?from=' + range.from + '&to=' + range.to);
     } catch (error) {
+      if (error.superseded) throw error;
       if (!isCurrent()) return false;
       const recovery = el('div', { class: 'pl-empty' }, el('h2', {}, 'Не удалось загрузить планы'), el('p', {}, error.message));
       const controls = el('div', { class: 'pc-filters' });
@@ -275,7 +278,9 @@
       if (!items.some(item => days.includes(item.date))) schedule.append(el('p', { class: 'pc-empty', role: 'status' }, 'На выбранные дни ничего не запланировано. Можно добавить задачу.'));
       agenda(schedule, value, items, days);
     }
-    if (focusDay) { focusDay = false; const b = [...container.querySelectorAll('.pc-day-button')].find(n => n.dataset.day === value.date); b?.focus(); }
+    container.budgetAfterMount = () => {
+      if (focusDay) { focusDay = false; const b = [...container.querySelectorAll('.pc-day-button')].find(n => n.dataset.day === value.date); b?.focus(); }
+    };
     container.append(el('p', { class: 'pc-legend' }, '◷ Период работы · ◇ Плановая дата · ⚑ Крайний срок. Все даты и время — по Москве. Перенос доступен через ⋯' + (!mobile() ? ' или перетаскиванием.' : '.')));
   };
   function resizeCalendar() {
