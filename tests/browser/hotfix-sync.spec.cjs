@@ -32,6 +32,8 @@ test('finance keeps table and chart nodes; consecutive local saves retain If-Mat
  const machine=await playwright.request.newContext({baseURL:server.baseURL,extraHTTPHeaders:{'X-Budget-Admin':'1',Authorization:'Basic '+Buffer.from('budget:'+server.password).toString('base64')}});
  try{
   const page=await context.newPage();await login(page,server.password);await expect(page.locator('#sync-status')).toHaveText('Синхронизировано');
+  // Landing is the planner; enter Budget explicitly before reading its new month.
+  await page.locator('#module-switch').click();await page.locator('#module-menu').getByRole('link',{name:'Бюджет',exact:true}).click();await expect(page.locator('#home-months-list a').first()).toBeVisible();
   const months=await(await machine.get('/api/months')).json(),id=months[0].id;
   await page.goto('/#/month/'+id);await expect(page.locator('#income-value')).toBeVisible();await expect(page.locator('#sync-status')).toHaveText('Синхронизировано');
   const cats=await machine.get('/api/categories');const category=(await cats.json()).expense[0];

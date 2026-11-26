@@ -108,7 +108,7 @@ def render(instance, identity, states, auth, sudo_mode):
     for line in menu_lines(instance,identity,states,auth,sudo_mode,status):print(line)
 
 def main(input_fn=None,run=None,observe=None):
-    instance=os.environ.get('INSTANCE') or 'production'
+    instance=os.environ.get('INSTANCE') or 'acceptance'
     sudo_mode=os.environ.get('SUDO_MODE') or 'session'
     if instance not in ('acceptance','production') or sudo_mode not in ('session','legacy'):
         print('Не выполнено: INSTANCE должен быть production/acceptance, SUDO_MODE — session/legacy.');return 2

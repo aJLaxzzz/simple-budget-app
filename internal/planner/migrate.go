@@ -55,7 +55,10 @@ var disableRecurrenceSQL string
 //go:embed migrations/014_project_workflows.sql
 var projectWorkflowsSQL string
 
-var migrations = []migration{{1, initialSQL}, {2, archiveSQL}, {3, sessionSQL}, {4, taskSeriesSQL}, {5, recurrenceManagementSQL}, {6, projectTemplatesSQL}, {7, calendarImportsSQL}, {8, appearanceSQL}, {9, entityTemplatesSQL}, {10, removedCyclesSQL}, {11, seriesAppearanceSQL}, {12, dynamicCompletionSQL}, {13, disableRecurrenceSQL}, {14, projectWorkflowsSQL}}
+//go:embed migrations/015_independent_projects.sql
+var independentProjectsSQL string
+
+var migrations = []migration{{1, initialSQL}, {2, archiveSQL}, {3, sessionSQL}, {4, taskSeriesSQL}, {5, recurrenceManagementSQL}, {6, projectTemplatesSQL}, {7, calendarImportsSQL}, {8, appearanceSQL}, {9, entityTemplatesSQL}, {10, removedCyclesSQL}, {11, seriesAppearanceSQL}, {12, dynamicCompletionSQL}, {13, disableRecurrenceSQL}, {14, projectWorkflowsSQL}, {15, independentProjectsSQL}}
 
 const applicationID = 1396853840
 

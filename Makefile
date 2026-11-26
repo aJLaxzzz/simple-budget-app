@@ -40,7 +40,7 @@ overview stg-setup stg-start stg-stop stg-reset promote:
 # Override only the Makefile defaults for the menu. Explicit environment and
 # command-line choices still work; direct administrative targets are unchanged.
 ifeq ($(origin INSTANCE),file)
-server: INSTANCE = production
+server: INSTANCE = acceptance
 endif
 ifeq ($(origin SUDO_MODE),file)
 server: SUDO_MODE = session

@@ -119,7 +119,7 @@ func pristineProject(tx *sql.Tx, p ProjectDTO) (bool, error) {
 			delete(x, "saved_template_id")
 			delete(x, "source_template_id")
 			delete(x, "repeat_series_id")
-			for _, key := range []string{"managed_repeat", "project_mode", "current_project_id", "needs_decision", "preliminary", "project_pending", "routines"} {
+			for _, key := range []string{"managed_repeat", "project_mode", "current_project_id", "needs_decision", "preliminary", "project_pending", "routines", "completion_ready", "remaining_tasks"} {
 				delete(x, key)
 			}
 			if x["sort_order"] == float64(0) {

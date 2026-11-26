@@ -27,6 +27,7 @@
     const interval = P.field(grid,'interval','Каждые','number',initial.interval); interval.min=1; interval.max=10000; interval.required=true;
     const unit = P.field(grid,'unit','Интервал','select',initial.unit,[['days','Дни'],['weeks','Недели'],['months','Месяцы'],['years','Годы']]);
     const mode = P.field(grid,'mode','Отсчёт','select',initial.mode,[['schedule','По расписанию'],...(!options.project ? [['completion','После выполнения']] : [])]);
+    if(options.project)mode.closest('.pl-field').hidden=true;
     const explanation=el('p',{class:'pl-info'});block.append(explanation);
     if(options.changing){mode.disabled=true;block.append(meta('Режим отсчёта существующего повторения сохраняется. Изменяются интервал и допустимые дни.'));}
     const allowed = P.field(grid,'allowed','Допустимые дни','select',initial.allowed_days.mode,[['any','Любые'],['weekdays','Понедельник–пятница'],['ru_weekdays','Будни без праздников РФ'],['weekends','Суббота–воскресенье'],['selected','Выбранные дни недели'],['ru_production','Рабочие дни РФ с праздниками и переносами']]);

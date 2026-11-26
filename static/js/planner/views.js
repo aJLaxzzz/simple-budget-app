@@ -203,11 +203,11 @@
 
     const results = el('div', { class: 'pl-results' });
     const draw = () => {
-      let tasks = P.data.tasks.filter(t => (!t.project_pending || !P.active(t) || showAll.value==='all') && (!inbox || (!t.project_id && !t.planned_date)) && (!undated || (!t.planned_date && !t.due_date)));
+      let tasks = P.data.tasks.filter(t => !P.data.projects.some(p=>p.id===t.project_id&&p.archived_at) && (!t.project_pending || !P.active(t) || showAll.value==='all') && (!inbox || (!t.project_id && !t.planned_date)) && (!undated || (!t.planned_date && !t.due_date)));
       tasks = tasks.filter(t => (status.value === 'all' || (status.value === 'active' ? P.active(t) : t.status === status.value)) && t.title.toLocaleLowerCase('ru').includes(search.value.toLocaleLowerCase('ru')) && (!project || P.matchesProject(t.project_id,project.value)));
       const total=tasks.length;tasks=P.limitUpcoming(tasks,inbox||showAll.value==='all');
       const fresh = el('div');
-      fresh.replaceChildren(el('p', { class: 'pl-list-count' }, 'Задач: ' + tasks.length), tasks.length ? (inbox ? P.taskTree(tasks) : P.groupedTasks(tasks,Boolean(search.value.trim()))) : P.empty(inbox ? 'Входящие разобраны' : 'Задач не найдено', inbox ? 'Новая идея? Добавьте её одной строкой выше.' : 'Измените фильтры или создайте первую задачу.'));
+      fresh.replaceChildren(el('p', { class: 'pl-list-count' }, 'Задач: ' + tasks.length), tasks.length ? (inbox ? P.taskTree(tasks) : P.groupedTasks(tasks,Boolean(search.value.trim()),P.data.tasks.filter(t=>!project||P.matchesProject(t.project_id,project.value)))) : P.empty(inbox ? 'Входящие разобраны' : 'Задач не найдено', inbox ? 'Новая идея? Добавьте её одной строкой выше.' : 'Измените фильтры или создайте первую задачу.'));
       P.reuseRows(results, fresh);
       results.replaceChildren(...fresh.childNodes);
     };
@@ -247,7 +247,7 @@
     const done=p.status==='completed',b=button(done?'✓':'',()=>P.completeProject(p),'pl-check pl-project-complete'+(done?' is-complete':''));
     b.disabled=!p.completion_ready;
     b.setAttribute('aria-label',done?'Проект завершён':'Завершить проект: '+p.title);
-    b.title=done?'Проект завершён':p.completion_ready?'Все задачи выполнены — завершить проект':!p.task_count?'В проекте пока нет задач':p.preliminary?'Сначала выберите это выполнение текущим':'Осталось выполнить задач и подзадач: '+p.remaining_tasks;
+    b.title=done?'Проект завершён':p.completion_ready?'Все задачи выполнены — завершить проект':!p.task_count?'В проекте пока нет задач':p.preliminary?'Устаревший режим серии: требуется обновление данных':'Осталось выполнить задач и подзадач: '+p.remaining_tasks;
     return b;
   };
   P.projectDisplayProgress = function(project) {
@@ -289,10 +289,10 @@
     content.append(el('div', { class: 'pl-section-head' }, el('div', {}, el('h2', {}, 'Проекты'), el('p', { class: 'pl-muted' }, 'Большие цели, разложенные на понятные шаги.')), button('+ Проект', () => P.navigate(P.base() + '?new=project'), 'pl-primary')));
     const filters = el('div', { class: 'pl-filters' });
     const status = P.field(filters, 'status', 'Статус проекта', 'select', '', [['', 'Все статусы'], ...['planned', 'in_progress', 'completed', 'cancelled'].map(k => [k, P.labels[k]])]);
-    const archive = P.field(filters, 'archive', 'Показывать', 'select', 'active', [['active', 'Без архива'], ['archived', 'Архив']]);
+
     const grid = el('div', { class: 'pl-project-grid' });
     function draw() {
-      const projects = P.projectCards(P.data.projects.filter(p => Boolean(p.archived_at) === (archive.value === 'archived') && (!status.value || p.status === status.value)));
+      const projects = P.projectCards(P.data.projects.filter(p => !p.archived_at && (!status.value || p.status === status.value)));
       const oldCards = new Map([...grid.querySelectorAll('.pl-project-card')].map(n => [n.dataset.projectId, n]));
       grid.replaceChildren(...projects.map(project => {
         const count = project.task_count ?? project.tasks?.length ?? 0;

@@ -511,7 +511,7 @@ func TestProductionBinaryLifecycle(t *testing.T) {
 		}
 	}
 	delete(env, "BUDGET_BACKUP_DIR")
-	// Existing v13 installation: startup refuses, only explicit migration advances it.
+	// Previous schema: startup refuses, only explicit migration advances it.
 	old := t.TempDir()
 	os.Chmod(old, 0700)
 	db, e := sql.Open("sqlite", "file:"+filepath.Join(old, "planner.db"))
@@ -535,7 +535,7 @@ func TestProductionBinaryLifecycle(t *testing.T) {
 			t.Fatal(e)
 		}
 	}
-	if _, e = db.Exec("PRAGMA application_id=1396853840; PRAGMA user_version=13; PRAGMA journal_mode=WAL"); e != nil {
+	if _, e = db.Exec(fmt.Sprintf("PRAGMA application_id=1396853840; PRAGMA user_version=%d; PRAGMA journal_mode=WAL", len(files)-1)); e != nil {
 		t.Fatal(e)
 	}
 	db.Close()

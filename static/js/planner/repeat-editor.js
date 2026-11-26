@@ -18,12 +18,12 @@ P.repeatEditor=async function(id,options={}){
     const selectedID=projectID||s.source_project_id||(s.occurrences||[]).find(o=>o.project)?.project.id;const p=s.source_type==='project'&&selectedID?await P.api('/projects/'+selectedID):null;
     if(tab==='schedule'){
      if(['disabled','archived'].includes(s.state))body.append(meta('Повторение прекращено. Выполнения и история доступны в дополнительных настройках.'));
-     else{P.seriesChange(s,'change_rule',options.extras||{},body);if(s.source_type==='project')body.prepend(meta('Даты проектов рассчитываются по расписанию. Режим «Один проект за раз» определяет текущую работу, а не дату отсчёта.'));if(s.end_date)body.prepend(meta('Дата окончания: '+P.date(s.end_date)));}
+     else{P.seriesChange(s,'change_rule',options.extras||{},body);if(s.source_type==='project')body.prepend(meta('Даты проектов рассчитываются по расписанию. Каждое выполнение доступно независимо от остальных.'));if(s.end_date)body.prepend(meta('Дата окончания: '+P.date(s.end_date)));}
     }else if(tab==='tasks')await P.projectComposition(p||{repeat_series_id:s.id,title:P.seriesTitle(s)},false,body);
-    else if(tab==='mode'){if(p)await P.projectMode(p,body);else body.append(meta('Нет сохранённых выполнений для выбора текущего. Расписание, история и отключение доступны в этом редакторе.'));}
-    else{
+        else{
      const leave=fn=>()=>{h.close(true);fn();};const advanced=el('details',{open:true},el('summary',{},'Дополнительные настройки'));body.append(advanced);
      if(!['disabled','archived'].includes(s.state)){
+      advanced.append(button('Архивировать серию',leave(()=>P.seriesChange(s,'archive'))));
       advanced.append(button('Приостановить повторение',leave(()=>P.seriesChange(s,'pause'))));
       for(const pause of s.pauses||[])if(!pause.resumed_on)advanced.append(button('Возобновить с '+P.date(pause.start_date),leave(()=>P.seriesChange(s,'resume',{pause_id:pause.id}))));
       if(s.state==='needs_anchor')advanced.append(button('Выбрать дату продолжения',leave(()=>P.seriesChange(s,'reanchor'))));
@@ -41,15 +41,45 @@ P.repeatEditor=async function(id,options={}){
     h.dialog.plannerGuard=async()=>!body.plannerGuard||await body.plannerGuard();
    }catch(e){body.append(el('p',{role:'alert'},P.errorMessage(e)));}finally{busy=false;tabs.querySelectorAll('button').forEach(b=>b.disabled=false);}
   }
-  const series=await P.api('/series/'+id+'?limit=1');for(const [tab,label]of [['schedule','Расписание'],...(series.source_type==='project'?[['tasks','Задачи проекта'],['mode','Режим выполнения']]:[]),['advanced','Дополнительно']]){const b=button(label,()=>choose(tab));b.dataset.tab=tab;b.setAttribute('role','tab');tabs.append(b);}
-  await choose(options.tab||'schedule');
+  const series=await P.api('/series/'+id+'?limit=1');for(const [tab,label]of [['schedule','Расписание'],...(series.source_type==='project'?[['tasks','Задачи проекта']]:[]),['advanced','Дополнительно']]){const b=button(label,()=>choose(tab));b.dataset.tab=tab;b.setAttribute('role','tab');tabs.append(b);}
+  await choose(options.tab==='mode'?'schedule':options.tab||'schedule');
  }catch(e){P.notify(P.errorMessage(e));}
 };
-P.projectScopeField=function(form,project,adding=false){return project?.repeat_series_id?P.field(form,'change_scope',adding?'Добавить задачу в':'Применить изменение','select',adding?'this_and_following':'this',adding?scopes.filter(([s])=>s!=='following'):scopes):null;};
+
+P.confirmProjectOverlap=async function(project,start,end){
+ if(!project?.repeat_series_id||!start)return;
+ const peers=(await P.api('/projects')).items.filter(p=>p.id!==project.id&&p.repeat_series_id===project.repeat_series_id&&P.active(p)&&p.start_date&&p.start_date<=(end||start)&&(p.due_date||p.start_date)>=start);
+ if(!peers.length)return;
+ return new Promise((resolve,reject)=>{const h=P.dialog('Даты выполнений пересекаются');let accepted=false;h.dialog.append(meta('На эти даты уже запланировано выполнение. Проекты останутся отдельными; расписание серии не изменится.'),el('ul',{},peers.map(p=>el('li',{},p.title+' · '+P.projectDateLabel(p)))),button('Сохранить оба выполнения',()=>{accepted=true;h.close(true);resolve();},'pl-primary'),button('Выбрать другую дату',()=>h.close(true)));h.dialog.addEventListener('close',()=>{if(!accepted)reject(Error('Выберите другую дату. Изменения не применены.'));});});
+};
+P.moveProjectExecution=async function(project){
+ if(project.occurrence_id)return P.openOccurrence(project.occurrence_id,'reschedule');
+ const p=await P.api('/projects/'+project.id),series=await P.api('/series/'+p.repeat_series_id),h=P.dialog('Перенести выполнение проекта'),form=el('form',{'data-submit':'Перенести выполнение'});h.dialog.append(form,meta('Только выбранный проект. Расписание остальных выполнений сохраняется.'));
+ const date=P.field(form,'planned_date','Новая дата','date',p.start_date);date.required=true;
+ const decision=P.field(form,'tasks_date_decision','Даты задач','select','shift',[['shift','Перенести открытые задачи вместе с проектом'],['keep','Сохранить даты задач']]);
+ const send=P.commandSender('/projects/'+p.id+'/close-current');
+ P.bindForm(form,async()=>{const end=p.due_date&&p.start_date?P.calendarModel.addDays(date.value,Math.round((Date.parse(p.due_date+'T12:00:00Z')-Date.parse(p.start_date+'T12:00:00Z'))/86400000)):null;await P.confirmProjectOverlap(p,date.value,end);return send({action:'reschedule',planned_date:date.value,tasks_date_decision:decision.value,expected_revision:p.revision,expected_series_revision:series.revision,related_revisions:P.revisions(p.tasks)});},async()=>{h.close(true);await P.refresh();P.notify('Выполнение перенесено. Расписание серии сохранено.');});
+};
+P.projectContext=function(project){const r=P.route();return r.view==='projects'&&r.id===project?.id;};
+P.projectScopeField=function(form,project){
+ if(!project?.repeat_series_id)return null;
+ const scope=P.projectContext(project)?'this_and_following':'this';
+ const input=el('input',{type:'hidden',name:'change_scope',value:scope});
+ form.append(el('div',{class:'pl-field pl-scope-note'},input,meta(scope==='this'?'Изменяется только эта задача':'Состав и даты: это и последующие выполнения. Индивидуальные исключения защищены.')));return input;
+};
+const pendingScope=new Map();
 P.scopedProjectSave=async function(project,input){
+ const cacheKey=JSON.stringify([project.id,project.revision,input]);
+ const retry=async entry=>{try{const result=await entry.send(entry.request);pendingScope.delete(cacheKey);result.scope_notice="Изменения сохранены для этого и последующих выполнений";return result;}catch(e){if(!e.uncertainCommand)pendingScope.delete(cacheKey);throw e;}};
+ if(pendingScope.has(cacheKey))return retry(pendingScope.get(cacheKey));
  const latest=await P.api('/projects/'+project.id),series=await P.api('/series/'+latest.repeat_series_id+'?limit=1');
  // The selected record revisions come from the editing form, never silently refreshed.
  let request={...input,expected_revision:project.revision,expected_series_revision:series.revision};
+ if(input.action!=='remove'){
+  const preview=await P.api('/projects/'+project.id+'/task-change-preview','POST',request);
+  const protectedRows=preview.future.rows.filter(r=>!r.after);
+  if(!protectedRows.length){const entry={send:P.commandSender('/projects/'+project.id+'/task-change-apply'),request:{...request,preview_token:preview.preview_token}};pendingScope.set(cacheKey,entry);return retry(entry);}
+ }
  const h=P.dialog(input.action==='remove'?'Удалить задачи из выполнений':'Изменение следующих выполнений');h.dialog.classList.add('pl-wide-dialog');
  const area=el('section',{'aria-live':'polite'});h.dialog.append(area);let preview,send=P.commandSender('/projects/'+project.id+'/task-change-apply');
  return new Promise((resolve,reject)=>{
@@ -68,10 +98,10 @@ P.scopedProjectSave=async function(project,input){
  });
 };
 // Infrequent structural operations choose the scope here; ordinary edits carry
-// the same selector directly in their existing form.
+// their scope from the current screen.
 P.chooseProjectScope=function(project,run){const h=P.dialog('Область изменения');h.dialog.append(el('p',{},project.title),...scopes.map(([scope,label])=>button(label,()=>{h.close(true);run(scope);})));};
 const remove=P.deleteForever;P.deleteForever=async function(kind,item){
- if(kind!=='tasks'||!item.project_id||item.series_id)return remove(kind,item);
+ if(kind!=='tasks'||!item.project_id||item.series_id||P.route().view==='settings')return remove(kind,item);
  const project=await P.api('/projects/'+item.project_id);if(!project.repeat_series_id)return remove(kind,item);
  P.chooseProjectScope(project,async scope=>{if(scope==='this')return remove(kind,item);try{const result=await P.scopedProjectSave(project,{scope,action:'remove',task_id:item.id,expected_task_revision:item.revision});P.closeEditor();await P.refresh();P.notify(result.scope_notice);}catch(e){P.notify(e.message);}});
 };

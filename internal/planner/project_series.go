@@ -107,14 +107,15 @@ func (s *Service) createProjectSeriesFromOrigin(ctx context.Context, tx *sql.Tx,
 	if e != nil {
 		return CommandResult{}, e
 	}
-	if v.EndDate != nil && string(c.AdjustedDate) > *v.EndDate {
+	beyondEnd := v.EndDate != nil && string(c.AdjustedDate) > *v.EndDate
+	if beyondEnd && origin == "" {
 		return CommandResult{}, invalid("Первый проект позже окончания серии")
 	}
 	room, e := s.projectRepeatRoom(tx, v)
 	if e != nil {
 		return CommandResult{}, e
 	}
-	if room {
+	if room && !beyondEnd {
 		if _, e = s.insertProjectCycle(ctx, tx, &v, c, cal, nil, op, now); e != nil {
 			return CommandResult{}, e
 		}

@@ -10,6 +10,7 @@ test('closing or reloading the page sends no shutdown request', () => {
   const root = { innerHTML: '' };
   const context = {
     window: {
+      AppNavigation: {render() {}, deferNavigation() {return false;}},
       location: { hash: '#/', origin: 'http://127.0.0.1:3001' },
       addEventListener(name, fn) {
         const list = handlers.get(name) || [];

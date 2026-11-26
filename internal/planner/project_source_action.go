@@ -32,7 +32,7 @@ func projectSourceActionRoute(s *Service, w http.ResponseWriter, r *http.Request
 		return 0, nil, methodError(w, "POST")
 	}
 	var in ProjectSourceAction
-	if e := strictPlannerInput(w, r, &in, "action expected_revision expected_series_revision request_id related_revisions tasks_decision sessions_decision session_revisions completed_date reason"); e != nil {
+	if e := strictPlannerInput(w, r, &in, "action expected_revision expected_series_revision request_id related_revisions tasks_decision sessions_decision session_revisions completed_date reason planned_date tasks_date_decision"); e != nil {
 		return 0, nil, e
 	}
 	var out CommandResult
@@ -93,6 +93,27 @@ func projectSourceActionRoute(s *Service, w http.ResponseWriter, r *http.Request
 				}
 				p.Status = map[string]string{"complete": "completed", "cancel": "cancelled", "skip": "skipped"}[in.Action]
 				p.ClosedAt = &now
+			case "reschedule":
+				if in.PlannedDate == nil || (in.TasksDateDecision != "keep" && in.TasksDateDecision != "shift") {
+					return CommandResult{}, invalid("Укажите новую дату и решение по датам задач")
+				}
+				if e = managementDate(*in.PlannedDate); e != nil {
+					return CommandResult{}, e
+				}
+				if e = s.moveProjectTasks(r.Context(), tx, p, *in.PlannedDate, in.OccurrenceCommand, in.RequestID, now); e != nil {
+					return CommandResult{}, e
+				}
+				if p.StartDate != nil {
+					offset, err := relativeDate(*p.StartDate, p.DueDate)
+					if err != nil {
+						return CommandResult{}, err
+					}
+					p.DueDate, err = offsetDate(*in.PlannedDate, offset)
+					if err != nil {
+						return CommandResult{}, err
+					}
+				}
+				p.StartDate = in.PlannedDate
 			case "restore":
 				p.Status = "planned"
 				p.ClosedAt = nil

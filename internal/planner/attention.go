@@ -15,7 +15,7 @@ const attentionCTE = `WITH problems AS (
  t.id AS task_id,t.project_id,t.occurrence_id,o.series_id,'needs_decision' AS disposition,'overdue' AS source,
  CASE WHEN t.due_date<?1 THEN 'Просрочен крайний срок' ELSE 'Не выполнено по плану' END AS reason,t.updated_at AS occurred_at,CASE WHEN COALESCE(a.snoozed_until,'')>?1 THEN 0 ELSE 1 END AS actionable,a.snoozed_until
  FROM tasks t LEFT JOIN occurrences o ON o.id=t.occurrence_id LEFT JOIN attention_state a ON a.task_id=t.id
- WHERE NOT EXISTS(SELECT 1 FROM project_repeat_projection rp WHERE rp.id=t.project_id AND rp.preliminary=1) AND t.status IN('planned','in_progress') AND COALESCE(o.dynamic,0)=0 AND ((t.due_date IS NOT NULL AND t.due_date<?1) OR (t.planned_date IS NOT NULL AND t.planned_date<?1))
+ WHERE NOT EXISTS(SELECT 1 FROM project_repeat_projection rp WHERE rp.id=t.project_id AND rp.preliminary=1) AND NOT EXISTS(SELECT 1 FROM projects ap WHERE ap.id=t.project_id AND ap.archived_at IS NOT NULL) AND t.status IN('planned','in_progress') AND COALESCE(o.dynamic,0)=0 AND ((t.due_date IS NOT NULL AND t.due_date<?1) OR (t.planned_date IS NOT NULL AND t.planned_date<?1))
  AND NOT EXISTS(SELECT 1 FROM occurrence_incidents i WHERE i.occurrence_id=t.occurrence_id AND i.disposition='needs_decision')
  UNION ALL
  SELECT 'project',p.id,p.title,p.status,p.due_date,NULL,p.id,p.occurrence_id,o.series_id,'needs_decision','overdue','Просрочен крайний срок',p.updated_at,
@@ -50,7 +50,7 @@ func attentionRoute(s *Service, w http.ResponseWriter, r *http.Request) (int, an
 	if tab == "" {
 		tab = "needs_decision"
 	}
-	where := map[string]string{"needs_decision": "actionable=1", "overdue": "kind IN('task','project')", "skipped": "kind='skipped'", "processed": "disposition='processed'"}[tab]
+	where := map[string]string{"active": "disposition='needs_decision'", "history": "disposition='processed'", "needs_decision": "actionable=1", "overdue": "kind IN('task','project')", "skipped": "kind='skipped'", "processed": "disposition='processed'"}[tab]
 	if where == "" {
 		return 0, nil, invalid("Неизвестный фильтр внимания")
 	}
@@ -82,6 +82,9 @@ func attentionRoute(s *Service, w http.ResponseWriter, r *http.Request) (int, an
 		}
 		args = append(args, limit, offset)
 		query := attentionCTE
+		if tab == "history" {
+			query = strings.Replace(query, "WHERE NOT EXISTS(SELECT 1 FROM occurrence_incidents newer WHERE newer.occurrence_id=i.occurrence_id AND (newer.created_at>i.created_at OR (newer.created_at=i.created_at AND newer.rowid>i.rowid)))", "WHERE i.disposition='processed'", 1)
+		}
 		if tab == "skipped" {
 			query = strings.Replace(query, "newer.occurrence_id=i.occurrence_id AND", "newer.occurrence_id=i.occurrence_id AND newer.kind='skipped' AND", 1)
 		}
@@ -96,7 +99,13 @@ func attentionRoute(s *Service, w http.ResponseWriter, r *http.Request) (int, an
 			if e = rows.Scan(&kind, &id, &title, &status, &date, &task, &project, &occurrence, &series, &disposition, &source, &reason, &stamp, &snoozedUntil); e != nil {
 				return e
 			}
-			items = append(items, map[string]any{"kind": kind, "id": id, "title": title, "status": status, "planned_date": date, "task_id": task, "project_id": project, "occurrence_id": occurrence, "series_id": series, "disposition": disposition, "source": source, "reason": reason, "created_at": stamp, "snoozed_until": snoozedUntil})
+			group := "late"
+			if snoozedUntil != nil && *snoozedUntil > today {
+				group = "deferred"
+			} else if kind == "series" {
+				group = "planning"
+			}
+			items = append(items, map[string]any{"group": group, "kind": kind, "id": id, "title": title, "status": status, "planned_date": date, "task_id": task, "project_id": project, "occurrence_id": occurrence, "series_id": series, "disposition": disposition, "source": source, "reason": reason, "created_at": stamp, "snoozed_until": snoozedUntil})
 		}
 		return rows.Err()
 	})

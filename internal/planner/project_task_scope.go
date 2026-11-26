@@ -180,7 +180,34 @@ func (s *Service) projectTaskScopePreview(ctx context.Context, tx *sql.Tx, id st
 			if next.ParentTaskID != nil {
 				k := reverse[*next.ParentTaskID]
 				if k == "" {
-					return out, invalid("Сначала добавьте родительскую задачу в следующие выполнения")
+					k = *next.ParentTaskID
+				}
+				exists := false
+				for _, root := range snapshot.Tasks {
+					if root.Key == k {
+						exists = true
+						break
+					}
+				}
+				if !exists {
+					// A legacy this-only parent has no template key. Promote that root
+					// with the child; never infer identity from titles or order.
+					root, err := getTask(tx, *next.ParentTaskID)
+					if err != nil {
+						return out, err
+					}
+					if root.SeriesID != nil || root.ParentTaskID != nil || root.ProjectID == nil || *root.ProjectID != p.ID {
+						return out, invalid("Родитель должен быть обычной корневой задачей этого проекта")
+					}
+					plan, err := relativeDate(*p.StartDate, root.PlannedDate)
+					if err != nil {
+						return out, err
+					}
+					due, err := relativeDate(*p.StartDate, root.DueDate)
+					if err != nil {
+						return out, err
+					}
+					snapshot.Tasks = append(snapshot.Tasks, ProjectTemplateTask{Key: k, Title: root.Title, Description: root.Description, Priority: root.Priority, Appearance: root.Appearance, PlannedOffset: plan, DueOffset: due, ScheduledTime: root.ScheduledTime})
 				}
 				parent = &k
 			}
@@ -412,6 +439,13 @@ func projectTaskScopeRoute(s *Service, w http.ResponseWriter, r *http.Request, i
 				return CommandResult{}, invalid("Подтвердите окончательное удаление перечисленных задач")
 			}
 			now := stamp(s.now())
+			adoptBaseline := false
+			if in.Scope == "this_and_following" && p.Project.OccurrenceID != nil {
+				adoptBaseline, e = pristineProject(tx, p.Project)
+				if e != nil {
+					return CommandResult{}, e
+				}
+			}
 			result, e := s.applyCompositionPreviewTx(r.Context(), tx, *p.Project.RepeatSeriesID, p.Future, "cancel", in.RequestID, now)
 			if e != nil {
 				return result, e
@@ -442,6 +476,17 @@ func projectTaskScopeRoute(s *Service, w http.ResponseWriter, r *http.Request, i
 							return result, e
 						}
 						keys[p.key] = t.ID
+						if t.ParentTaskID != nil {
+							known := false
+							for _, tid := range keys {
+								if tid == *t.ParentTaskID {
+									known = true
+								}
+							}
+							if !known {
+								keys[*t.ParentTaskID] = *t.ParentTaskID
+							}
+						}
 						raw, _ := json.Marshal(keys)
 						if _, e = tx.Exec("UPDATE project_instances SET task_keys_json=? WHERE project_id=?", string(raw), id); e != nil {
 							return result, e
@@ -497,6 +542,37 @@ func projectTaskScopeRoute(s *Service, w http.ResponseWriter, r *http.Request, i
 				}
 			}
 			project, e := projectWithTree(tx, id)
+			// A shared edit is part of the series composition, not an individual
+			// exception. Adopt its version only for an originally pristine instance
+			// whose complete tree matches the new snapshot; never bless unrelated edits.
+			if e == nil && adoptBaseline {
+				keys, err := projectKeys(tx, id)
+				if err != nil {
+					return result, err
+				}
+				matches, err := scopedSnapshotMatches(project, keys, p.Future.Snapshot)
+				if err != nil {
+					return result, err
+				}
+				if matches {
+					if _, err = tx.Exec("UPDATE projects SET template_version_id=? WHERE id=?", result.Series.TemplateVersionID, id); err != nil {
+						return result, err
+					}
+					live := map[string]bool{}
+					for _, task := range project.Tasks {
+						live[task.ID] = true
+					}
+					for key, taskID := range keys {
+						if !live[taskID] {
+							delete(keys, key)
+						}
+					}
+					if err = projectBaseline(tx, id, keys); err != nil {
+						return result, err
+					}
+					project, e = projectWithTree(tx, id)
+				}
+			}
 			result.Project = &project
 			return result, e
 		})
@@ -504,4 +580,33 @@ func projectTaskScopeRoute(s *Service, w http.ResponseWriter, r *http.Request, i
 		return e
 	})
 	return 200, out, e
+}
+
+func scopedSnapshotMatches(p ProjectDTO, keys map[string]string, want ProjectTemplateSnapshot) (bool, error) {
+	actual, err := projectSnapshot(p, *p.StartDate)
+	if err != nil {
+		return false, err
+	}
+	reverse := map[string]string{}
+	for key, id := range keys {
+		reverse[id] = key
+	}
+	a, b := map[string]ProjectTemplateTask{}, map[string]ProjectTemplateTask{}
+	for _, task := range actual.Tasks {
+		task.Key = reverse[task.Key]
+		if task.Key == "" {
+			return false, nil
+		}
+		if task.ParentKey != nil {
+			key := reverse[*task.ParentKey]
+			task.ParentKey = &key
+		}
+		a[task.Key] = task
+	}
+	for _, task := range want.Tasks {
+		b[task.Key] = task
+	}
+	actual.Tasks = nil
+	want.Tasks = nil
+	return reflect.DeepEqual(actual, want) && reflect.DeepEqual(a, b), nil
 }

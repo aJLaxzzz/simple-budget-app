@@ -143,6 +143,16 @@ func (s *Service) projectOccurrenceCommandTx(ctx context.Context, tx *sql.Tx, v 
 						return fail(e)
 					}
 				}
+				if !newlyMaterialized && p.StartDate != nil {
+					offset, err := relativeDate(*p.StartDate, p.DueDate)
+					if err != nil {
+						return fail(err)
+					}
+					p.DueDate, err = offsetDate(*in.PlannedDate, offset)
+					if err != nil {
+						return fail(err)
+					}
+				}
 				p.StartDate = in.PlannedDate
 			}
 			if action == "skip" || action == "cancel" || action == "complete" {

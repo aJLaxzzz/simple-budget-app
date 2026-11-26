@@ -2,13 +2,13 @@
  'use strict';const {el,button,meta}=P;
  P.updateAttentionCount=async nav=>{try{const result=await P.api('/attention?limit=1');const link=nav.querySelector('[href="#/plans/attention"]');if(link){link.replaceChildren(document.createTextNode('Внимание'),el('span',{class:'pl-attention-count','aria-label':'Необработанных проблем: '+result.count},String(result.count)));}}catch{/* The view exposes retry and details; navigation stays usable. */}};
  P.renderAttention=async function(host,route){
-   const tab=route.params.get('tab')||'needs_decision';const series=route.params.get('series_id');
+   const tab=['processed','history'].includes(route.params.get('tab'))?'history':'active';const series=route.params.get('series_id');
    host.replaceChildren(el('div',{class:'pl-section-head'},el('div',{},el('h2',{},'Требуют внимания'),meta('Пропущенное не исчезает. Выберите, что делать дальше.'))));
-   host.append(el('nav',{class:'pl-tabs','aria-label':'Фильтры внимания'},[['needs_decision','Требуют решения'],['overdue','Просроченные'],['skipped','Пропущенные'],['processed','Обработанные']].map(([key,title])=>el('a',{href:'#/plans/attention?tab='+key+(series?'&series_id='+series:''),class:key===tab?'is-active':''},title))));
+   host.append(el('nav',{class:'pl-tabs','aria-label':'Фильтры внимания'},[['active','Активные'],['history','История']].map(([key,title])=>el('a',{href:'#/plans/attention?tab='+key+(series?'&series_id='+series:''),class:key===tab?'is-active':''},title))));
    if(series)host.append(el('a',{href:'#/plans/attention?tab='+tab},'Показать все повторения'));
    const projects=await P.api('/projects');const projectNames=new Map(projects.items.map(p=>[p.id,p.title]));
    const list=el('div',{class:'pl-attention-list'});const groups=new Map();let offset=0;const more=button('Ещё',load);host.append(list,more);
-   async function load(){more.disabled=true;try{const result=await P.api('/attention?tab='+tab+'&offset='+offset+'&limit=50'+(series?'&series_id='+series:''));for(const item of result.items){const groupKey=item.source==='pause'?item.series_id:null;let target=list;if(groupKey){if(!groups.has(groupKey)){const details=el('details',{class:'pl-attention-group'},el('summary',{},item.title+' · пропуски во время паузы'));groups.set(groupKey,details);list.append(details);}target=groups.get(groupKey);}target.append(row(item,projectNames));}offset+=result.items.length;more.hidden=result.items.length<50;if(!offset)list.append(P.empty('Всё спокойно','В этом списке пока нет выполнений, требующих просмотра.'));}catch(e){list.append(el('p',{role:'alert'},e.message));}finally{more.disabled=false;}}
+   async function load(){more.disabled=true;try{const result=await P.api('/attention?tab='+tab+'&offset='+offset+'&limit=50'+(series?'&series_id='+series:''));for(const item of result.items){const groupKey=tab==='active'?(item.group||'late'):'history';if(!groups.has(groupKey)){const group=el('section',{'data-attention-group':groupKey},el('h3',{},({late:'Невыполненные вовремя',deferred:'Отложенные',planning:'Проблемы планирования',history:'Обработанные инциденты'})[groupKey]));groups.set(groupKey,group);list.append(group);for(const key of ['late','deferred','planning','history'])if(groups.has(key))list.append(groups.get(key));}const target=groups.get(groupKey);target.append(row(item,projectNames));}offset+=result.items.length;more.hidden=result.items.length<50;if(!offset)list.append(P.empty('Всё спокойно','В этом списке пока нет выполнений, требующих просмотра.'));}catch(e){list.append(el('p',{role:'alert'},e.message));}finally{more.disabled=false;}}
    await load();
  };
  function row(item,projectNames){
@@ -17,7 +17,7 @@
    if(item.series_id)card.firstChild.append(el('a',{class:'pl-attention-context',href:'#/plans/series/'+item.series_id},'↻ Настройки повторения'));
    const actions=el('div',{class:'pl-actions'}), entries=[];
    const add=(label,run)=>entries.push({label,run});
-   if(item.kind==='series'){actions.append(button(item.source==='anchor'?'Выбрать дату продолжения':'Открыть повторение',async()=>{try{if(item.source==='project_current'){P.projectMode({repeat_series_id:item.series_id,project_mode:'sequential'});return;}if(item.source==='anchor')P.seriesChange(await P.api('/series/'+item.series_id),'reanchor');else P.navigate('#/plans/series/'+item.series_id);}catch(e){P.notify(e.message);}},'pl-primary'));}
+   if(item.kind==='series'){actions.append(button(item.source==='anchor'?'Выбрать дату продолжения':'Открыть повторение',async()=>{try{if(item.source==='anchor')P.seriesChange(await P.api('/series/'+item.series_id),'reanchor');else P.navigate('#/plans/series/'+item.series_id);}catch(e){P.notify(e.message);}},'pl-primary'));}
    else if(item.occurrence_id){
      const allowed=P.occurrenceActions(item.status), primary=allowed.includes('reschedule')?'reschedule':allowed.includes('restore')?'restore':allowed[0];
      if(primary)actions.append(button(P.occurrenceLabels[primary],()=>P.openOccurrence(item.occurrence_id,primary),'pl-primary'));

@@ -15,13 +15,13 @@ test('Addition2 empty recurring project: single atomic create, default shared ad
  await page.getByText('Даты и повторение',{exact:true}).click();await page.getByLabel('Повторение',{exact:true}).selectOption('yes');await page.getByLabel('Интервал',{exact:true}).selectOption('weeks');await page.getByLabel('Каждые',{exact:true}).fill('1');
  await page.getByRole('button',{name:'Создать проект',exact:true}).click();await expect(page.locator('.pl-dialog')).toHaveCount(0);
  const id=new URL(page.url()).hash.split('/').at(-1);let p=await api(request,'projects/'+id);expect(p.tasks).toHaveLength(0);expect(p.repeat_series_id).toBeTruthy();
- await expect(page.getByLabel('Добавить задачу в',{exact:true})).toHaveValue('this_and_following');
+ await expect(page.locator('input[name=change_scope]')).toHaveValue('this_and_following');
  await page.getByLabel('Название новой задачи',{exact:true}).fill('Пропылесосить комнаты');await page.getByRole('button',{name:'Добавить',exact:true}).click();
- await expect(page.getByText(/Следующих обновится: 2/)).toBeVisible();await page.getByRole('button',{name:'Применить изменения',exact:true}).click();await expect(page.locator('.pl-dialog')).toHaveCount(0);
+ await expect(page.getByLabel('Название новой задачи',{exact:true})).toHaveValue('');await expect(page.locator('dialog[open]')).toHaveCount(0);
  p=await api(request,'projects/'+id);const series=await api(request,'series/'+p.repeat_series_id);expect(p.tasks).toHaveLength(1);for(const o of series.occurrences)expect(o.project.tasks).toHaveLength(1);
  await shot(page,'project');
  await page.goto('/#/plans/tasks?project=series:'+p.repeat_series_id+'&future=all');await expect(page.locator('.pl-list-count')).toHaveText('Задач: 3');await expect(page.locator('select[name=project] option').filter({hasText:title})).toHaveCount(1);
- await page.locator('select[name=future]').selectOption('nearest');await expect(page.locator('.pl-list-count')).toHaveText('Задач: 1');
+ await page.locator('select[name=future]').selectOption('nearest');await expect(page.locator('.pl-list-count')).toHaveText('Задач: 3');
  await page.goto('/#/plans/calendar?mode=month&project=series:'+p.repeat_series_id);await expect(page.locator('select[name=calendar_project] option').filter({hasText:title})).toHaveCount(1);
  await page.goto('/#/plans/projects/'+series.occurrences[0].project.id);await expect(page.getByRole('button',{name:'Пропылесосить комнаты',exact:true})).toBeVisible();
 });
@@ -73,15 +73,15 @@ test('Addition2 shared limit, settings-only controls, flat list and visual setti
  }finally{const fresh=await api(request,'settings/project-repeat-limit');await api(request,'settings/project-repeat-limit',{limit:original.limit,expected_revision:fresh.revision},'put');}
 });
 
-test('Addition2 choosing a recurring project in a new editor offers shared scope; editing keeps this-only',async({page,request})=>{
+test('Addition3 choosing a recurring project in task-list editor keeps creation and editing local',async({page,request})=>{
  const input={request_id:randomUUID(),anchor_date:today(),has_start:true,project_mode:'independent',snapshot:{title:'Состав '+randomUUID().slice(0,5),due_offset:2,tasks:[]},rule:{schema_version:1,mode:'schedule',unit:'weeks',interval:1,allowed_days:{mode:'any'},adjustment:'none'}};
  const preview=await api(request,'project-drafts/preview',input),created=await api(request,'project-drafts/apply',{...input,preview_token:preview.preview_token});const p=created.project;
  await page.goto('/#/plans/tasks');await page.getByRole('button',{name:'Добавить',exact:true}).click();
  const editor=page.getByRole('dialog',{name:'Новая задача'});await editor.getByText('Проект и подзадача',{exact:false}).click();
- await editor.locator('select[name=project_id]').selectOption(p.id);await expect(editor.getByLabel('Добавить задачу в',{exact:true})).toHaveValue('this_and_following');
- await editor.getByLabel('Название',{exact:true}).fill('Из полного редактора');await editor.getByRole('button',{name:'Сохранить',exact:true}).click();await page.getByRole('button',{name:'Применить изменения',exact:true}).click();await expect(page.locator('.pl-dialog')).toHaveCount(0);
- const fresh=await api(request,'projects/'+p.id);expect(fresh.tasks).toHaveLength(1);const series=await api(request,'series/'+p.repeat_series_id);expect(series.occurrences.every(o=>o.project.tasks.length===1)).toBe(true);
- await page.goto('/#/plans/tasks?task='+fresh.tasks[0].id);await expect(page.getByLabel('Применить изменение',{exact:true})).toHaveValue('this');
+ await editor.locator('select[name=project_id]').selectOption(p.id);await expect(editor.locator('input[name=change_scope]')).toHaveValue('this');
+ await editor.getByLabel('Название',{exact:true}).fill('Из полного редактора');await editor.getByRole('button',{name:'Сохранить',exact:true}).click();await expect(page.locator('dialog[open]')).toHaveCount(0);
+ const fresh=await api(request,'projects/'+p.id);expect(fresh.tasks).toHaveLength(1);const series=await api(request,'series/'+p.repeat_series_id);expect(series.occurrences.every(o=>o.project.tasks.length===0)).toBe(true);
+ await page.goto('/#/plans/tasks?task='+fresh.tasks[0].id);await expect(page.locator('input[name=change_scope]')).toHaveValue('this');
  await page.goto('/#/plans/projects');await expect(page.locator('[data-project-id="'+p.id+'"]')).toBeVisible();fs.mkdirSync('artifacts/ux31-add2',{recursive:true});await page.locator('[data-project-id="'+p.id+'"]').screenshot({path:'artifacts/ux31-add2/project-card.png'});
  await page.locator('[data-project-id="'+p.id+'"] .pl-project-date').click();await expect(page).toHaveURL(new RegExp('#/plans/projects/'+p.id+'$'));await expect(page.getByRole('heading',{name:p.title,exact:true})).toBeVisible();
 });

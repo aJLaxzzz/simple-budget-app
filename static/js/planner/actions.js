@@ -208,7 +208,7 @@
     });
     dialog.append(form);
     // No optimistic DOM move: a rejected drop leaves the original event in place.
-    if (immediate&&!changeScope) form.requestSubmit();
+    if (immediate&&(!changeScope||changeScope.value==='this')) form.requestSubmit();
   };
   P.projectMenu=function(project){
     const {dialog,close}=P.dialog('Действия с проектом');dialog.setAttribute('aria-label','Действия с проектом');dialog.classList.add('pl-action-menu');const list=el('div',{class:'pl-menu-items'});dialog.append(list);
@@ -218,7 +218,7 @@
       if(P.active(project)){const complete=button('Завершить проект',run(()=>P.completeProject(project)));complete.disabled=!project.completion_ready;complete.title=P.projectCompleteControl(project).title;list.append(complete);}
       list.append(button('Добавить существующие задачи',run(()=>P.addExistingTasks(project))),button('Добавить задачу',run(()=>project.repeat_series_id?P.newTask(project.id):P.compactTask({view:'projects',id:project.id,params:new URLSearchParams()}))));
 
-      if(project.repeat_series_id)list.append(button('Настроить повторение',run(()=>P.repeatEditor(project.repeat_series_id,{projectID:project.id}))));
+      if(project.repeat_series_id)list.append(button('Перенести выполнение проекта',run(()=>P.moveProjectExecution(project))),button('Настроить повторение',run(()=>P.repeatEditor(project.repeat_series_id,{projectID:project.id}))));
       else if(!project.occurrence_id)list.append(button('Повторять проект',run(()=>P.projectTemplateFlow(project,true))));
 
       if((project.occurrence_id||project.managed_repeat)&&P.active(project))list.append(button('Пропустить выполнение',run(()=>P.projectAction(project,'skip'))));

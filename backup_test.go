@@ -12,6 +12,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"image"
 	"image/png"
 	"io"
@@ -866,87 +867,91 @@ func TestBackupCLIArchiveOnlyDisasterRecovery(t *testing.T) {
 }
 
 func TestBackupRestoreOlderCompatibleArchive(t *testing.T) {
-	r, o := backupFixture(t)
-	v := makeBackup(t, r, o)
-	_, archive, _ := r.find(v.Manifest.ID)
-	stage := t.TempDir()
-	m, e := extractBackup(context.Background(), archive, stage)
-	if e != nil {
-		t.Fatal(e)
-	}
-	dbPath := filepath.Join(stage, "planner.db")
-	if e = os.Remove(dbPath); e != nil {
-		t.Fatal(e)
-	}
-	db, e := sql.Open("sqlite", dbPath)
-	if e != nil {
-		t.Fatal(e)
-	}
-	tx, e := db.Begin()
-	if e != nil {
-		t.Fatal(e)
-	}
-	_, e = tx.Exec(`CREATE TABLE schema_migrations(version INTEGER PRIMARY KEY,checksum TEXT NOT NULL,applied_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')))`)
-	if e != nil {
-		t.Fatal(e)
-	}
-	files, e := filepath.Glob("internal/planner/migrations/*.sql")
-	if e != nil || len(files) < 7 {
-		t.Fatal(e)
-	}
-	sort.Strings(files)
-	for i, name := range files[:7] {
-		raw := readBytes(t, name)
-		if _, e = tx.Exec(string(raw)); e != nil {
-			t.Fatal(e)
-		}
-		sum := sha256.Sum256(raw)
-		if _, e = tx.Exec("INSERT INTO schema_migrations(version,checksum) VALUES(?,?)", i+1, hex.EncodeToString(sum[:])); e != nil {
-			t.Fatal(e)
-		}
-	}
-	if _, e = tx.Exec(`PRAGMA application_id=1396853840; PRAGMA user_version=7; INSERT INTO projects(id,title) VALUES('old-archive-project','Old compatible project')`); e != nil {
-		t.Fatal(e)
-	}
-	if e = tx.Commit(); e != nil {
-		t.Fatal(e)
-	}
-	db.Close()
-	m.SQLite, e = planner.SnapshotInfo(context.Background(), dbPath, true)
-	if e != nil {
-		t.Fatal(e)
-	}
-	for i, name := range archiveNames {
-		m.Files[i], e = hashFile(context.Background(), filepath.Join(stage, name))
-		if e != nil {
-			t.Fatal(e)
-		}
-	}
-	oldArchive := filepath.Join(t.TempDir(), "old.tar.gz")
-	if e = packBackup(context.Background(), stage, oldArchive, m); e != nil {
-		t.Fatal(e)
-	}
-	target := o
-	target.DataDir = filepath.Join(t.TempDir(), "restored")
-	if _, e = restoreBackup(context.Background(), r, target, oldArchive, "full"); e != nil {
-		t.Fatal(e)
-	}
-	info, e := planner.SnapshotInfo(context.Background(), filepath.Join(target.DataDir, "planner.db"), false)
-	if e != nil || info.Schema != planner.SchemaVersion() {
-		t.Fatal(info, e)
-	}
-	db, e = sql.Open("sqlite", "file:"+filepath.Join(target.DataDir, "planner.db")+"?mode=ro&immutable=1")
-	if e != nil {
-		t.Fatal(e)
-	}
-	defer db.Close()
-	var title string
-	if e = db.QueryRow("SELECT title FROM projects WHERE id='old-archive-project'").Scan(&title); e != nil || title != "Old compatible project" {
-		t.Fatal(title, e)
-	}
-	old, e := planner.SnapshotInfo(context.Background(), dbPath, true)
-	if e != nil || old.Schema != 7 {
-		t.Fatal("source snapshot mutated", old, e)
+	for _, schema := range []int{7, 14} {
+		t.Run(fmt.Sprintf("schema%d", schema), func(t *testing.T) {
+			r, o := backupFixture(t)
+			v := makeBackup(t, r, o)
+			_, archive, _ := r.find(v.Manifest.ID)
+			stage := t.TempDir()
+			m, e := extractBackup(context.Background(), archive, stage)
+			if e != nil {
+				t.Fatal(e)
+			}
+			dbPath := filepath.Join(stage, "planner.db")
+			if e = os.Remove(dbPath); e != nil {
+				t.Fatal(e)
+			}
+			db, e := sql.Open("sqlite", dbPath)
+			if e != nil {
+				t.Fatal(e)
+			}
+			tx, e := db.Begin()
+			if e != nil {
+				t.Fatal(e)
+			}
+			_, e = tx.Exec(`CREATE TABLE schema_migrations(version INTEGER PRIMARY KEY,checksum TEXT NOT NULL,applied_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')))`)
+			if e != nil {
+				t.Fatal(e)
+			}
+			files, e := filepath.Glob("internal/planner/migrations/*.sql")
+			if e != nil || len(files) < schema {
+				t.Fatal(e)
+			}
+			sort.Strings(files)
+			for i, name := range files[:schema] {
+				raw := readBytes(t, name)
+				if _, e = tx.Exec(string(raw)); e != nil {
+					t.Fatal(e)
+				}
+				sum := sha256.Sum256(raw)
+				if _, e = tx.Exec("INSERT INTO schema_migrations(version,checksum) VALUES(?,?)", i+1, hex.EncodeToString(sum[:])); e != nil {
+					t.Fatal(e)
+				}
+			}
+			if _, e = tx.Exec(fmt.Sprintf(`PRAGMA application_id=1396853840; PRAGMA user_version=%d; INSERT INTO projects(id,title) VALUES('old-archive-project','Old compatible project')`, schema)); e != nil {
+				t.Fatal(e)
+			}
+			if e = tx.Commit(); e != nil {
+				t.Fatal(e)
+			}
+			db.Close()
+			m.SQLite, e = planner.SnapshotInfo(context.Background(), dbPath, true)
+			if e != nil {
+				t.Fatal(e)
+			}
+			for i, name := range archiveNames {
+				m.Files[i], e = hashFile(context.Background(), filepath.Join(stage, name))
+				if e != nil {
+					t.Fatal(e)
+				}
+			}
+			oldArchive := filepath.Join(t.TempDir(), "old.tar.gz")
+			if e = packBackup(context.Background(), stage, oldArchive, m); e != nil {
+				t.Fatal(e)
+			}
+			target := o
+			target.DataDir = filepath.Join(t.TempDir(), "restored")
+			if _, e = restoreBackup(context.Background(), r, target, oldArchive, "full"); e != nil {
+				t.Fatal(e)
+			}
+			info, e := planner.SnapshotInfo(context.Background(), filepath.Join(target.DataDir, "planner.db"), false)
+			if e != nil || info.Schema != planner.SchemaVersion() {
+				t.Fatal(info, e)
+			}
+			db, e = sql.Open("sqlite", "file:"+filepath.Join(target.DataDir, "planner.db")+"?mode=ro&immutable=1")
+			if e != nil {
+				t.Fatal(e)
+			}
+			defer db.Close()
+			var title string
+			if e = db.QueryRow("SELECT title FROM projects WHERE id='old-archive-project'").Scan(&title); e != nil || title != "Old compatible project" {
+				t.Fatal(title, e)
+			}
+			old, e := planner.SnapshotInfo(context.Background(), dbPath, true)
+			if e != nil || old.Schema != schema {
+				t.Fatal("source snapshot mutated", old, e)
+			}
+		})
 	}
 }
 

@@ -37,7 +37,9 @@
    workflow.intro && form.append(meta(workflow.intro));
    const appearance=P.appearanceField(form,snapshot,true);
    const title=P.field(form,'title','Название шаблона','text',snapshot.title);title.required=true;const description=P.field(form,'description','Описание проекта','textarea',snapshot.description);
-   const due=offsetField(form,'project_due','Крайний срок проекта',snapshot.due_offset,workflow.dateAnchor||workflow.displayAnchor);
+   let due;
+   if(workflow.simpleDates){const date=P.field(form,'project_due','Крайний срок проекта · необязательно','date',snapshot.due_offset==null?'':P.calendarModel.addDays(workflow.dateAnchor(),snapshot.due_offset));due=()=>date.value?Math.round((Date.parse(date.value+'T00:00:00Z')-Date.parse(workflow.dateAnchor()+'T00:00:00Z'))/86400000):null;}
+   else due=offsetField(form,'project_due','Крайний срок проекта',snapshot.due_offset,workflow.dateAnchor||workflow.displayAnchor);
    const tree=el('div',{class:'pl-template-tree'});const taskReaders=new Map();
    function capture(){Object.assign(snapshot,appearance());snapshot.title=title.value;snapshot.description=description.value;snapshot.due_offset=due();for(const t of snapshot.tasks){const read=taskReaders.get(t.key);if(read)Object.assign(t,read());}P.drafts.set(key,structuredClone(snapshot));}
    function draw(){taskReaders.clear();tree.replaceChildren();for(const t of snapshot.tasks){

@@ -528,6 +528,36 @@ func (s *Service) Unarchive(ctx context.Context, kind, id string, in DeletionInp
 			if e = checkRevision(in.ExpectedRevision, m); e != nil {
 				return CommandResult{}, e
 			}
+			if kind == "series" {
+				before, err := getSeries(tx, id)
+				if err != nil {
+					return CommandResult{}, err
+				}
+				if before.State != "archived" {
+					return CommandResult{}, invalid("Повторение не находится в архиве либо отключено")
+				}
+				next := before
+				next.State = "active"
+				// Missing completion anchors require an explicit decision; never invent one.
+				if next.AnchorMode == "completion" && next.AnchorDate == nil && next.WaitingOccurrenceID == nil {
+					next.State = "needs_anchor"
+				}
+				if err = s.refreshPauseState(tx, &next); err != nil {
+					return CommandResult{}, err
+				}
+				if err = saveSeriesRuntime(tx, next, now); err != nil {
+					return CommandResult{}, err
+				}
+				next, err = getSeries(tx, id)
+				if err != nil {
+					return CommandResult{}, err
+				}
+				if err = event(tx, "series", id, "unarchived", in.RequestID, now, before, next); err != nil {
+					return CommandResult{}, err
+				}
+				return CommandResult{Series: &next}, nil
+			}
+
 			if kind == "projects" {
 				before, e := getProject(tx, id)
 				if e != nil {

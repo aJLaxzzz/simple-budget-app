@@ -13,6 +13,8 @@ import (
 // Explicit manifest: files accidentally placed in static are never published.
 // Assets are read once at startup, so later symlink swaps cannot expose data.
 var publicAssets = map[string]string{
+	"/js/navigation.js":                  "text/javascript; charset=utf-8",
+	"/css/navigation.css":                "text/css; charset=utf-8",
 	"/favicon.ico":                       "image/x-icon",
 	"/favicon.svg":                       "image/svg+xml",
 	"/favicon-16.png":                    "image/png",
@@ -69,6 +71,7 @@ var publicAssets = map[string]string{
 //go:embed static/favicon.svg static/favicon.ico static/favicon-16.png static/favicon-32.png
 //go:embed static/js/view-sync.js
 //go:embed static/js/live.js static/js/environment.js
+//go:embed static/js/navigation.js static/css/navigation.css
 var embeddedFrontend embed.FS
 
 func newStaticHandler(dir string) (http.Handler, error) {

@@ -3,8 +3,9 @@
  P.renderCalendarSettings=async function(host){
    const section=P.route().params.get('section')||'planner';
    host.classList.add('pl-settings');
-   host.replaceChildren(el('nav',{class:'pl-tabs pl-settings-nav','aria-label':'Подразделы настроек'},[['planner','Планировщик'],['calendar','Производственный календарь'],['appearance','Оформление'],['backups','Резервные копии'],['security','Безопасность']].map(([key,title])=>el('a',{href:'#/plans/settings?section='+key,class:key===section?'is-active':''},title))));
-   if(section==='templates'){host.append(button('Создать из шаблона',()=>P.chooseTemplate(P.route())));return;}
+   host.replaceChildren(el('nav',{class:'pl-tabs pl-settings-nav','aria-label':'Подразделы настроек'},[['planner','Планировщик'],['calendar','Производственный календарь'],['appearance','Оформление'],['backups','Резервные копии'],['security','Безопасность'],['archive','Архив']].map(([key,title])=>el('a',{href:'#/plans/settings?section='+key,class:key===section?'is-active':''},title))));
+   if(section==='templates'){host.append(el('h2',{},'Старые шаблоны'),meta('Сохранённые заготовки. Это не архив задач или проектов.'),el('a',{class:'pl-button',href:'#/plans/task-templates'},'Шаблоны задач'),el('a',{class:'pl-button',href:'#/plans/templates'},'Шаблоны проектов'),button('Создать из шаблона',()=>P.chooseTemplate(P.route())));return;}
+   if(section==='archive'){await P.renderArchive(host);return;}
    if(section==='security'){await window.budgetSecurity(host);return;}
    if(section==='backups'){await renderBackups(host);return;}
    if(section==='appearance'){const icons=el('section',{class:'pl-my-icons pl-settings-block'});host.append(icons);await P.renderMyIcons(icons);return;}
@@ -22,7 +23,7 @@
      const calendar=block('Календарь','История остаётся на запланированных датах');
      checkbox(calendar,'Показывать выполненные задачи',P.showCompletedCalendar(),P.setCompletedCalendar);
      checkbox(calendar,'Показывать отменённые задачи',P.showCancelledCalendar(),P.setCancelledCalendar);
-     const templates=el('details',{class:'pl-settings-block'},el('summary',{},'Ранее сохранённые шаблоны'),el('div',{class:'pl-actions'},el('a',{class:'pl-button',href:'#/plans/task-templates'},'Шаблоны задач'),el('a',{class:'pl-button',href:'#/plans/templates'},'Шаблоны проектов'),el('a',{class:'pl-button',href:'#/plans/settings?section=templates'},'Создать из шаблона')));host.append(templates);return;
+     host.append(el('a',{class:'pl-muted',href:'#/plans/settings?section=templates'},'Старые шаблоны · дополнительные инструменты'));return;
    }
    host.append(el('h2',{},'Производственный календарь РФ'));
    const highlight=el('input',{type:'checkbox',checked:P.showCalendarDays()});highlight.addEventListener('change',()=>P.setCalendarDays(highlight.checked));host.append(el('label',{class:'pl-checkbox pc-highlight-setting'},highlight,'Показывать праздники и выходные'));
@@ -34,6 +35,22 @@
    const file=P.field(host,'calendar_file','Или импортировать подготовленный JSON-файл','file','');file.accept='.json,application/json';
    file.addEventListener('change',async()=>{try{if(!file.files[0])return;if(file.files[0].size>120*1024)throw Error('Файл должен быть не больше 120 KiB.');importDialog(JSON.parse(await file.files[0].text()));}catch(e){P.notify('Не удалось прочитать календарь: '+e.message);}finally{file.value='';}});
    host.append(el('p',{class:'pl-info'},'Подготовлены проверенные календари 2026 и 2027 годов. Каждый год импортируется только после подтверждения. Для остальных лет нужен полный файл, сверенный с официальными публикациями.'),el('p',{class:'pl-info'},'После обновления откройте нужную серию → «Изменить правило» → «Посмотреть изменения». Даты существующих выполнений изменятся только после отдельного подтверждения; ручные переносы и закрытая история защищены.'));
+ };
+
+ P.renderArchive=async function(host){
+  host.append(el('h2',{},'Архив'),meta('Архив проекта сохраняет его задачи. Архив серии останавливает создание новых выполнений; уже созданные выполнения сохраняют своё состояние.'));
+  const [projects,series]=await Promise.all([P.api('/projects?archived=true'),P.seriesList()]);
+  const rows=[];
+  for(const p of projects.items){rows.push({kind:'projects',item:p,type:'project',label:'Проект',owner:p});const tasks=await P.api('/tasks?project_id='+p.id);for(const t of tasks.items)rows.push({kind:'tasks',item:t,type:'task',label:'Задача в архивном проекте',owner:p});}
+  for(const s of series.filter(s=>s.state==='archived')){
+   const history=await P.api('/history?object_type=series&object_id='+encodeURIComponent(s.id)+'&limit=100');
+   const archived=history.items.find(e=>e.action==='archived'||e.action==='archive');
+   rows.push({kind:'series',item:{...s,title:P.seriesTitle(s),status:s.state,archived_at:archived?.created_at},type:s.source_type,label:s.source_type==='project'?'Серия проектов':'Серия задач'});
+  }
+  const filter=el('div',{class:'pl-filters'}),type=P.field(filter,'archive_type','Тип','select','all',[['all','Все'],['task','Задачи'],['project','Проекты']]),list=el('div',{class:'pl-archive-list'});host.append(filter,list);
+  const open=r=>r.kind==='tasks'?P.openTask(r.item.id):P.navigate('#/plans/'+(r.kind==='series'?'series':'projects')+'/'+r.item.id);
+  function draw(){const selected=rows.filter(r=>type.value==='all'||r.type===type.value);list.replaceChildren(...selected.map(r=>{const i=r.item,box=el('article',{class:'pl-settings-block','data-archive-id':i.id},el('h3',{},i.title),el('p',{class:'pl-muted'},r.label+' · '+(P.labels[i.status]||i.status)),el('p',{class:'pl-muted'},(i.archived_at||r.owner?.archived_at)?'В архиве с '+P.date((i.archived_at||r.owner.archived_at).slice(0,10)):'Дата архивирования не сохранена в карточке'),el('div',{class:'pl-actions'},button('Открыть',()=>open(r)),button(r.kind==='tasks'?'Вернуть проект с задачами':'Вернуть из архива',()=>P.unarchive(r.kind==='tasks'?'projects':r.kind,r.owner||i)),button('Удалить навсегда',()=>P.deleteForever(r.kind,i),'pl-danger')));return box;}));if(!selected.length)list.append(P.empty('Архив пуст','Здесь появятся архивные проекты и серии.'));}
+  type.addEventListener('change',draw);draw();
  };
  P.backupViewModel=function(data,staging=false){
    const copy=data.latest;const ready=Boolean(copy&&/^[0-9]{8}T[0-9]{6}Z-[a-f0-9]{16}$/.test(copy.manifest?.backup_id));

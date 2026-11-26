@@ -4,10 +4,7 @@
   P.navGroup = route => ['projects','templates'].includes(route.view) || (route.view === 'series' && (route.params.get('source') || route.params.get('filter')) === 'project') ? 'projects' : ['tasks','inbox','series','task-templates'].includes(route.view) ? 'tasks' : route.view;
   P.navigation = function (page, route) {
     const group = P.navGroup(route);
-    const nav = el('nav', {class:'pl-tabs pl-main-tabs','aria-label':'Разделы планировщика'}, [['calendar','Календарь'],['tasks','Задачи'],['projects','Проекты'],['attention','Внимание']].map(([key,title]) => el('a', {href:key==='calendar'?P.calendarLink():'#/plans/'+key, ...(group===key?{'aria-current':'page',class:'is-active'}:{})}, title)));
-    const settings = el('a', {class:'pl-button pl-icon',href:'#/plans/settings','aria-label':'Настройки планировщика',title:'Настройки планировщика'}, '⚙');
-    page.append(el('div', {class:'pl-heading'}, el('div', {}, el('h1',{},'Планы')), el('div',{class:'pl-header-actions'},settings)),nav);
-    const ready = P.updateAttentionCount?.(nav);
+    const ready = window.AppNavigation.render('plans',route);
     if (group==='tasks' || group==='projects') {
       const project = group==='projects';
       const entries = project ? [['#/plans/projects','Все проекты','all'],['#/plans/projects?view=regular','Регулярные проекты','regular']] : [['#/plans/tasks','Все задачи','all'],['#/plans/tasks?view=regular','Регулярные','regular'],['#/plans/tasks?view=undated','Без даты','undated']];

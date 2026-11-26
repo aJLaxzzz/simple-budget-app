@@ -28,6 +28,17 @@ class MenuTerminal(unittest.TestCase):
         with patch.dict(os.environ,{'TERM':'vt100','OUTPUT':''}),patch.object(ui,'interactive',return_value=True),contextlib.redirect_stdout(io.StringIO()) as out:
             ui.clear_menu()
             self.assertEqual(out.getvalue(),'\033[2J\033[H')
+    def test_default_stg_does_not_start_it(self):
+        for explicit,expected in (('', 'acceptance'),('production','production')):
+            with tempfile.TemporaryDirectory() as tmp,patch.object(Path,'home',return_value=Path(tmp)),patch.dict(os.environ,{'INSTANCE':explicit,'SUDO_MODE':'session'}),patch.object(ui,'interactive',return_value=False),patch.object(menu.version_status,'git',return_value=''),contextlib.redirect_stdout(io.StringIO()) as out:
+                execute=Mock(return_value=subprocess.CompletedProcess([],0))
+                observe=Mock(return_value={'acceptance':{'service':'stopped'},'production':{'service':'running'}})
+                with patch('builtins.input',side_effect=['1','','0']):self.assertEqual(menu.main(run=execute,observe=observe),0)
+                execute.assert_called_once()
+                call=execute.call_args
+                self.assertIn('status',call.args[0])
+                self.assertEqual(call.kwargs['env']['INSTANCE'],expected)
+
     def test_initial_clear_result_pause_then_redraw_success_and_error(self):
         for code in (0,1):
             with self.subTest(code=code),tempfile.TemporaryDirectory() as tmp,patch.object(Path,'home',return_value=Path(tmp)),patch.dict(os.environ,{'TERM':'xterm','OUTPUT':'','INSTANCE':'','SUDO_MODE':''}),patch.object(ui,'interactive',return_value=True),patch.object(menu.version_status,'git',return_value=''),contextlib.redirect_stdout(io.StringIO()) as out:

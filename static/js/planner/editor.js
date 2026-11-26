@@ -107,7 +107,8 @@
       const turn=++scopeTurn,selected=project.value;scopeLoading=true;scopeError=null;
       changeScope?.closest('.pl-field')?.remove();changeScope=null;scopeProject=null;
       try{
-        if(selected&&!record.series_id){const current=await P.api('/projects/'+selected);if(turn!==scopeTurn||!isCurrent())return;scopeProject=current;changeScope=P.projectScopeField(form,current,!id);if(changeScope){if(initial&&draft?.values?.change_scope)changeScope.value=draft.values.change_scope;const footer=form.querySelector('.pl-form-footer');if(footer)form.insertBefore(changeScope.closest('.pl-field'),footer);}}
+        if(repeat)repeat.closest('.pl-new-recurrence').hidden=false;if(form.elements.status){form.elements.status.disabled=false;form.elements.status.closest('.pl-field').hidden=false;}
+        if(selected&&!record.series_id){const current=await P.api('/projects/'+selected);if(repeat){repeat.closest('.pl-new-recurrence').hidden=Boolean(current.repeat_series_id);if(current.repeat_series_id)repeat.checked=false;}if(turn!==scopeTurn||!isCurrent())return;scopeProject=current;if(form.elements.status){const shared=Boolean(current.repeat_series_id&&P.projectContext(current));form.elements.status.disabled=shared;form.elements.status.closest('.pl-field').hidden=shared;}changeScope=P.projectScopeField(form,current,!id);if(changeScope){const footer=form.querySelector('.pl-form-footer');if(footer)form.insertBefore(changeScope.closest('.pl-field'),footer);}}
       }catch(e){if(turn===scopeTurn){scopeError=e;P.notify(P.errorMessage(e));}}
       finally{if(turn===scopeTurn)scopeLoading=false;}
     };
@@ -212,8 +213,9 @@
     P.field(grid, 'due_date', 'Крайний срок', 'date', value.due_date);
     remember(form, key, () => ({ record }));
     const create = P.commandSender('/projects');
-    P.bindForm(form, () => {
+    P.bindForm(form, async () => {
       const data = P.nullable(P.values(form), ['color_id','icon_id','start_date', 'due_date']);
+      if(id&&(data.start_date!==record.start_date||data.due_date!==record.due_date))await P.confirmProjectOverlap(record,data.start_date,data.due_date);
       return id ? P.api('/projects/' + id, 'PATCH', { ...changed(data, record), expected_revision: record.revision }) : create(data);
     }, async saved => { P.drafts.delete(key); dialog.remove(); if (window.location.hash === originHash) P.navigate('#/plans/projects/' + saved.id); P.notify('Проект «'+saved.title+'» сохранён'); }, async () => {
       const latest = await P.api('/projects/' + id);
@@ -349,7 +351,7 @@
   function history(kind, id) {
     const section = el('section', { class: 'pl-editor-section' });
     const list = el('div', { class: 'pl-history' });
-    const actions = {repeat_disabled:'Повторение отключено',completion_undone:'Завершение отменено',appearance_changed:'Оформление повторения изменено',unarchived:'Возвращено из архива',occurrence_deleted:'Выполнение удалено навсегда',repeat_deleted:'Повторение удалено навсегда',saved_as_template:'Сохранено как шаблон',created_from_template:'Создано из шаблона',version_created:'Новая версия шаблона',instantiated:'Создано из шаблона',archived:'Архивировано', created: 'Создано', edited: 'Изменено', status_changed: 'Изменён статус', rescheduled: 'Перенесено', completed: 'Завершено', cancelled: 'Отменено', restored: 'Восстановлено', moved_project: 'Перемещено в проект' };
+    const actions = {project_mode_changed:'Выполнения стали независимыми',repeat_disabled:'Повторение отключено',completion_undone:'Завершение отменено',appearance_changed:'Оформление повторения изменено',unarchived:'Возвращено из архива',occurrence_deleted:'Выполнение удалено навсегда',repeat_deleted:'Повторение удалено навсегда',saved_as_template:'Сохранено как шаблон',created_from_template:'Создано из шаблона',version_created:'Новая версия шаблона',instantiated:'Создано из шаблона',archived:'Архивировано', created: 'Создано', edited: 'Изменено', status_changed: 'Изменён статус', rescheduled: 'Перенесено', completed: 'Завершено', cancelled: 'Отменено', restored: 'Восстановлено', moved_project: 'Перемещено в проект' };
     let offset = 0, loaded = false;
     const load = button('Показать ещё', async () => {
       load.disabled = true;

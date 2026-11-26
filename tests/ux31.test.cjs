@@ -80,3 +80,13 @@ test('addition2 intentional STG backup disablement is informational; real warnin
  assert.equal(view({automatic:'unknown',warning:'Ошибка проверки'},true).warning,'Ошибка проверки');
  assert.match(view({automatic:'unknown',stale:true},false).warning,/Нет актуальной/);
 });
+
+test('addition4 series group merges same-day instances only, with stable identity and real progress',()=>{
+ const p=model(),projects=[{id:'p1',repeat_series_id:'s',title:'Дейлик'},{id:'p2',repeat_series_id:'s',title:'Дейлик'},{id:'p3',title:'Дейлик'},{id:'p4',title:'Дейлик'}];
+ const child={...task('child','p1',today,'planned','11:00'),parent_task_id:'yesterday'},root=task('root','p2',today,'planned','09:00'),done=task('done','p1',today,'completed'),next=task('next','p2','2026-11-27');
+ const all=[child,root,done,next,task('a','p3',today),task('b','p4',today)];
+ const groups=p.projectTaskGroups(all.filter(t=>t.status==='planned'&&t.planned_date===today),[...all,done],'today',today,projects);
+ const merged=groups.find(g=>g.seriesID==='s');assert.equal(groups.length,3);assert.equal(merged.tasks.map(t=>t.id).join(','),'root,child');assert.equal(merged.members.length,3);assert.equal(merged.completed,1);assert.equal(merged.projectIDs.size,2);
+ const one=p.projectTaskGroups([child],all.filter(t=>t.project_id==='p1'),'today',today,projects)[0];assert.equal(one.members.length,2);assert.equal(one.key,merged.key);assert.equal(one.projectIDs.size,1);
+ assert.notEqual(p.projectTaskGroups([next],all,'tomorrow',today,projects)[0].key,merged.key);
+});

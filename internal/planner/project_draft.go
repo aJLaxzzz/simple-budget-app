@@ -12,6 +12,7 @@ type ProjectDraftInput struct {
 	AnchorDate   string                  `json:"anchor_date"`
 	HasStart     bool                    `json:"has_start"`
 	Rule         *recurrence.Rule        `json:"rule,omitempty"`
+	EndDate      *string                 `json:"end_date,omitempty"`
 	ProjectMode  string                  `json:"project_mode,omitempty"`
 	PreviewToken string                  `json:"preview_token"`
 	RequestID    string                  `json:"request_id"`
@@ -28,8 +29,11 @@ func projectDraftRoute(s *Service, w http.ResponseWriter, r *http.Request, actio
 		return 0, nil, methodError(w, "POST")
 	}
 	var in ProjectDraftInput
-	if e := strictPlannerInput(w, r, &in, "snapshot anchor_date has_start rule project_mode preview_token request_id"); e != nil {
+	if e := strictPlannerInput(w, r, &in, "snapshot anchor_date has_start rule project_mode end_date preview_token request_id"); e != nil {
 		return 0, nil, e
+	}
+	if in.ProjectMode == "" {
+		in.ProjectMode = "independent"
 	}
 	if action != "preview" && action != "apply" {
 		return 0, nil, notFound("Маршрут", action)
@@ -38,6 +42,12 @@ func projectDraftRoute(s *Service, w http.ResponseWriter, r *http.Request, actio
 	e := s.store.Transaction(r.Context(), func(tx *sql.Tx) error {
 		preview := func() (ProjectDraftPreview, error) {
 			p := ProjectDraftPreview{}
+			if e := validDate(in.EndDate); e != nil {
+				return p, e
+			}
+			if in.EndDate != nil && *in.EndDate < in.AnchorDate {
+				return p, invalid("Конец повторения раньше начала проекта")
+			}
 			snapshot, e := normalizeTemplate(in.Snapshot)
 			if e != nil {
 				return p, e
@@ -70,7 +80,9 @@ func projectDraftRoute(s *Service, w http.ResponseWriter, r *http.Request, actio
 				if e != nil {
 					return p, e
 				}
-				p.Next = &next
+				if in.EndDate == nil || p.FirstDate <= *in.EndDate {
+					p.Next = &next
+				}
 			}
 			clean := in
 			clean.PreviewToken = ""
@@ -161,7 +173,7 @@ func projectDraftRoute(s *Service, w http.ResponseWriter, r *http.Request, actio
 				if e != nil {
 					return CommandResult{}, e
 				}
-				result, e := s.createProjectSeriesFromOrigin(r.Context(), tx, CreateSeriesInput{SourceType: "project", RequestID: in.RequestID + ":repeat", TemplateID: t.ID, TemplateVersionID: t.VersionID, ExpectedRevision: t.Revision, FirstDate: p.FirstDate, Rule: rule}, rule, in.RequestID, now, in.AnchorDate, id)
+				result, e := s.createProjectSeriesFromOrigin(r.Context(), tx, CreateSeriesInput{SourceType: "project", RequestID: in.RequestID + ":repeat", TemplateID: t.ID, TemplateVersionID: t.VersionID, ExpectedRevision: t.Revision, FirstDate: p.FirstDate, Rule: rule, EndDate: in.EndDate}, rule, in.RequestID, now, in.AnchorDate, id)
 				if e != nil {
 					return CommandResult{}, e
 				}

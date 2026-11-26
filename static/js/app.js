@@ -982,13 +982,14 @@
   }
 
   function render(background = false) {
-    if (window.Planner?.deferNavigation?.(render)) return;
+    if (window.Planner?.deferNavigation?.(render) || window.AppNavigation.deferNavigation()) return;
     var route = parseHash();
     if (route.page === 'plans') {
       destroyCharts();
       return window.Planner.mount(root, background === true);
     }
     if (window.Planner) window.Planner.unmount();
+    window.AppNavigation.render('budget', route);
     if (route.page === 'month') {
       return renderMonthPage(route.monthId, background);
     } else if (route.page === 'year') {
@@ -1001,7 +1002,7 @@
   }
 
   window.budgetRefreshView = render;
-  window.addEventListener('hashchange', () => { window.budgetDraftDirty = false; if (window.budgetStarted || !window.EventSource) render(); });
+  window.addEventListener('hashchange', () => { if (window.budgetStarted || !window.EventSource) render(); });
   if (!window.EventSource) render();
 
   function initSearch() {

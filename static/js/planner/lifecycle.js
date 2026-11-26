@@ -5,7 +5,7 @@
  P.unarchive=async function(kind,item){
   if(P.guardActive&&!await P.guardActive())return;
   const {dialog,close}=P.dialog('Вернуть из архива');
-  dialog.append(el('p',{},item.title||item.snapshot?.title),meta('Данные и история сохранятся. Статус выполнения не изменится: отменённый проект останется отменённым.'));
+  dialog.append(el('p',{},item.title||item.snapshot?.title),meta(kind==='series'?'Повторение возобновится по прежнему расписанию с учётом лимита. Задачи, даты и история сохранятся. Если нет опорной даты, потребуется выбрать её отдельно.':'Данные и история сохранятся. Статус выполнения не изменится: отменённый проект останется отменённым.'));
   const form=el('form',{'data-submit':'Вернуть из архива'}),send=P.commandSender('/'+kind+'/'+item.id+'/unarchive');
   P.bindForm(form,()=>send({expected_revision:item.revision}),async()=>{close(true);P.notify('«'+(item.title||item.snapshot?.title)+'»: возвращено из архива');await P.refresh();},async()=>{const latest=await P.api('/'+kind+'/'+item.id);return {record:latest,accept(){item=latest;}};});dialog.append(form);
  };

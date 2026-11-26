@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="/css/style.css" />
   <link rel="stylesheet" href="/css/planner.css" />
   <link rel="stylesheet" href="/css/calendar.css" />
+  <link rel="stylesheet" href="/css/navigation.css" />
 <link rel="icon" href="/favicon.ico" sizes="16x16 32x32">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" sizes="any">
   <link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32">
@@ -14,19 +15,24 @@
 </head>
 <body>
   <div class="app">
-    <header class="header">
-      <a href="#/" class="logo">◆ Личный бюджет</a>
-      <nav class="header-nav">
-        <div class="header-search">
+    <header class="header app-navigation" aria-label="Навигация приложения">
+      <div class="app-module-switch">
+        <button type="button" id="module-switch" aria-expanded="false" aria-controls="module-menu">Планы <span aria-hidden="true">⌄</span></button>
+        <div id="module-menu" hidden aria-label="Выбор модуля">
+          <a href="#/plans/calendar" data-module="plans">Планы</a>
+          <a href="#/" data-module="budget">Бюджет</a>
+        </div>
+      </div>
+      <nav id="module-tabs" class="app-module-tabs" aria-label="Основные разделы"></nav>
+      <div class="app-navigation-tools">
+        <div class="header-search" id="budget-search" hidden>
           <input type="text" id="search-input" class="search-input" placeholder="Поиск по операциям..." autocomplete="off" />
           <div id="search-results" class="search-results" aria-hidden="true"></div>
         </div>
-        <a href="#/plans">Планы</a>
-        <a href="#/">Месяцы</a>
-        <a href="#/year">Аналитика за год</a>
-        <a href="#/categories">Категории</a>
-        <button type="button" id="backup-button" class="header-backup" title="Скачать копию данных">Скачать бэкап</button>
-      </nav>
+        <button type="button" id="backup-button" class="header-backup" hidden title="Скачать копию данных">Бэкап</button>
+        <a class="app-settings" href="#/plans/settings" aria-label="Настройки планировщика" title="Настройки">⚙</a>
+        <span id="environment-marker"></span>
+      </div>
     </header>
     <main id="root" class="main"></main>
   </div>
@@ -57,6 +63,7 @@
   <script src="/js/planner/beta2.js"></script>
   <script src="/js/planner/beta3.js"></script>
   <script src="/js/planner/repeat-editor.js"></script>
+  <script src="/js/navigation.js"></script>
   <script src="/js/app.js"></script>
   <script src="/js/live.js"></script>
 <script src="/js/environment.js"></script></body>
