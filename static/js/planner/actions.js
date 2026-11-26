@@ -56,6 +56,7 @@
         return P.reschedule(task);
       }
       if(task.type==='session')return P.sessionAction(task,action);
+      if(action==='restore')return P.quickRestore(task);
       return await P.taskAction(task,action);
     }catch(e){P.notify(e.message);}
   };
@@ -100,7 +101,74 @@
       },async()=>({record:await P.api('/tasks/'+tasks[0].id),async accept(){tasks=await Promise.all(tasks.map(t=>P.api('/tasks/'+t.id)));invalidate();}}));dialog.append(form,preview);
     }catch(e){P.notify(e.message);}
   };
+  const directBusy = new Set();
+  const actionError = (message,error) => {P.notify(message+': '+P.errorMessage(error));clearTimeout(P.toastTimer);};
+  function sameRevision(record,expected) {
+    if(record.revision!==expected)throw Error('Запись изменилась на другом устройстве. Обновите данные и повторите действие.');
+  }
+  // Drag carries an explicit destination. It never chooses a series-wide scope.
+  P.calendarDrop = async function(item,date,time) {
+    item=P.actionObject(item);const session=item.type==='session',key=(session?'session:':'task:')+item.id;
+    if(directBusy.has(key))return;directBusy.add(key);
+    try {
+      const occurrence=item.occurrence_id&&!session?await P.api('/occurrences/'+item.occurrence_id):null;
+      const path='/'+(session?'sessions':'tasks')+'/'+item.id;
+      const before=occurrence?.occurrence.task||await P.api(path);
+      sameRevision(before,item.revision);
+      const oldDate=session?before.date:before.planned_date,oldTime=session?before.start_time:before.scheduled_time;
+      const nextTime=time===undefined?oldTime:time;
+      let end=before.end_time;
+      if(session&&time!==undefined){
+        if(!time)end=null;
+        else {const minutes=C.minutes(time)+(before.start_time&&before.end_time?C.minutes(before.end_time)-C.minutes(before.start_time):30);if(minutes>=1440)throw Error('Период работы выходит за границу суток. Используйте действие «Перенести» для выбора интервала.');end=C.time(minutes);}
+      }
+      if(date===oldDate&&nextTime===oldTime&&(!session||end===before.end_time))return;
+      const fields=session?{date,start_time:nextTime||null,end_time:end||null}:{planned_date:date,scheduled_time:nextTime||null};
+      const previous=session?{date:oldDate,start_time:oldTime||null,end_time:before.end_time||null}:{planned_date:oldDate,scheduled_time:oldTime||null};
+      const send=async (fields,record,cycle) => {
+        if(occurrence){
+          const current=cycle||await P.api('/occurrences/'+item.occurrence_id);
+          return P.commandSender('/occurrences/'+item.occurrence_id+'/reschedule')({...fields,instance_only:true,expected_revision:cycle?cycle.occurrence.revision:record.occurrenceRevision,expected_task_revision:record.revision,expected_series_revision:current.series.revision});
+        }
+        return P.api(path+'/reschedule','POST',{...fields,expected_revision:record.revision});
+      };
+      const result=await send(fields,before,occurrence),saved=result.occurrence?{...result.occurrence.task,occurrenceRevision:result.occurrence.revision}:result;
+      await P.refresh();
+      let undone=false,undoBusy=false;
+      P.notify(date===oldDate?'Время изменено':'Перенесено на '+P.date(date),{label:'Отменить перенос',run:async()=>{
+        if(undone||undoBusy)return;undoBusy=true;
+        try{await send(previous,saved);undone=true;await P.refresh();P.notify('Исходные дата и время восстановлены');}
+        catch(e){actionError('Не удалось отменить перенос',e);}finally{undoBusy=false;}
+      }});
+    }catch(e){actionError('Не удалось изменить дату или время',e);}finally{directBusy.delete(key);}
+  };
+  P.quickRestore = async function(item,completion) {
+    const task=P.actionObject(item),key='restore:'+task.id;
+    if(directBusy.has(key))return;directBusy.add(key);
+    try {
+      let result;
+      if(task.occurrence_id){
+        const current=await P.api('/occurrences/'+task.occurrence_id);
+        sameRevision(current.occurrence.task,task.revision);
+        const undo=completion?.undo;
+        result=await P.commandSender('/occurrences/'+task.occurrence_id+(undo?'/undo-complete':'/restore'))({
+          expected_revision:current.occurrence.revision,expected_task_revision:task.revision,expected_series_revision:current.series.revision,
+          ...(undo?{completion_request_id:completion.requestID}:{})
+        });
+      }else result=await P.commandSender('/tasks/'+task.id+'/restore')({expected_revision:task.revision});
+      const saved=result.occurrence?.task||result;
+      const draft=P.drafts.get('task:'+task.id);if(draft){draft.record=saved;draft.values.status=saved.status;delete draft.related;}
+      await P.refresh();P.notify('Задача «'+task.title+'» восстановлена');
+    }catch(e){
+      // Completion-based branches can affect other occurrences. Keep their
+      // existing explicit decision workflow; never silently rebase a conflict.
+      if(task.occurrence_id&&['completion_branch_conflict','undo_changed','undo_requires_decision','dynamic_manual_conflict'].includes(e.code)){
+        P.notify(P.errorMessage(e),{label:'Проверить последствия',run:()=>P.openOccurrence(task.occurrence_id,'restore')});clearTimeout(P.toastTimer);
+      }else actionError('Не удалось восстановить задачу',e);
+    }finally{directBusy.delete(key);}
+  };
   P.reschedule = async function (item, targetDate, targetTime, immediate = false) {
+    if(immediate)return P.calendarDrop(item,targetDate,targetTime);
     item = P.actionObject(item);
     if (item.occurrence_id && item.type !== 'session') return P.openOccurrence(item.occurrence_id, 'reschedule', {targetDate,targetTime,immediate});
     const session = item.type === 'session';
@@ -147,7 +215,7 @@
     const run=fn=>()=>{close(true);fn();};
     if(!project.archived_at){
       list.append(button('Редактировать проект',run(()=>P.navigate('#/plans/projects/'+project.id+'?edit=project&id='+project.id))),button('Изменить даты',run(()=>P.navigate('#/plans/projects/'+project.id+'?edit=project&id='+project.id+'&dates=1'))));
-      if(P.active(project))list.append(button('Завершить проект',run(()=>P.projectAction(project,'complete'))));
+      if(P.active(project)){const complete=button('Завершить проект',run(()=>P.completeProject(project)));complete.disabled=!project.completion_ready;complete.title=P.projectCompleteControl(project).title;list.append(complete);}
       list.append(button('Добавить существующие задачи',run(()=>P.addExistingTasks(project))),button('Добавить задачу',run(()=>project.repeat_series_id?P.newTask(project.id):P.compactTask({view:'projects',id:project.id,params:new URLSearchParams()}))));
 
       if(project.repeat_series_id)list.append(button('Настроить повторение',run(()=>P.repeatEditor(project.repeat_series_id,{projectID:project.id}))));

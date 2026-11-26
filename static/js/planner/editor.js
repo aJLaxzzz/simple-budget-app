@@ -102,22 +102,31 @@
       } if(builder){builder.first.value=date.value||P.today();settings.querySelectorAll('input,select').forEach(c=>c.disabled=!repeat.checked);if(repeat.checked)builder.refresh();}};
       repeat.addEventListener('change',toggle);date.addEventListener('input',toggle);toggle();
     }
-    let scopeProject=null,changeScope=null;
-    if(value.project_id&&!record.series_id){scopeProject=await P.api('/projects/'+value.project_id);if(!isCurrent())return;changeScope=P.projectScopeField(form,scopeProject);}
-    if(changeScope){const restore=draft?.values?.change_scope;if(restore)changeScope.value=restore;project.addEventListener('change',()=>{changeScope.disabled=project.value!==scopeProject.id;if(changeScope.disabled)changeScope.value='this';});}
+    let scopeProject=null,changeScope=null,scopeTurn=0,scopeLoading=false,scopeError=null;
+    const loadScope=async(initial=false)=>{
+      const turn=++scopeTurn,selected=project.value;scopeLoading=true;scopeError=null;
+      changeScope?.closest('.pl-field')?.remove();changeScope=null;scopeProject=null;
+      try{
+        if(selected&&!record.series_id){const current=await P.api('/projects/'+selected);if(turn!==scopeTurn||!isCurrent())return;scopeProject=current;changeScope=P.projectScopeField(form,current,!id);if(changeScope){if(initial&&draft?.values?.change_scope)changeScope.value=draft.values.change_scope;const footer=form.querySelector('.pl-form-footer');if(footer)form.insertBefore(changeScope.closest('.pl-field'),footer);}}
+      }catch(e){if(turn===scopeTurn){scopeError=e;P.notify(P.errorMessage(e));}}
+      finally{if(turn===scopeTurn)scopeLoading=false;}
+    };
+    await loadScope(true);if(!isCurrent())return;
+    project.addEventListener('change',()=>loadScope());
     remember(form, key, () => ({ record, related }));
     const create = P.commandSender('/tasks'),createRepeat=P.commandSender('/series');
     P.bindForm(form, () => {
+      if(scopeLoading)throw Error('Дождитесь проверки выбранного проекта');if(scopeError)throw scopeError;
       const values = P.nullable(P.values(form), ['color_id','icon_id','project_id', 'parent_task_id', 'planned_date', 'scheduled_time', 'due_date']);
       const data = Object.fromEntries(Object.entries(values).filter(([k]) => taskFields.includes(k) || k === 'status'));
       if(record.occurrence_id){delete data.project_id;delete data.parent_task_id;delete data.planned_date;}
       if(changeScope&&changeScope.value!=='this'){
         if(repeat?.checked)throw Error('Отдельное повторение дочерней задачи нельзя добавить в повторяющийся состав');
-        if(data.project_id!==scopeProject.id||data.parent_task_id!==(record.parent_task_id||null))throw Error('Перемещение между проектами и родителями выполняется отдельно');
-        const patch=id?changed(data,record):data;
+        if(data.project_id!==scopeProject.id||(id&&data.parent_task_id!==(record.parent_task_id||null)))throw Error('Перемещение между проектами и родителями выполняется отдельно');
+        const parentID=data.parent_task_id;const patch=id?changed(data,record):{...data};
         if(id&&'status' in patch)throw Error('Измените статус отдельно для выбранного выполнения. Область относится к параметрам задачи.');
         for(const k of ['project_id','parent_task_id','status'])delete patch[k];
-        return P.scopedProjectSave(scopeProject,{scope:changeScope.value,action:id?'edit':'add',...(id?{task_id:id,expected_task_revision:record.revision}:{parent_id:record.parent_task_id||''}),patch}).then(r=>({...r.task||r.project?.tasks.find(t=>t.id===id)||record,scope_notice:r.scope_notice}));
+        return P.scopedProjectSave(scopeProject,{scope:changeScope.value,action:id?'edit':'add',...(id?{task_id:id,expected_task_revision:record.revision}:{parent_id:parentID||''}),patch}).then(r=>({...r.task||r.project?.tasks.find(t=>t.id===id)||record,scope_notice:r.scope_notice}));
       }
       if (id) {
         const patch = changed(data, record);

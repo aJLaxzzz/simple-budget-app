@@ -116,11 +116,11 @@
   document.addEventListener('visibilitychange',()=>{if(document.hidden){connectTurn++;clearTimeout(retry);connected=false;stream?.close();}else{clearTimeout(retry);connect();}});
   window.addEventListener('focus',()=>{if(failed){window.budgetAuth(true).then(()=>{failed=false;notice.hidden=true;connect();}).catch(()=>{});}});
   window.budgetSecurity=async function(host){
-    const section=document.createElement('section');host.append(section);const title=document.createElement('h2');title.textContent='Безопасность';section.append(title);
+    const section=document.createElement('section');section.className='pl-security pl-settings-block';host.append(section);const title=document.createElement('h2');title.textContent='Безопасность';section.append(title);
     const session=await window.budgetAuth();if(!session.enabled){section.append('В локальном режиме пароль не настроен.');return;}
     const rows=await window.budgetAPI('/api/auth/sessions');
-    const action=(label,payload,path)=>{const b=document.createElement('button');b.textContent=label;b.onclick=async()=>{try{await window.budgetAPI(path||'/api/auth/revoke',{method:'POST',body:JSON.stringify(payload)});if(payload.all||path||payload.id===session.id){location.assign('/login.html');}else{section.remove();await window.budgetSecurity(host);}}catch(e){alert(e.message);}};return b;};
-    for(const row of rows){const line=document.createElement('p');line.textContent=(row.current?'Эта сессия':'Другая сессия')+' · вход '+new Date(row.created).toLocaleString('ru-RU')+' · активность '+new Date(row.active).toLocaleString('ru-RU')+' ';line.append(action('Завершить',{id:row.id}));section.append(line);}
+    const action=(label,payload,path)=>{const b=document.createElement('button');b.className='pl-button';b.type='button';b.textContent=label;b.onclick=async()=>{try{await window.budgetAPI(path||'/api/auth/revoke',{method:'POST',body:JSON.stringify(payload)});if(payload.all||path||payload.id===session.id){location.assign('/login.html');}else{section.remove();await window.budgetSecurity(host);}}catch(e){alert(e.message);}};return b;};
+    for(const row of rows){const line=document.createElement('article');line.className='pl-session-card';line.textContent=(row.current?'Эта сессия':'Другая сессия')+' · вход '+new Date(row.created).toLocaleString('ru-RU')+' · активность '+new Date(row.active).toLocaleString('ru-RU')+' ';line.append(action('Завершить',{id:row.id}));section.append(line);}
     section.append(action('Завершить остальные',{others:true}),action('Завершить все',{all:true}),action('Выйти',{},'/api/auth/logout'));
     const note=document.createElement('p');note.textContent='Завершение сессии не отзывает сертификат устройства.';section.append(note);
   };

@@ -224,6 +224,8 @@ func TestAPIValidationAndProjectLifecycle(t *testing.T) {
 	apiCall(t, h, "GET", "/history?object_type=task&object_id=x&limit=101", nil, 422)
 	p := project(t, h, "P")
 	apiCall(t, h, "PATCH", "/projects/"+p.ID, map[string]any{"title": "No revision"}, 422)
+	readyTask := task(t, h, map[string]any{"title": "Готовая работа", "project_id": p.ID})
+	apiCall(t, h, "POST", "/tasks/"+readyTask.ID+"/complete", map[string]any{"expected_revision": readyTask.Revision, "completed_date": "2026-11-15"}, 200)
 	p = value[ProjectDTO](t, apiCall(t, h, "POST", "/projects/"+p.ID+"/complete", map[string]any{"expected_revision": 1}, 200))
 	if p.Status != "completed" || p.ClosedAt == nil {
 		t.Fatal(p)

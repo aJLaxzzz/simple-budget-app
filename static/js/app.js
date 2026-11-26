@@ -15,7 +15,8 @@
   var monthExpenseFilterSubcategory = '';
 
   function parseHash() {
-    const hash = (window.location.hash || '#/').slice(1);
+    if (!window.location.hash) window.history.replaceState(null, '', '#/plans/calendar?mode=month&date='+window.Planner.today());
+    const hash = window.location.hash.slice(1);
     const parts = hash.split('/').filter(Boolean);
     if (parts[0] === 'plans' || (parts[0] || '').startsWith('plans?')) return { page: 'plans' };
     if (parts[0] === 'month' && parts[1]) return { page: 'month', monthId: parts[1] };

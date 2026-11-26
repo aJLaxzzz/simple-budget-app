@@ -41,13 +41,13 @@ func (s *Service) createProjectSeries(ctx context.Context, in CreateSeriesInput)
 }
 
 // Shared by direct creation and the atomic existing-project workflow.
-func (s *Service) createProjectSeriesTx(ctx context.Context, tx *sql.Tx, in CreateSeriesInput, rule recurrence.Rule, op, now string) (CommandResult, error) {
-	return s.createProjectSeriesFromOrigin(ctx, tx, in, rule, op, now, "")
+func (s *Service) createProjectSeriesTx(ctx context.Context, tx *sql.Tx, in CreateSeriesInput, rule recurrence.Rule, op, now string, source ...string) (CommandResult, error) {
+	return s.createProjectSeriesFromOrigin(ctx, tx, in, rule, op, now, "", source...)
 }
 
 // A newly composed source occupies logical cycle zero without being copied.
 // Keep its immutable origin for month-end arithmetic and working-day shifts.
-func (s *Service) createProjectSeriesFromOrigin(ctx context.Context, tx *sql.Tx, in CreateSeriesInput, rule recurrence.Rule, op, now, origin string) (CommandResult, error) {
+func (s *Service) createProjectSeriesFromOrigin(ctx context.Context, tx *sql.Tx, in CreateSeriesInput, rule recurrence.Rule, op, now, origin string, source ...string) (CommandResult, error) {
 	firstCycle := int64(0)
 	firstDate := in.FirstDate
 	if origin != "" {
@@ -98,6 +98,11 @@ func (s *Service) createProjectSeriesFromOrigin(ctx context.Context, tx *sql.Tx,
 		return CommandResult{}, e
 	}
 	v.RuleVersionID = version
+	// The source project is linked only after creation returns. Reserve its
+	// place now as well, otherwise N future instances plus the source become N+1.
+	if len(source) > 0 {
+		v.SourceProjectID = &source[0]
+	}
 	c, cal, e := calculateStoredCycle(ctx, tx, v, firstCycle, nil)
 	if e != nil {
 		return CommandResult{}, e
@@ -105,10 +110,18 @@ func (s *Service) createProjectSeriesFromOrigin(ctx context.Context, tx *sql.Tx,
 	if v.EndDate != nil && string(c.AdjustedDate) > *v.EndDate {
 		return CommandResult{}, invalid("Первый проект позже окончания серии")
 	}
-	if _, e = s.insertProjectCycle(ctx, tx, &v, c, cal, nil, op, now); e != nil {
+	room, e := s.projectRepeatRoom(tx, v)
+	if e != nil {
 		return CommandResult{}, e
 	}
-	_, e = tx.Exec(`INSERT INTO series_runtime(series_id,next_cycle,anchor_cycle,horizon_date,end_date) VALUES(?,?,0,?,?)`, id, firstCycle+1, v.HorizonDate, v.EndDate)
+	if room {
+		if _, e = s.insertProjectCycle(ctx, tx, &v, c, cal, nil, op, now); e != nil {
+			return CommandResult{}, e
+		}
+	} else {
+		v.NextCycle = firstCycle
+	}
+	_, e = tx.Exec(`INSERT INTO series_runtime(series_id,next_cycle,anchor_cycle,horizon_date,end_date) VALUES(?,?,0,?,?)`, id, v.NextCycle, v.HorizonDate, v.EndDate)
 	if e != nil {
 		return CommandResult{}, e
 	}

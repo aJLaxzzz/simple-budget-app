@@ -11,7 +11,7 @@
 .pc-calendar { border:1px solid var(--border); border-radius:14px; overflow:hidden; background:var(--bg-card); }
 .pc-month { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); }
 .pc-weekday { padding:12px; text-align:right; color:var(--text-muted); font-size:12px; border-bottom:1px solid var(--border); }
-.pc-month-day { min-height:155px; padding:7px; border-right:1px solid var(--border); border-bottom:1px solid var(--border); min-width:0; }
+.pc-month-day { position:relative; min-height:155px; padding:7px; border-right:1px solid var(--border); border-bottom:1px solid var(--border); min-width:0; }
 .pc-month-day:nth-child(7n) { border-right:0; }
 .pc-month-day.pc-outside { background:rgba(0,0,0,.15); }
 .pc-outside > .pc-day-button { color:var(--text-subtle); }
@@ -25,7 +25,7 @@
 .pc-event.pc-kind-deadline { border-left-style:dashed; background:transparent; }
 .pc-event.pc-kind-planning { border-left-style:dotted; background:transparent; }
 .pc-event.pc-closed { opacity:.65; }
-.pc-closed .pc-event-title { text-decoration:line-through; }
+.pc-completed .pc-event-name { text-decoration:line-through; }
 .pc-event-line { display:flex; align-items:start; min-width:0; }
 .pc-event .pc-event-title { color:inherit; border:0; border-radius:3px; padding:0; background:none; min-height:24px; flex:1; min-width:0; display:block; text-align:left; font-size:12px; line-height:24px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .pc-event .pc-event-menu { border:0; background:transparent; color:var(--text-muted); padding:0; width:22px; flex:0 0 22px; min-height:24px; font-size:17px; }
@@ -216,3 +216,19 @@
 .pc-dense-group { font-size:14px; line-height:1.4; white-space:normal; }
 .pc-group-footer { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:6px 12px; margin-top:6px; }
 .pc-group-footer .pc-group-move { margin:0; }
+
+/* Completion is distinct from cancellation; retain the icon, time and project. */
+.pc-event.pc-completed { opacity:.68; }
+.pc-calendar > p.pc-completed-count { padding:6px 12px; margin:0; }
+.pc-completed-count { color:var(--text-muted); font-size:11px; font-weight:500; }
+.pc-month-day > .pc-completed-count { position:absolute; top:12px; left:8px; }
+@media (max-width:900px) {
+ .pc-month-day > .pc-completed-count { display:none; }
+ .pc-filters .pl-checkbox { margin-top:0; }
+}
+
+.pc-event.pc-completed { opacity:1; background:#1e332d; border-color:#527864; color:#9bbbA9; --pc-color:#719c82 !important; }
+.pc-event.pc-completed .pc-event-title,.pc-event.pc-completed .pc-event-hint { color:#9bbba9; }
+.pc-event.pc-cancelled { opacity:1; background:#292e36; border-color:#515963; color:#a4adb8; --pc-color:#89939f !important; }
+.pc-event.pc-cancelled .pc-event-title,.pc-event.pc-cancelled .pc-event-hint { color:#a4adb8; }
+.pc-event.pc-cancelled .pc-event-name { text-decoration:none; }

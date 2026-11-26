@@ -432,7 +432,7 @@ func (s *Service) SaveProjectTemplate(ctx context.Context, id string, in Project
 				if e != nil {
 					return out, e
 				}
-				out, e = s.createProjectSeriesTx(ctx, tx, CreateSeriesInput{SourceType: "project", RequestID: in.RequestID, TemplateID: t.ID, TemplateVersionID: t.VersionID, ExpectedRevision: t.Revision, FirstDate: in.FirstDate, Rule: rule, EndDate: in.EndDate}, rule, op, now)
+				out, e = s.createProjectSeriesTx(ctx, tx, CreateSeriesInput{SourceType: "project", RequestID: in.RequestID, TemplateID: t.ID, TemplateVersionID: t.VersionID, ExpectedRevision: t.Revision, FirstDate: in.FirstDate, Rule: rule, EndDate: in.EndDate}, rule, op, now, id)
 				if e != nil {
 					return out, e
 				}

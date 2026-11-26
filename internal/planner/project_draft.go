@@ -161,7 +161,7 @@ func projectDraftRoute(s *Service, w http.ResponseWriter, r *http.Request, actio
 				if e != nil {
 					return CommandResult{}, e
 				}
-				result, e := s.createProjectSeriesFromOrigin(r.Context(), tx, CreateSeriesInput{SourceType: "project", RequestID: in.RequestID + ":repeat", TemplateID: t.ID, TemplateVersionID: t.VersionID, ExpectedRevision: t.Revision, FirstDate: p.FirstDate, Rule: rule}, rule, in.RequestID, now, in.AnchorDate)
+				result, e := s.createProjectSeriesFromOrigin(r.Context(), tx, CreateSeriesInput{SourceType: "project", RequestID: in.RequestID + ":repeat", TemplateID: t.ID, TemplateVersionID: t.VersionID, ExpectedRevision: t.Revision, FirstDate: p.FirstDate, Rule: rule}, rule, in.RequestID, now, in.AnchorDate, id)
 				if e != nil {
 					return CommandResult{}, e
 				}

@@ -35,13 +35,13 @@ test('UX-01/02/10/11/14/18: compact chrome, bounded undated work and predictable
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
   if([1440,390].includes(width))await page.screenshot({path:'artifacts/ux21/calendar-day-'+width+'.png',animations:'disabled'});
   await page.goto('/#/plans/calendar?mode=week&date='+today()+'&project='+p.id);await expect(page.locator('.pc-time-controls')).toBeVisible();expect((await page.locator('.pc-time-controls').boundingBox()).y).toBeLessThan(820);
-  await page.goto('/#/plans/tasks?project='+p.id);await expect(page.locator('.pl-task').first()).toBeVisible();const taskY=(await page.locator('.pl-task').first().boundingBox()).y;measurements.push({width,taskY,timedY:y});expect(taskY).toBeLessThan(width>=1024?350:520);
+  await page.goto('/#/plans/tasks?project='+p.id);await expect(page.locator('.pl-project-task-group').first()).toBeVisible();const taskY=(await page.locator('.pl-project-task-group').first().boundingBox()).y;measurements.push({width,taskY,timedY:y});expect(taskY).toBeLessThan(width>=1024?350:520);
   await expect(page.getByPlaceholder('Поиск по операциям')).not.toBeVisible();await expect(page.locator('.pl-main-tabs a')).toHaveCount(4);
   if([1440,390].includes(width))await page.screenshot({path:'artifacts/ux21/tasks-'+width+'.png',animations:'disabled'});
  }
  require('node:fs').writeFileSync('artifacts/ux21/layout.json',JSON.stringify(measurements,null,2));
  await page.setViewportSize({width:1440,height:900});await page.goto('/#/plans/calendar?mode=month&date='+today());await expect(page.locator('.pc-month')).toBeVisible();expect((await page.locator('.pc-month').boundingBox()).y).toBeLessThan(350);await page.screenshot({path:'artifacts/ux21/calendar-month-1440.png',animations:'disabled'});
- await page.goto('/#/plans/calendar?date='+today()+'&project='+p.id+'&completed=1&cancelled=1');await page.getByRole('button',{name:'Сбросить фильтры',exact:true}).click();await expect(page).not.toHaveURL(/project=|completed=1|cancelled=1/);await expect(page.getByRole('button',{name:'Сбросить фильтры',exact:true})).toHaveCount(0);
+ await page.goto('/#/plans/calendar?date='+today()+'&project='+p.id+'&completed=1&cancelled=1');await page.getByRole('button',{name:'Сбросить фильтры',exact:true}).click();await expect(page).not.toHaveURL(/project=|completed=0|cancelled=1/);await expect(page.getByRole('button',{name:'Сбросить фильтры',exact:true})).toHaveCount(0);
  await page.getByRole('button',{name:'Показать все',exact:true}).click();await expect(page).toHaveURL(/completed=1/);await expect(page).toHaveURL(/cancelled=1/);await expect(page.locator('.pc-calendar')).toBeVisible();
 });
 

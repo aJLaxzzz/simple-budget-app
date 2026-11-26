@@ -93,6 +93,9 @@ func route(s *Service, w http.ResponseWriter, r *http.Request) (int, any, error)
 	}
 	ctx := r.Context()
 	kind := parts[0]
+	if path == "settings/project-repeat-limit" {
+		return projectLimitRoute(s, w, r)
+	}
 	id, action := "", ""
 	if len(parts) > 1 {
 		id = parts[1]

@@ -75,6 +75,9 @@ func projectSourceActionRoute(s *Service, w http.ResponseWriter, r *http.Request
 			switch in.Action {
 			case "complete", "cancel", "skip":
 				if in.Action == "complete" {
+					if e = requireProjectComplete(tx, id); e != nil {
+						return CommandResult{}, e
+					}
 					if in.CompletedDate == nil {
 						return CommandResult{}, invalid("Укажите фактическую дату")
 					}

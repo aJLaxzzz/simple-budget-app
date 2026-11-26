@@ -45,7 +45,7 @@ func calendarItems(ctx context.Context, tx *sql.Tx, from, to string) ([]Calendar
 }
 func calendarProjects(ctx context.Context, tx *sql.Tx) ([]CalendarProject, error) {
 	// Only names for the filter; do not compute project progress or read task history.
-	rows, e := tx.QueryContext(ctx, "SELECT id,title,archived_at FROM projects ORDER BY title,id")
+	rows, e := tx.QueryContext(ctx, "SELECT p.id,p.title,p.archived_at,r.series_id FROM projects p LEFT JOIN project_repeat_projection r ON r.id=p.id ORDER BY p.title,p.id")
 	if e != nil {
 		return nil, e
 	}
@@ -53,7 +53,7 @@ func calendarProjects(ctx context.Context, tx *sql.Tx) ([]CalendarProject, error
 	items := []CalendarProject{}
 	for rows.Next() {
 		var p CalendarProject
-		if e = rows.Scan(&p.ID, &p.Title, &p.ArchivedAt); e != nil {
+		if e = rows.Scan(&p.ID, &p.Title, &p.ArchivedAt, &p.RepeatSeriesID); e != nil {
 			return nil, e
 		}
 		items = append(items, p)

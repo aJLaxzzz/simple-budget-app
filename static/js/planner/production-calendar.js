@@ -1,13 +1,29 @@
 (function(P){
  'use strict';const {el,button,meta}=P;
  P.renderCalendarSettings=async function(host){
-   const section=P.route().params.get('section')||'calendar';const appearance=section==='appearance';
-   host.replaceChildren(el('nav',{class:'pl-tabs pl-settings-nav','aria-label':'Подразделы настроек'},[['calendar','Производственный календарь'],['appearance','Оформление'],['backups','Резервные копии'],['security','Безопасность']].map(([key,title])=>el('a',{href:'#/plans/settings?section='+key,class:key===section?'is-active':''},title))));
-   host.append(el('details',{},el('summary',{},'Ранее сохранённые шаблоны'),el('a',{class:'pl-button',href:'#/plans/task-templates'},'Шаблоны задач'),el('a',{class:'pl-button',href:'#/plans/templates'},'Шаблоны проектов'),el('a',{class:'pl-button',href:'#/plans/settings?section=templates'},'Создание из сохранённых заготовок')));
-   if(P.route().params.get('section')==='templates'){host.append(button('Создать из шаблона',()=>P.chooseTemplate(P.route())));return;}
+   const section=P.route().params.get('section')||'planner';
+   host.classList.add('pl-settings');
+   host.replaceChildren(el('nav',{class:'pl-tabs pl-settings-nav','aria-label':'Подразделы настроек'},[['planner','Планировщик'],['calendar','Производственный календарь'],['appearance','Оформление'],['backups','Резервные копии'],['security','Безопасность']].map(([key,title])=>el('a',{href:'#/plans/settings?section='+key,class:key===section?'is-active':''},title))));
+   if(section==='templates'){host.append(button('Создать из шаблона',()=>P.chooseTemplate(P.route())));return;}
    if(section==='security'){await window.budgetSecurity(host);return;}
-   if(section==='backups'){const nav=host.querySelector('.pl-settings-nav');nav.scrollLeft=nav.scrollWidth;await renderBackups(host);return;}
-   if(appearance){const icons=el('section',{class:'pl-my-icons'});host.append(icons);await P.renderMyIcons(icons);return;}
+   if(section==='backups'){await renderBackups(host);return;}
+   if(section==='appearance'){const icons=el('section',{class:'pl-my-icons pl-settings-block'});host.append(icons);await P.renderMyIcons(icons);return;}
+   if(section==='planner'){
+     const block=(title,description)=>{const box=el('section',{class:'pl-settings-block'},el('h2',{},title),meta(description));host.append(box);return box;};
+     const repeat=block('Повторения','Ближайшие выполнения регулярных задач и проектов');
+     const limit=await P.api('/settings/project-repeat-limit');
+     const form=el('form',{'data-submit':'Сохранить лимит','aria-label':'Ближайшие выполнения'});
+     const count=P.field(form,'project_repeat_limit','Количество ближайших выполнений','number',limit.limit);count.min=1;count.max=20;count.required=true;
+     form.append(meta('От 1 до 20. Текущие и будущие открытые проекты входят в лимит, просроченные показаны дополнительно. У задач это фильтр списка. «Все выполнения» показывает уже доступные задачи, не создавая неограниченное число новых. Уменьшение лимита не удаляет созданные экземпляры.'));
+     P.bindForm(form,()=>P.api('/settings/project-repeat-limit','PUT',{limit:Number(count.value),expected_revision:limit.revision}),async result=>{P.repeatLimit=result.limit;P.notify('Лимит сохранён');await P.refresh();});repeat.append(form);
+     const checkbox=(box,label,checked,save)=>{const input=el('input',{type:'checkbox',checked});input.addEventListener('change',()=>save(input.checked));box.append(el('label',{class:'pl-checkbox'},input,label));};
+     const tasks=block('Список задач','Группы разделяются по экземпляру проекта и дате');
+     checkbox(tasks,'Группировать по проектам',P.groupProjects(),value=>{try{localStorage.setItem('planner.project-groups',value?'on':'off');}catch(_){}});
+     const calendar=block('Календарь','История остаётся на запланированных датах');
+     checkbox(calendar,'Показывать выполненные задачи',P.showCompletedCalendar(),P.setCompletedCalendar);
+     checkbox(calendar,'Показывать отменённые задачи',P.showCancelledCalendar(),P.setCancelledCalendar);
+     const templates=el('details',{class:'pl-settings-block'},el('summary',{},'Ранее сохранённые шаблоны'),el('div',{class:'pl-actions'},el('a',{class:'pl-button',href:'#/plans/task-templates'},'Шаблоны задач'),el('a',{class:'pl-button',href:'#/plans/templates'},'Шаблоны проектов'),el('a',{class:'pl-button',href:'#/plans/settings?section=templates'},'Создать из шаблона')));host.append(templates);return;
+   }
    host.append(el('h2',{},'Производственный календарь РФ'));
    const highlight=el('input',{type:'checkbox',checked:P.showCalendarDays()});highlight.addEventListener('change',()=>P.setCalendarDays(highlight.checked));host.append(el('label',{class:'pl-checkbox pc-highlight-setting'},highlight,'Показывать праздники и выходные'));
    const data=await P.api('/production-calendar');const grid=el('div',{class:'pl-project-grid pl-calendar-years'});
@@ -19,15 +35,15 @@
    file.addEventListener('change',async()=>{try{if(!file.files[0])return;if(file.files[0].size>120*1024)throw Error('Файл должен быть не больше 120 KiB.');importDialog(JSON.parse(await file.files[0].text()));}catch(e){P.notify('Не удалось прочитать календарь: '+e.message);}finally{file.value='';}});
    host.append(el('p',{class:'pl-info'},'Подготовлены проверенные календари 2026 и 2027 годов. Каждый год импортируется только после подтверждения. Для остальных лет нужен полный файл, сверенный с официальными публикациями.'),el('p',{class:'pl-info'},'После обновления откройте нужную серию → «Изменить правило» → «Посмотреть изменения». Даты существующих выполнений изменятся только после отдельного подтверждения; ручные переносы и закрытая история защищены.'));
  };
- P.backupViewModel=function(data){
+ P.backupViewModel=function(data,staging=false){
    const copy=data.latest;const ready=Boolean(copy&&/^[0-9]{8}T[0-9]{6}Z-[a-f0-9]{16}$/.test(copy.manifest?.backup_id));
-   return {ready,automatic:data.automatic==='enabled'?'Включено':data.automatic==='unknown'?'Состояние требует проверки':'Автоматическое копирование ещё не установлено',warning:data.warning||(data.stale?'Нет актуальной резервной копии':''),base:ready?'/api/backups/'+copy.manifest.backup_id:''};
+   return {ready,automatic:data.automatic==='enabled'?'Включено':staging?'STG: ежедневные копии намеренно отключены; сохраняются копии перед обновлением':data.automatic==='unknown'?'Состояние требует проверки':'Автоматическое копирование ещё не установлено',warning:data.warning||(data.stale&&!staging?'Нет актуальной резервной копии':''),base:ready?'/api/backups/'+copy.manifest.backup_id:''};
  };
  async function renderBackups(host){
    const panel=el('section',{class:'pl-backups','aria-label':'Резервные копии'});host.append(panel);panel.append(el('h2',{},'Резервные копии'),meta('Скачиваются готовые проверенные копии. Новая копия при нажатии не создаётся.'));
    const content=el('div',{'aria-live':'polite'},meta('Проверяем наличие копий…'));panel.append(content);
    try{
-     const data=await window.budgetAPI('/api/backups/status'),view=P.backupViewModel(data);content.replaceChildren();
+     const data=await window.budgetAPI('/api/backups/status'),environment=await window.budgetAPI('/api/environment'),view=P.backupViewModel(data,environment.staging===true);content.replaceChildren();
      const format=value=>new Intl.DateTimeFormat('ru-RU',{timeZone:'Europe/Moscow',dateStyle:'medium',timeStyle:'short'}).format(new Date(value));
      if(view.warning)content.append(el('p',{class:'pl-info',role:'status'},view.warning));
      if(view.ready){content.append(el('p',{},'Последняя успешная копия: '+format(data.latest.manifest.created_at)+' · МСК'),meta((data.latest.size<1048576?(data.latest.size/1024).toFixed(1)+' КиБ':(data.latest.size/1048576).toFixed(1)+' МиБ')+' · Проверена '+format(data.latest.verified_at)));}

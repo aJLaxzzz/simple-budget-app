@@ -74,6 +74,13 @@ func decorateProject(tx *sql.Tx, p *ProjectDTO, includeTasks bool) error {
 		return e
 	}
 	p.TaskCount = len(tasks)
+	p.RemainingTasks = 0
+	for _, t := range tasks {
+		if t.Status != "completed" {
+			p.RemainingTasks++
+		}
+	}
+	p.CompletionReady = len(tasks) > 0 && p.RemainingTasks == 0 && active(p.Status) && p.ArchivedAt == nil && !p.Preliminary
 	parents := map[string]bool{}
 	for _, t := range tasks {
 		if t.ParentTaskID != nil {

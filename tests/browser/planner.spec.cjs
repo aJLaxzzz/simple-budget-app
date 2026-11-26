@@ -100,6 +100,7 @@ test('inbox schedule and move keep task, filters and draft navigation', async ({
   await page.goto('/#/plans/tasks');
   await page.getByLabel('Поиск по названию').fill(task.title);
   await page.getByLabel('Проект', { exact: true }).selectOption(project.id);
+  await page.locator('.pl-project-task-group > summary').click();
   await page.getByRole('button', { name: task.title, exact: true }).click();
   await expand(page,'Параметры');
   await editor(page).getByLabel('Описание').fill('Несохранённая мысль');
@@ -132,7 +133,7 @@ test('completion actual Moscow date, cancellation, restore and lazy history', as
   await expect(page.locator('.pl-history details')).toHaveCount(2);
   await editor(page).getByRole('tab', { name: 'Основное', exact: true }).click();
   await editor(page).getByRole('button', { name: 'Восстановить задачу', exact: true }).click();
-  await actionDialog(page).locator('button[type=submit]').click();
+  await expect(editor(page).getByRole('button', { name: 'Завершить задачу', exact: true })).toBeVisible();
   await taskMenu(page,'Отменить задачу');
   await actionDialog(page).locator('button[type=submit]').click();
   await expect(editor(page).getByRole('button', { name: 'Восстановить задачу', exact: true })).toBeVisible();
@@ -291,7 +292,7 @@ test('cancel task explicitly closes active sessions; restore preserves history',
   await expect(editor(page).getByRole('button', { name: 'Восстановить задачу', exact: true })).toBeVisible();
   expect((await get(request, 'sessions', session.id)).status).toBe('cancelled');
   await editor(page).getByRole('button', { name: 'Восстановить задачу', exact: true }).click();
-  await actionDialog(page).locator('button[type=submit]').click();
+  await expect(editor(page).getByRole('button', { name: 'Завершить задачу', exact: true })).toBeVisible();
   await expand(page,'Периоды работы');
   await expect(editor(page).getByRole('button', { name: 'Восстановить период работы', exact: true })).toBeVisible();
   expect((await get(request, 'sessions', session.id)).status).toBe('cancelled');

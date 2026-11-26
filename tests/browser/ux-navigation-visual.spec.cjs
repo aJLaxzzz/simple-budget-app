@@ -14,7 +14,7 @@ test.beforeAll(async({request})=>{
  await create('tasks',{title:'Оплатить интернет',due_date:day(0)});
 });
 for(const width of [1440,1024,768,390])test('UX visual '+width,async({page})=>{
- await page.setViewportSize({width,height:1000});await page.goto('/#/plans/tasks');await expect(page.getByRole('heading',{name:'Все задачи',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Подготовить квартиру к выходным',exact:true})).toBeVisible();
+ await page.setViewportSize({width,height:1000});await page.goto('/#/plans/tasks');await expect(page.getByRole('heading',{name:'Все задачи',exact:true})).toBeVisible();await expect(page.locator('[data-project-group*="'+project.id+'"]').first()).toBeVisible();
  if(phase==='after'){
   await expect(page.getByRole('navigation',{name:'Разделы планировщика'}).getByRole('link')).toHaveCount(4);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);

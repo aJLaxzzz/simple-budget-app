@@ -39,7 +39,7 @@ func occurrenceManagementRoute(s *Service, w http.ResponseWriter, r *http.Reques
 		return 0, nil, notFound("Маршрут", action)
 	}
 	var in OccurrenceCommand
-	if e := strictPlannerInput(w, r, &in, "completion_request_id request_id expected_revision expected_task_revision expected_series_revision planned_date scheduled_time completed_date reason dynamic_decision branch_decision sessions_decision session_revisions children_decision related_revisions expected_project_revision tasks_decision tasks_date_decision"); e != nil {
+	if e := strictPlannerInput(w, r, &in, "instance_only completion_request_id request_id expected_revision expected_task_revision expected_series_revision planned_date scheduled_time completed_date reason dynamic_decision branch_decision sessions_decision session_revisions children_decision related_revisions expected_project_revision tasks_decision tasks_date_decision"); e != nil {
 		return 0, nil, e
 	}
 	result, e := s.OccurrenceCommand(r.Context(), id, action, in)

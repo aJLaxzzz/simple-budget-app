@@ -266,6 +266,9 @@ func (s *Service) OccurrenceCommand(ctx context.Context, id, action string, in O
 			if in.ScheduledTime.Set && (action != "reschedule" || v.SourceType == "project") {
 				return CommandResult{}, invalid("scheduled_time допустимо только при переносе выполнения задачи")
 			}
+			if in.InstanceOnly && (action != "reschedule" || v.SourceType != "task" || !active(o.Task.Status)) {
+				return CommandResult{}, invalid("instance_only допустимо только для переноса открытого выполнения задачи")
+			}
 			if v.SourceType == "project" {
 				return s.projectOccurrenceCommandTx(ctx, tx, v, o, action, in, op, now, false)
 			}
@@ -305,7 +308,7 @@ func (s *Service) OccurrenceCommand(ctx context.Context, id, action string, in O
 			if in.DynamicDecision != "" && in.DynamicDecision != "keep_manual" {
 				return CommandResult{}, invalid("Неизвестное решение по динамическим датам")
 			}
-			options := taskChangeOptions{AllowRestore: true, Reason: in.Reason, DynamicDecision: in.DynamicDecision}
+			options := taskChangeOptions{InstanceOnly: in.InstanceOnly, AllowRestore: true, Reason: in.Reason, DynamicDecision: in.DynamicDecision}
 			if in.BranchDecision == "historical_only" {
 				if action != "complete" || (active(o.Task.Status) && !o.Task.Dynamic) || v.AnchorMode != "completion" {
 					return CommandResult{}, invalid("historical_only допустимо для завершения закрытого цикла от выполнения")

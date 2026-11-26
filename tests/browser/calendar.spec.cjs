@@ -1,3 +1,4 @@
+const {plannerPreference}=require('../browser-fixtures.cjs');
 const { test, expect, revealAction } = require('../browser-fixtures.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -171,8 +172,8 @@ test('failed drag leaves event in original place and preserves requested date', 
   await open(page, 'month', '2026-12-23');
   await page.route('**/tasks/' + task.id + '/reschedule', route => route.fulfill({ status: 500, json: { error: { message: 'Не удалось сохранить перенос' } } }));
   await event(page, 'task', task.id).dragTo(page.locator('.pc-month-day[data-date="2026-12-24"]'), { targetPosition: { x: 10, y: 10 } });
-  await expect(dialog(page).getByRole('alert')).toContainText('Не удалось сохранить');
-  await expect(dialog(page).getByLabel('Новая дата')).toHaveValue('2026-12-24');
+  await expect(page.locator('#planner-toast')).toContainText('Не удалось сохранить');
+  await expect(dialog(page)).toHaveCount(0);
   await expect(event(page, 'task', task.id)).toHaveAttribute('data-event-date', '2026-12-23');
   expect((await get(request, 'tasks', task.id)).planned_date).toBe('2026-12-23');
 });
@@ -203,10 +204,12 @@ test('project and terminal filters, project link and state preserved across plan
   await request.post('/api/planner/tasks/' + a.id + '/complete', { data: { expected_revision: 1, completed_date: '2026-01-01' } });
   await request.post('/api/planner/tasks/' + b.id + '/cancel', { data: { expected_revision: 1 } });
   await open(page, 'day', '2026-12-25');
+  await expect(event(page, 'task', a.id)).toHaveClass(/pc-completed/);
+  await plannerPreference(page,'Показывать выполненные задачи',false);
   await expect(event(page, 'task', a.id)).toHaveCount(0);
-  await page.getByLabel('Завершённые', { exact: true }).check();
+  await plannerPreference(page,'Показывать выполненные задачи',true);
   await expect(event(page, 'task', a.id)).toBeVisible();
-  await page.getByLabel('Отменённые', { exact: true }).check();
+  await plannerPreference(page,'Показывать отменённые задачи',true);
   await expect(event(page, 'task', b.id)).toBeVisible();
   await page.getByLabel('Проект', { exact: true }).selectOption(project.id);
   await expect(event(page, 'task', c.id)).toHaveCount(0);
@@ -238,7 +241,7 @@ test('quick create on selected day and complete parent using existing session ch
   await dialog(page).getByLabel('Фактическая дата выполнения').fill('2026-01-01');
   await dialog(page).getByRole('checkbox').check();
   await dialog(page).locator('button[type=submit]').click();
-  await expect(event(page, 'task', parent.id)).toHaveCount(0);
+  await expect(event(page, 'task', parent.id)).toHaveClass(/pc-completed/);
   expect((await get(request, 'tasks', child.id)).status).toBe('completed');
   expect((await get(request, 'sessions', session.id)).status).toBe('cancelled');
 });
@@ -251,7 +254,7 @@ test('session quick completion leaves its task open', async ({ page, request }) 
   await dialog(page).getByRole('button', { name: 'Завершить период', exact: true }).click();
   await dialog(page).getByLabel('Фактическая дата выполнения').fill('2026-01-01');
   await dialog(page).locator('button[type=submit]').click();
-  await expect(event(page, 'session', session.id)).toHaveCount(0);
+  await expect(event(page, 'session', session.id)).toHaveClass(/pc-completed/);
   expect((await get(request, 'tasks', task.id)).status).toBe('planned');
 });
 

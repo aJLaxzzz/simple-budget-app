@@ -5,12 +5,8 @@
   P.navigation = function (page, route) {
     const group = P.navGroup(route);
     const nav = el('nav', {class:'pl-tabs pl-main-tabs','aria-label':'Разделы планировщика'}, [['calendar','Календарь'],['tasks','Задачи'],['projects','Проекты'],['attention','Внимание']].map(([key,title]) => el('a', {href:key==='calendar'?P.calendarLink():'#/plans/'+key, ...(group===key?{'aria-current':'page',class:'is-active'}:{})}, title)));
-    const add = button('+', () => {
-      const {dialog,close} = P.dialog('Создать');
-      dialog.append(el('div', {class:'pl-create-options'}, button('Создать задачу', () => {close(true);const date=route.view==='calendar'?route.params.get('date')||P.today():null;const project=route.view==='projects'?route.id:route.view==='calendar'&&route.params.get('project')!=='none'?route.params.get('project'):null;P.newTask(project,null,date);}), button('Создать проект', () => {close(true);P.navigate('#/plans/projects?new=project');})));
-    }, 'pl-primary pl-icon'); add.setAttribute('aria-label','Создать');
     const settings = el('a', {class:'pl-button pl-icon',href:'#/plans/settings','aria-label':'Настройки планировщика',title:'Настройки планировщика'}, '⚙');
-    page.append(el('div', {class:'pl-heading'}, el('div', {}, el('h1',{},'Планы')), el('div',{class:'pl-header-actions'},add,settings)),nav);
+    page.append(el('div', {class:'pl-heading'}, el('div', {}, el('h1',{},'Планы')), el('div',{class:'pl-header-actions'},settings)),nav);
     const ready = P.updateAttentionCount?.(nav);
     if (group==='tasks' || group==='projects') {
       const project = group==='projects';

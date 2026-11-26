@@ -35,4 +35,13 @@ async function revealAction(page,name) {
 async function login(page,password) {
  await page.goto('/login.html');await page.getByLabel('Логин',{exact:true}).fill('budget');await page.getByLabel('Пароль',{exact:true}).fill(password);await page.getByRole('button',{name:'Войти',exact:true}).click();await page.waitForURL(url=>url.pathname==='/');
 }
-module.exports = { ...base, test, revealAction, login };
+async function plannerPreference(page,label,value) {
+ const hash=new URL(page.url()).hash;
+ await page.evaluate(()=>Planner.navigate('#/plans/settings'));
+ await page.getByLabel(label,{exact:true}).setChecked(value);
+ const [path,query]=hash.split('?'),params=new URLSearchParams(query);
+ if(path==='#/plans/calendar'){params.delete('completed');params.delete('cancelled');}
+ await page.evaluate(hash=>Planner.navigate(hash),path+(params.size?'?'+params:''));
+ await page.locator('.pl-content .pl-loading').waitFor({state:'detached'});
+}
+module.exports = { ...base, test, revealAction, login, plannerPreference };

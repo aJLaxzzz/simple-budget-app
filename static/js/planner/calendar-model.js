@@ -22,7 +22,13 @@
   C.caption = (value, options) => new Intl.DateTimeFormat('ru-RU', { timeZone: 'UTC', ...options }).format(make(value));
   C.minutes = value => { const [hours, minutes] = value.split(':').map(Number); return hours * 60 + minutes; };
   C.time = minutes => String(Math.floor(minutes / 60)).padStart(2, '0') + ':' + String(minutes % 60).padStart(2, '0');
-  C.visible = (item, filters) => (!filters.project || item.project_id === filters.project || (filters.project === 'none' && !item.project_id)) && (filters.completed || (item.status !== 'completed' && item.task_status !== 'completed')) && (filters.cancelled || (item.status !== 'cancelled' && item.task_status !== 'cancelled'));
+  C.completed = item => !['cancelled','skipped'].includes(item.status) && !['cancelled','skipped'].includes(item.task_status) && (item.status === 'completed' || item.task_status === 'completed');
+  C.completedCount = items => new Set(items.filter(item => C.completed(item) && (item.task_status ? item.task_status === 'completed' : item.type !== 'session')).map(item => item.task_id || item.id)).size;
+  C.visible = (item, filters) => item.status !== 'skipped' && item.task_status !== 'skipped' && (!filters.project || item.project_id === filters.project || (filters.project === 'none' && !item.project_id)) && (filters.completed || (item.status !== 'completed' && item.task_status !== 'completed')) && (filters.cancelled || (item.status !== 'cancelled' && item.task_status !== 'cancelled'));
+  C.cancelled = item => item.status === 'cancelled' || item.task_status === 'cancelled';
+  C.statusRank = item => C.cancelled(item)?2:C.completed(item)?1:0;
+  C.compareGroupedEvents = (a,b) => a.date.localeCompare(b.date) || C.statusRank(a)-C.statusRank(b) || C.compareEvents(a,b);
+  C.compareEvents = (a,b) => a.date.localeCompare(b.date) || (a.start_time||'').localeCompare(b.start_time||'') || a.title.localeCompare(b.title,'ru') || a.id.localeCompare(b.id);
   C.color = id => { let hash = 0; for (const char of id || 'inbox') hash = (hash * 31 + char.charCodeAt(0)) >>> 0; return hash % 6; };
   // Column packing is presentation only. Tasks have no duration; their 40-minute
   // display footprint is not persisted. Sessions retain their actual interval.

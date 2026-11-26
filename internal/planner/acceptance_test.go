@@ -119,6 +119,8 @@ func TestAcceptanceOverdueProjectAndDate(t *testing.T) {
 	if r.Count != 1 {
 		t.Fatal(r)
 	}
+	readyTask := task(t, h, map[string]any{"title": "Готовая работа", "project_id": p.ID})
+	apiCall(t, h, "POST", "/tasks/"+readyTask.ID+"/complete", map[string]any{"expected_revision": readyTask.Revision, "completed_date": "2026-11-15"}, 200)
 	apiCall(t, h, "POST", "/projects/"+p.ID+"/complete", map[string]any{"expected_revision": p.Revision}, 200)
 	if len(history(t, h, "project", p.ID)) != 3 {
 		t.Fatal("history lost")

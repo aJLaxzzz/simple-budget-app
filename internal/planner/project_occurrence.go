@@ -54,6 +54,14 @@ func (s *Service) projectOccurrenceCommandTx(ctx context.Context, tx *sql.Tx, v 
 			return fail(e)
 		}
 	}
+	if action == "complete" {
+		if o.Project == nil {
+			return fail(invalid("Сначала восстановите выполнение и выполните его задачи"))
+		}
+		if e := requireProjectComplete(tx, o.Project.ID); e != nil {
+			return fail(e)
+		}
+	}
 	before := o
 	if action == "review" {
 		if o.ProjectStatus != "skipped" {

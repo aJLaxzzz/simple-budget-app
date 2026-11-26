@@ -373,6 +373,7 @@ func TestLifecycleCompactProjectDeletionPreservesOtherManualDates(t *testing.T) 
 		t.Fatal(e)
 	}
 	managedApply(t, s, v.ID, SeriesCommand{Action: "pause", StartDate: "2027-01-20", EndDate: "2027-02-28"})
+	setProjectLimitTest(t, h, 20)
 	drainSeries(t, s, MaterializeInput{SeriesID: v.ID, Through: "2027-02-28"})
 	v = getSeriesTest(t, s, v.ID)
 	var compact string

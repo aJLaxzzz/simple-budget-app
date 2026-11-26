@@ -45,7 +45,7 @@ P.repeatEditor=async function(id,options={}){
   await choose(options.tab||'schedule');
  }catch(e){P.notify(P.errorMessage(e));}
 };
-P.projectScopeField=function(form,project){return project?.repeat_series_id?P.field(form,'change_scope','Применить изменение','select','this',scopes):null;};
+P.projectScopeField=function(form,project,adding=false){return project?.repeat_series_id?P.field(form,'change_scope',adding?'Добавить задачу в':'Применить изменение','select',adding?'this_and_following':'this',adding?scopes.filter(([s])=>s!=='following'):scopes):null;};
 P.scopedProjectSave=async function(project,input){
  const latest=await P.api('/projects/'+project.id),series=await P.api('/series/'+latest.repeat_series_id+'?limit=1');
  // The selected record revisions come from the editing form, never silently refreshed.

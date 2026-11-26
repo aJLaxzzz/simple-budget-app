@@ -30,18 +30,18 @@ test('100 projects, 1000 tasks and dense calendar remain usable with bounded req
  }
  const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('response',r=>{if(r.status()>=400)timings.httpErrors.push({url:r.url(),status:r.status()});});page.on('requestfailed',r=>{if(new URL(r.url()).pathname!=='/api/events')timings.requestFailures.push({url:r.url(),error:r.failure()?.errorText});});
  let requests=[];page.on('request',r=>{if(r.url().includes('/api/planner/'))requests.push(new URL(r.url()).pathname)});
- for(const [name,route,selector]of [['tasks','tasks','[data-task-id="'+firstTask.id+'"]'],['projects','projects','.pl-project-card'],['calendar','calendar?mode=month&date=2026-12-19','.pc-calendar']]){
+ for(const [name,route,selector]of [['tasks','tasks','.pl-project-task-group[data-project-id="'+firstTask.project_id+'"]'],['projects','projects','.pl-project-card'],['calendar','calendar?mode=month&date=2026-12-19','.pc-calendar']]){
   await page.goto('about:blank');requests=[];const started=Date.now();await page.goto(server.baseURL+'/#/plans/'+route);await expect(page.locator(selector).first()).toBeVisible();await expect(page.locator('#sync-status')).toHaveText('Синхронизировано');await expect(page.locator(selector).first()).toBeVisible();
   const ready=Date.now()-started;const resources=await page.evaluate(()=>performance.getEntriesByType('resource').filter(r=>r.name.includes('/api/planner/')).map(r=>({path:new URL(r.name).pathname,start:r.startTime,responseEnd:r.responseEnd,ms:r.responseEnd-r.startTime})));
   const browserNow=await page.evaluate(()=>performance.now());const dataEnd=Math.max(0,...resources.filter(r=>!r.path.includes('/icons/')).map(r=>r.responseEnd));timings.screens[name]={ready_ms:ready,post_data_to_observation_ms:Math.round(browserNow-dataEnd),requests:requests.length,resources};
   expect(requests.filter(p=>p.startsWith('/api/planner/tasks/'))).toHaveLength(0);expect(ready).toBeLessThan(10000);sampleMemory();
   if(name==='tasks'){
    expect(await page.locator('.pl-task').count()).toBeGreaterThanOrEqual(1000);
-   const interaction=Date.now();await page.locator(selector+' .pl-task-title').click();await expect(page.getByRole('dialog',{name:'Редактор задачи',exact:true}).getByLabel('Название',{exact:true})).toHaveValue(firstTask.title);timings.screens.tasks.interaction_ms=Date.now()-interaction;
+   const interaction=Date.now();await page.locator(selector+' > summary').click();await page.locator('[data-task-id="'+firstTask.id+'"] .pl-task-title').click();await expect(page.getByRole('dialog',{name:'Редактор задачи',exact:true}).getByLabel('Название',{exact:true})).toHaveValue(firstTask.title);timings.screens.tasks.interaction_ms=Date.now()-interaction;
    // The hashchange starts a new mount after the click. An old networkidle state
    // can already be satisfied before that mount starts, so wait for its actual
    // responses and rendered list before navigating away.
-   const refreshed=Promise.all(['/tasks?status=active','/projects','/projects?archived=true'].map(url=>page.waitForResponse(r=>r.url()===server.baseURL+'/api/planner'+url&&r.request().method()==='GET')));
+   const refreshed=Promise.all(['/tasks','/projects','/projects?archived=true'].map(url=>page.waitForResponse(r=>r.url()===server.baseURL+'/api/planner'+url&&r.request().method()==='GET')));
    await page.getByRole('dialog',{name:'Редактор задачи',exact:true}).getByRole('button',{name:'Закрыть редактор'}).click();
    for(const response of await refreshed){expect(response.status()).toBe(200);await response.finished();}
    await expect(page.getByRole('dialog',{name:'Редактор задачи',exact:true})).toHaveCount(0);

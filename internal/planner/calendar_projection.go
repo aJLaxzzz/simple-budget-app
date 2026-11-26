@@ -33,9 +33,10 @@ type CalendarItem struct {
 	ProjectArchived bool    `json:"project_archived"`
 }
 type CalendarProject struct {
-	ID         string  `json:"id"`
-	Title      string  `json:"title"`
-	ArchivedAt *string `json:"archived_at"`
+	RepeatSeriesID *string `json:"repeat_series_id,omitempty"`
+	ID             string  `json:"id"`
+	Title          string  `json:"title"`
+	ArchivedAt     *string `json:"archived_at"`
 }
 type CalendarProjection struct {
 	CalendarDays         []CalendarDisplayDay `json:"calendar_days"`

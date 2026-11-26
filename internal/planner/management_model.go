@@ -75,6 +75,7 @@ type SeriesChangePreview struct {
 	PreviewToken          string                   `json:"preview_token"`
 }
 type OccurrenceCommand struct {
+	InstanceOnly            bool             `json:"instance_only,omitempty"`
 	CompletionRequestID     string           `json:"completion_request_id,omitempty"`
 	DynamicDecision         string           `json:"dynamic_decision,omitempty"`
 	ScheduledTime           Field[string]    `json:"scheduled_time"`

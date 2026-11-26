@@ -51,6 +51,12 @@ func (s *Service) materializeSeriesTx(ctx context.Context, tx *sql.Tx, v *Series
 		if e := ctx.Err(); e != nil {
 			return 0, false, e
 		}
+		if v.SourceType == "project" {
+			room, err := s.projectRepeatRoom(tx, *v)
+			if err != nil || !room {
+				return created, false, err
+			}
+		}
 		var removed int
 		if e := tx.QueryRow("SELECT count(*) FROM removed_cycles WHERE series_id=? AND cycle_index=?", v.ID, v.NextCycle).Scan(&removed); e != nil {
 			return 0, false, e
@@ -83,24 +89,36 @@ func (s *Service) materializeSeriesTx(ctx context.Context, tx *sql.Tx, v *Series
 			return 0, false, recurrenceAPIError(e)
 		}
 		horizon := v.HorizonDate
-		if v.EndDate != nil && *v.EndDate < horizon {
+		// Projects fill a bounded number of whole instances, including slow
+		// schedules beyond the ordinary task/calendar horizon.
+		if v.SourceType == "project" {
+			horizon = ""
+		}
+		if v.EndDate != nil && (horizon == "" || *v.EndDate < horizon) {
 			horizon = *v.EndDate
 		}
-		end, _ := parseDate(Date(horizon))
-		if rule.Adjustment == recurrence.Previous || rule.Adjustment == recurrence.Nearest {
-			end = end.AddDate(0, 0, recurrence.MaxAdjustmentDays)
-		}
-		if string(base) > end.Format("2006-01-02") {
-			n, err := s.ensureUpcomingTx(ctx, tx, v, op, now)
-			return created + n, false, err
+		if horizon != "" {
+			end, _ := parseDate(Date(horizon))
+			if rule.Adjustment == recurrence.Previous || rule.Adjustment == recurrence.Nearest {
+				end = end.AddDate(0, 0, recurrence.MaxAdjustmentDays)
+			}
+			if string(base) > end.Format("2006-01-02") {
+				n, err := s.ensureUpcomingTx(ctx, tx, v, op, now)
+				return created + n, false, err
+			}
 		}
 		c, calendars, e := calculateStoredCycle(ctx, tx, selected, v.NextCycle, calendar)
 		if e != nil {
 			return 0, false, e
 		}
+		// An open-ended pause must not generate an unbounded stream of compact
+		// incidents while trying to fill the open-project quota.
+		if v.SourceType == "project" && pauseOn(pauses, string(c.AdjustedDate)) != nil && string(c.AdjustedDate) > v.HorizonDate {
+			return created, false, nil
+		}
 		// Allowed-day adjustment is monotonic for a fixed rule/calendar. Keep the
 		// first out-of-horizon cycle pending; later cycles cannot precede it.
-		if string(c.AdjustedDate) > horizon {
+		if horizon != "" && string(c.AdjustedDate) > horizon {
 			n, err := s.ensureUpcomingTx(ctx, tx, v, op, now)
 			return created + n, false, err
 		}
@@ -283,7 +301,7 @@ func (s *Service) advanceTaskSeries(ctx context.Context, tx *sql.Tx, before, tas
 			if e != nil {
 				return e
 			}
-			if v.AnchorMode == "completion" {
+			if v.AnchorMode == "completion" && !options.InstanceOnly {
 				decision := options.DynamicDecision
 				if task.Dynamic {
 					decision = "keep_manual"

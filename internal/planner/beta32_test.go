@@ -86,6 +86,7 @@ func TestBeta32ScopedFieldsDatesAndProtection(t *testing.T) {
 }
 func TestBeta32FollowingBoundaryLongOffsetsAndRestart(t *testing.T) {
 	db, s, h := seriesFixture(t)
+	legacyProjectPopulation(t, db, 6)
 	s.now = func() time.Time { return time.Date(2026, 11, 24, 12, 0, 0, 0, time.UTC) }
 	p := beta3Draft(t, h, "scope-long32")
 	v := getSeriesTest(t, s, *p.RepeatSeriesID)
@@ -220,7 +221,8 @@ func TestBeta32ScopedRollbackAndConflict(t *testing.T) {
 }
 
 func TestBeta32ScopeProtectsClosedStartedAndSessions(t *testing.T) {
-	_, s, h := seriesFixture(t)
+	db, s, h := seriesFixture(t)
+	legacyProjectPopulation(t, db, 6)
 	s.now = func() time.Time { return time.Date(2026, 11, 24, 12, 0, 0, 0, time.UTC) }
 	p := beta3Draft(t, h, "protected32")
 	v := getSeriesTest(t, s, *p.RepeatSeriesID)

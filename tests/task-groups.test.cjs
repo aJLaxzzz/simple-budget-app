@@ -25,6 +25,6 @@ test('beta2 inclusive rolling 30 days across months and years',()=>{
 });
 test('beta2 project ordering sorts actual dates, time, fallback, priority and stable identities',()=>{
  const rows=[{...task('nov','2027-11-04'),priority:'low'},{...task('oct','2027-10-28'),priority:'high'},task('none'),task('deadline',null,'2027-09-13'),{...task('time1','2027-10-28'),scheduled_time:'10:00'},{...task('time2','2027-10-28'),scheduled_time:'09:00'}];
- assert.deepEqual(Array.from(p.sortProjectTasks(rows),t=>t.id),['deadline','time2','time1','oct','nov','none']);
+ assert.deepEqual(Array.from(p.sortProjectTasks(rows),t=>t.id),['deadline','oct','time2','time1','nov','none']);
  assert.equal(p.sortProjectTasks(rows.slice(0,2),'priority')[0].id,'oct');
 });

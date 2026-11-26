@@ -147,7 +147,11 @@ func (s *Service) syncCompletionChain(ctx context.Context, tx *sql.Tx, v *Series
 			anchor = *t.PlannedDate
 		}
 	}
-	// Three tasks by default; a calendar request may safely extend the same chain.
+	// The shared nearest limit is a bounded minimum; the calendar may extend it.
+	limit, err := projectRepeatLimit(tx)
+	if err != nil {
+		return 0, false, err
+	}
 	extend := v.HorizonDate > s.horizon() || (len(expand) > 0 && expand[0])
 	count := len(tasks)
 	for attempt := 0; attempt < materializeCyclesPerBatch; attempt++ {
@@ -157,7 +161,7 @@ func (s *Service) syncCompletionChain(ctx context.Context, tx *sql.Tx, v *Series
 		if e = ctx.Err(); e != nil {
 			return 0, false, e
 		}
-		if count >= 3 && !extend {
+		if count >= limit.Limit && !extend {
 			break
 		}
 		var removed int
@@ -187,7 +191,7 @@ func (s *Service) syncCompletionChain(ctx context.Context, tx *sql.Tx, v *Series
 		if v.EndDate != nil && date > *v.EndDate {
 			break
 		}
-		if count >= 3 && date > v.HorizonDate {
+		if count >= limit.Limit && date > v.HorizonDate {
 			break
 		}
 		pauses, e := loadPauses(tx, v.ID)

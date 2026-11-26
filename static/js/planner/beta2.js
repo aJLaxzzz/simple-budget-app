@@ -6,21 +6,20 @@
   try{
    const context=await P.api('/tasks/'+task.id+'/context'),t=context.task;
    if(!P.active(t)&&!pending.has(t.id)){await P.refresh();return;}
-   if(context.children.some(P.active)||context.sessions.some(P.active)||t.dynamic){await P.taskAction(t,'complete');return;}
+   if(context.sessions.some(P.active)||t.dynamic){await P.taskAction(t,'complete');return;}
    let data,path;
    if(t.occurrence_id){const c=await P.api('/occurrences/'+t.occurrence_id);path='/occurrences/'+t.occurrence_id+'/complete';data={expected_revision:c.occurrence.revision,expected_task_revision:t.revision,expected_series_revision:c.series.revision,completed_date:P.today()};}
    else{path='/tasks/'+t.id+'/complete';data={expected_revision:t.revision,completed_date:P.today()};}
+   if(context.children.some(P.active)){data.children_decision='keep_open';data.related_revisions=P.revisions(context.children);}
    // Retain the exact request across an uncertain network response.
    let command=pending.get(t.id);if(!command){command={send:P.commandSender(path),data:{...data,request_id:crypto.randomUUID()}};pending.set(t.id,command);}
    let result;
-   try{result=await command.send(command.data);}catch(e){if(e.status===409||e.status===422){pending.delete(t.id);await P.taskAction(t,'complete');P.notify(e.message);return;}throw e;}
+   try{result=await command.send(command.data);}catch(e){if(e.status===409||e.status===422){pending.delete(t.id);P.notify('Не удалось завершить задачу: '+P.errorMessage(e));return;}throw e;}
    pending.delete(t.id);await P.refresh();
    const completionID=command.data.request_id;
    const saved=result.task||result.occurrence?.task||result;
-   P.notify('Задача «'+t.title+'» выполнена',{label:'Отменить завершение',run:async()=>{
-    try{if(t.occurrence_id){if(result.undo){const c=await P.api('/occurrences/'+t.occurrence_id),send=P.commandSender('/occurrences/'+t.occurrence_id+'/undo-complete');await send({completion_request_id:completionID,expected_revision:c.occurrence.revision,expected_task_revision:c.occurrence.task.revision,expected_series_revision:c.series.revision});await P.refresh();P.notify('Задача «'+t.title+'» восстановлена');}else await P.openOccurrence(t.occurrence_id,'restore');return;}const send=P.commandSender('/tasks/'+t.id+'/restore');await send({expected_revision:saved.revision});await P.refresh();P.notify('Задача «'+t.title+'» восстановлена');}catch(e){P.notify(e.message);await P.taskAction(saved,'restore');}
-   }});
-  }catch(e){P.notify('Не удалось завершить «'+task.title+'»: '+e.message);}finally{completing.delete(task.id);}
+   P.notify('Задача «'+t.title+'» выполнена',{label:'Отменить завершение',run:()=>P.quickRestore(saved,{undo:result.undo,requestID:completionID})});
+  }catch(e){P.notify('Не удалось завершить «'+task.title+'»: '+e.message,pending.has(task.id)?{label:'Повторить завершение',run:()=>P.quickComplete(item)}:undefined);if(pending.has(task.id))clearTimeout(P.toastTimer);}finally{completing.delete(task.id);}
  };
  P.disableRepeat=async function(seriesID,keepID){
   try{

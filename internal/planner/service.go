@@ -269,6 +269,11 @@ func (s *Service) ChangeProject(ctx context.Context, id, action string, in Proje
 					return conflict("nested_series_conflict", "Проект содержит независимые регулярные задачи. Сначала отдельно остановите их серии или перенесите их источник и выполнения; закрытие проекта не отменяет серии автоматически.", before)
 				}
 			}
+			if p.Status == "completed" && before.Status != "completed" {
+				if e = requireProjectComplete(tx, id); e != nil {
+					return e
+				}
+			}
 			if before.ProjectMode == "sequential" && before.OccurrenceID == nil && p.Status != before.Status && !active(p.Status) {
 				var open int
 				if e = tx.QueryRow(`SELECT count(*) FROM tasks WHERE project_id=? AND status IN('planned','in_progress')`, id).Scan(&open); e != nil {
@@ -444,6 +449,7 @@ func (s *Service) ChangeTask(ctx context.Context, id, action string, in TaskInpu
 }
 
 type taskChangeOptions struct {
+	InstanceOnly    bool
 	DynamicDecision string
 	ProjectSkip     bool
 	AllowRestore    bool

@@ -6,34 +6,45 @@
   const mobile = () => window.matchMedia('(max-width: 700px)').matches;
   const compactWeek = () => window.matchMedia('(max-width: 900px)').matches;
   const layoutKey = () => mobile()+':'+compactWeek()+':'+window.innerWidth;
-  const canMove = item => ['task', 'planning', 'session'].includes(item.type) && P.active(item) && !item.project_archived;
+  const canMove = item => ['task', 'planning', 'session'].includes(item.type) && P.active(item) && !C.completed(item) && !item.project_archived;
   let officialDays = new Map(), renderedLayout = layoutKey(), resizeTimer;
   const expandedDays=new Set();
   let saved = '', dragged = null, focusDay = false, filterOpen = false;
   try { saved = sessionStorage.getItem('planner-calendar') || ''; } catch (_) { /* storage is optional */ }
-  P.calendarLink = () => saved || '#/plans/calendar';
+  P.calendarLink = () => {
+    if (!saved) return '#/plans/calendar';
+    const params = new URLSearchParams(saved.split('?')[1]);
+    params.set('completed', P.showCompletedCalendar() ? '1' : '0');params.set('cancelled',P.showCancelledCalendar()?'1':'0');
+    return '#/plans/calendar?' + params;
+  };
+  P.showCompletedCalendar = () => { try { return localStorage.getItem('planner-calendar-completed') !== 'off'; } catch (_) { return true; } };
+  P.setCompletedCalendar = value => { try { localStorage.setItem('planner-calendar-completed', value ? 'on' : 'off'); } catch (_) {} };
+  P.showCancelledCalendar = () => {try{return localStorage.getItem('planner-calendar-cancelled')==='on';}catch(_){return false;}};
+  P.setCancelledCalendar = value => {try{localStorage.setItem('planner-calendar-cancelled',value?'on':'off');}catch(_){}};
   function state(route) {
     const params = route.params;
-    return { mode: ['month', 'week', 'day'].includes(params.get('mode')) ? params.get('mode') : mobile() ? 'week' : 'month', date: C.valid(params.get('date')) ? params.get('date') : P.today(), project: params.get('project') || '', completed: params.get('completed') === '1', cancelled: params.get('cancelled') === '1' };
+    return { mode: ['month', 'week', 'day'].includes(params.get('mode')) ? params.get('mode') : mobile() ? 'week' : 'month', date: C.valid(params.get('date')) ? params.get('date') : P.today(), project: params.get('project') || '', completed: params.has('completed') ? params.get('completed') === '1' : P.showCompletedCalendar(), cancelled: params.has('cancelled')?params.get('cancelled') === '1':P.showCancelledCalendar() };
   }
   function url(value) {
     const params = new URLSearchParams({ mode: value.mode, date: value.date });
     if (value.project) params.set('project', value.project);
-    if (value.completed) params.set('completed', '1');
-    if (value.cancelled) params.set('cancelled', '1');
+    params.set('completed', value.completed ? '1' : '0');
+    params.set('cancelled', value.cancelled?'1':'0');
     return '#/plans/calendar?' + params;
   }
   function remember(value) {
+    P.setCompletedCalendar(value.completed);P.setCancelledCalendar(value.cancelled);
     saved = url(value);
     try { sessionStorage.setItem('planner-calendar', saved); } catch (_) { /* URL remains authoritative */ }
   }
-  function go(value, patch) { focusDay = document.activeElement?.classList.contains('pc-day-button'); P.navigate(url({ ...value, ...patch })); }
+  function go(value, patch) { if ('completed' in patch) P.setCompletedCalendar(patch.completed); focusDay = document.activeElement?.classList.contains('pc-day-button'); P.navigate(url({ ...value, ...patch })); }
   function actions(item) { P.objectMenu(item); }
   function eventCard(item, compact = false) {
-    const card = el('div', { class: 'pc-event pc-kind-' + item.type + (P.active(item) ? '' : ' pc-closed'), 'data-event-id': item.type + ':' + item.id, 'data-event-date': item.date });
+    const card = el('div', { class: 'pc-event pc-kind-' + item.type + (P.active(item) ? '' : ' pc-closed') + (C.completed(item) ? ' pc-completed' : '')+(C.cancelled(item)?' pc-cancelled':''), 'data-event-id': item.type + ':' + item.id, 'data-event-date': item.date });
     card.budgetIdentity = JSON.stringify([item, compact, mobile()]);
-    const label = [(item.dynamic||item.project_pending)&&P.active(item)?'Предварительно запланировано':null,kind[item.type], item.start_time ? item.start_time + (item.end_time ? '–' + item.end_time : '') : null, item.title, P.labels[item.status], item.project_title].filter(Boolean).join(' · ');
-    const open = button((item.status === 'completed' ? '✓ ' : item.status === 'cancelled' ? '− ' : item.status === 'in_progress' ? '• ' : '') + (item.priority === 'high' ? '↑ ' : '') + (item.parent_task_id ? '↳ ' : '') + (item.start_time ? item.start_time + ' ' : '') + (item.type === 'deadline' ? '⚑ ' : item.type === 'planning' ? '◇ ' : item.type === 'session' ? '◷ ' : '') + ((item.dynamic||item.project_pending)&&P.active(item) ? '≈ ' : '') + (item.series_id ? '↻ ' : '') + item.title, () => P.openTask(item.task_id), 'pc-event-title');
+    const label = [(item.dynamic||item.project_pending)&&P.active(item)?'Предварительно запланировано':null,kind[item.type], item.start_time ? item.start_time + (item.end_time ? '–' + item.end_time : '') : null, item.title, P.labels[C.completed(item) ? 'completed' : item.status], item.project_title].filter(Boolean).join(' · ');
+    const open = button((C.completed(item) ? '✓ ' : C.cancelled(item) ? '⊘ ' : item.status === 'in_progress' ? '• ' : '') + (item.priority === 'high' ? '↑ ' : '') + (item.parent_task_id ? '↳ ' : '') + (item.start_time ? item.start_time + ' ' : '') + (item.type === 'deadline' ? '⚑ ' : item.type === 'planning' ? '◇ ' : item.type === 'session' ? '◷ ' : '') + ((item.dynamic||item.project_pending)&&P.active(item) ? '≈ ' : '') + (item.series_id ? '↻ ' : ''), () => P.openTask(item.task_id), 'pc-event-title');
+    open.append(el('span',{class:'pc-event-name'},item.title));
     P.paint(card,item);open.prepend(P.appearanceIcon(item));
     open.setAttribute('aria-label', label);
     const menu = button('⋯', () => actions(item), 'pc-event-menu'); menu.setAttribute('aria-label', 'Действия: ' + label);
@@ -61,7 +72,7 @@
       if (!dragged) return;
       event.preventDefault(); event.stopPropagation(); node.classList.remove('pc-drop-active');
       const item = dragged; dragged = null;
-      P.calendarReschedule(item, date, time, true);
+      P.calendarDrop(item, date, time);
     });
   }
   P.calendarReschedule = (...args) => P.reschedule(...args);
@@ -76,12 +87,14 @@
     const grid = el('div', { class: 'pc-month', 'aria-label': 'Месяц, понедельник — воскресенье' });
     weekdays.forEach(name => grid.append(el('div', { class: 'pc-weekday' }, name)));
     for (const day of C.days(range.from, range.to)) {
-      const events = items.filter(item => item.date === day);
+      const events = items.filter(item => item.date === day).sort(C.compareGroupedEvents);
       const cell = el('section', { class: 'pc-month-day' + (day.slice(0, 7) !== value.date.slice(0, 7) ? ' pc-outside' : '') + (day === value.date ? ' pc-selected-cell' : ''), 'data-date': day, 'aria-label': P.date(day) });
       const heading = dayButton(day, value, () => go(value, { date: day, mode: 'day' }));
       heading.textContent = String(Number(day.slice(8))); heading.setAttribute('aria-label', 'Открыть день ' + P.date(day));
       P.decorateCalendarDay(cell,officialDays.get(day));
       cell.append(heading);
+      const completed=C.completedCount(events);
+      if(completed) cell.append(el('span',{class:'pc-completed-count',title:'Выполнено задач: '+completed},'✓ '+completed));
       events.slice(0, 3).forEach(item => cell.append(eventCard(item, true)));
       if (events.length > 3) cell.append(button('Ещё ' + (events.length - 3), () => {expandedDays.add(day);go(value, { date: day, mode: 'day' });}, 'pc-more'));
       cell.addEventListener('click', event => { if (event.target === cell) go(value, { date: day, mode: 'day' }); });
@@ -97,13 +110,14 @@
   function agenda(container, value, items, days) {
     const columns = days.length;
     const head = el('div', { class: 'pc-schedule-head', style: '--pc-days:' + columns }, el('span', { class: 'pc-time-label' }, 'МСК'));
-    days.forEach(day => head.append(dayButton(day, value, () => go(value, { date: day, mode: 'day' }))));
+    days.forEach(day => {const heading=dayButton(day,value,()=>go(value,{date:day,mode:'day'})), count=C.completedCount(items.filter(i=>i.date===day));if(count)heading.append(el('span',{class:'pc-completed-count'},' ✓ '+count));head.append(heading);});
     if(value.mode!=='day')container.append(head);
+    else {const count=C.completedCount(items);if(count)container.append(el('p',{class:'pc-completed-count'},'Выполнено задач: '+count));}
     const agendaBody=el('div',{class:'pc-agenda'+(columns===1?' pc-agenda-single':'')});container.append(agendaBody);
     const allDay = el('div', { class: 'pc-allday', style: '--pc-days:' + columns }, el('span', { class: 'pc-time-label' }, 'Без времени'));
     days.forEach(day => {
       const cell = el('div', { class: 'pc-allday-cell', 'data-allday': day });
-      const events = items.filter(item => item.date === day && !item.start_time);
+      const events = items.filter(item => item.date === day && !item.start_time).sort(C.compareGroupedEvents);
       const count=el('div',{class:'pc-allday-count'});cell.append(count);
       const list=el('div',{class:'pc-allday-items',tabindex:0,'aria-label':'Задачи без времени · '+P.date(day)});
       let expanded=expandedDays.has(day);const more=button('',()=>{expanded=!expanded;if(expanded)expandedDays.add(day);else expandedDays.delete(day);draw();},'pc-more pc-allday-more');
@@ -233,33 +247,28 @@
     const previous = button('‹', () => go(value, { date: value.mode === 'month' ? C.addMonths(value.date, -1) : C.addDays(value.date, value.mode === 'week' ? -7 : -1) }), 'pc-arrow'); previous.setAttribute('aria-label', 'Предыдущий период');
     const next = button('›', () => go(value, { date: value.mode === 'month' ? C.addMonths(value.date, 1) : C.addDays(value.date, value.mode === 'week' ? 7 : 1) }), 'pc-arrow'); next.setAttribute('aria-label', 'Следующий период');
     const modes = el('div', { class: 'pc-modes', role: 'group', 'aria-label': 'Вид календаря' }, [['month', 'Месяц'], ['week', 'Неделя'], ['day', 'День']].map(([mode, name]) => { const b = button(name, () => go(value, { mode }), mode === value.mode ? 'pl-primary' : ''); b.setAttribute('aria-pressed', String(mode === value.mode)); return b; }));
-    const create = button('+ Задача на день', () => P.newTask(value.project !== 'none' ? value.project : null, null, value.date), 'pl-primary pc-create');
+    const create = button('+ Задача на день', () => P.newTask(value.project !== 'none' && !value.project.startsWith('series:') ? value.project : null, null, value.date), 'pl-primary pc-create');
     create.setAttribute('aria-label', '+ Задача на день');
     if (data.projects.find(p => p.id === value.project)?.archived_at) { create.disabled = true; create.title = 'Архивный проект: только просмотр'; }
-    container.append(el('div', { class: 'pc-toolbar' }, el('div', { class: 'pc-period' }, previous, el('h2', {}, title), next), el('div', { class: 'pl-actions' }, button('Сегодня', () => go(value, { date: P.today() })), modes, create)));
+    container.append(el('div', { class: 'pc-toolbar' }, el('div', { class: 'pc-period' }, previous, el('h2', {}, title), next), el('div', { class: 'pl-actions' }, button('Сегодня', () => go(value, { date: P.today(),mode:'month' })), modes, create)));
     const filters = el('div', { class: 'pc-filters' });
-    const project = P.field(filters, 'calendar_project', 'Проект', 'select', value.project, [['', 'Все проекты'], ['none', 'Без проекта'], ...data.projects.map(p => [p.id, p.title + (p.archived_at ? ' · архив' : '')])]);
+    const project = P.field(filters, 'calendar_project', 'Проект', 'select', value.project, [['', 'Все проекты'], ['none', 'Без проекта'], ...P.projectFilterOptions(data.projects,value.project)]);
     const datePicker = P.field(filters, 'calendar_date', 'Выбранный день', 'date', value.date);
     datePicker.addEventListener('change', () => { if (C.valid(datePicker.value)) go(value, { date: datePicker.value }); });
     project.addEventListener('change', () => go(value, { project: project.value }));
-    for (const [key, label] of [['completed', 'Завершённые'], ['cancelled', 'Отменённые']]) {
-      const box = el('input', { type: 'checkbox', checked: value[key] });
-      box.addEventListener('change', () => go(value, { [key]: box.checked }));
-      filters.append(el('label', { class: 'pl-checkbox' }, box, label));
-    }
     const filterPanel = el('details', { class: 'pc-filter-panel', open: !mobile() || filterOpen }, el('summary', {}, 'Фильтры' + (value.project ? ' · ' + (data.projects.find(p => p.id === value.project)?.title || 'Без проекта') : '')), filters);
     filterPanel.addEventListener('toggle', () => { if (mobile() && filterPanel.isConnected) filterOpen = filterPanel.open; });
     container.append(filterPanel);
-    const items = data.items.filter(item => C.visible(item, value));
+    const items = data.items.filter(item => C.visible(item, {...value,project:''}) && P.matchesProject(item.project_id,value.project,data.projects)).sort(C.compareEvents);
     const chips=el('div',{class:'pc-active-filters','aria-label':'Активные фильтры'});
-    if(value.project){const name=value.project==='none'?'Без проекта':data.projects.find(p=>p.id===value.project)?.title||'Недоступный проект';chips.append(button('Проект: '+name+' ×',()=>go(value,{project:''}),'pc-filter-chip'));}
-    if(value.completed)chips.append(button('Завершённые показаны ×',()=>go(value,{completed:false}),'pc-filter-chip'));
-    if(value.cancelled)chips.append(button('Отменённые показаны ×',()=>go(value,{cancelled:false}),'pc-filter-chip'));
+    if(value.project){const name=value.project==='none'?'Без проекта':data.projects.find(p=>p.id===value.project||'series:'+p.repeat_series_id===value.project)?.title||'Недоступный проект';chips.append(button('Проект: '+name+' ×',()=>go(value,{project:''}),'pc-filter-chip'));}
+    if(!value.completed)chips.append(el('span',{class:'pl-muted'},'Выполненные скрыты · настройка планировщика'));
+    if(value.cancelled)chips.append(el('span',{class:'pl-muted'},'Отменённые показаны'));
     const countText='Показано '+items.length+' из '+data.items.length+' событий';
     filterPanel.querySelector('summary').textContent='Фильтры · '+countText;
     chips.append(el('span',{class:'pl-muted pc-filter-count'},countText));
-    if(value.project||value.completed||value.cancelled)chips.append(button('Сбросить фильтры',()=>go(value,{project:'',completed:false,cancelled:false}),'pc-filter-reset'));
-    if(value.project||!value.completed||!value.cancelled)chips.append(button('Показать все',()=>go(value,{project:'',completed:true,cancelled:true}),'pc-filter-reset'));
+    if(value.project)chips.append(button('Сбросить фильтр проекта',()=>go(value,{project:''}),'pc-filter-reset'));
+
     container.append(chips);
     P.calendarDayInfo(container,data,value.date);
     const schedule = el('div', { class: 'pc-calendar' }); container.append(schedule);

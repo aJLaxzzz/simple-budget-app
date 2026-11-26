@@ -16,6 +16,6 @@
   host.append(el('details',{class:'pc-day-legend-panel',open:!window.matchMedia('(max-width:700px)').matches},el('summary',{},'Обозначения календаря'),legend));
   const day=(data.calendar_days||[]).find(d=>d.date===selected);
   if(day)host.append(el('p',{class:'pc-day-description',title:day.reason},P.date(selected)+' · '+day.label));
-  if(data.calendar_missing_years?.length)host.append(el('p',{class:'pc-calendar-missing',role:'status'},'Нет официального календаря РФ: '+data.calendar_missing_years.join(', ')+'. Подсветка недоступна. ',el('a',{href:'#/plans/settings'},'Настройки календаря')));
+  if(data.calendar_missing_years?.length)host.append(el('p',{class:'pc-calendar-missing',role:'status'},'Нет официального календаря РФ: '+data.calendar_missing_years.join(', ')+'. Подсветка недоступна. ',el('a',{href:'#/plans/settings?section=calendar'},'Настройки календаря')));
  };
 })(window.Planner);

@@ -133,14 +133,14 @@ func TestProjectSeriesAdjustedAnchorIdempotenceConcurrencyAndCalendar(t *testing
 	if e != nil {
 		t.Fatal(e)
 	}
-	if len(series.Occurrences) != 4 {
+	if len(series.Occurrences) != 3 {
 		t.Fatal(len(series.Occurrences))
 	}
 	first := series.Occurrences[0]
 	if first.BaseDate != "2026-11-21" || first.AdjustedDate != "2026-11-23" || *taskNamed(t, *first.Project, "Кухня").PlannedDate != "2026-11-24" {
 		t.Fatal(first)
 	}
-	if count(t, db, "projects") != 4 || count(t, db, "tasks") != 16 {
+	if count(t, db, "projects") != 3 || count(t, db, "tasks") != 12 {
 		t.Fatal("wrong tree count")
 	}
 	ids := map[string]bool{}
@@ -160,6 +160,7 @@ func TestProjectSeriesAdjustedAnchorIdempotenceConcurrencyAndCalendar(t *testing
 	if e != nil || again.ID != series.ID || before != recurrenceDBSnapshot(t, db) {
 		t.Fatal("retry wrote", e)
 	}
+	setProjectLimitTest(t, h, 8)
 	var wg sync.WaitGroup
 	errs := make(chan error, 5)
 	for i := 0; i < 5; i++ {
@@ -181,7 +182,7 @@ func TestProjectSeriesAdjustedAnchorIdempotenceConcurrencyAndCalendar(t *testing
 		}
 	}
 	current := getSeriesTest(t, s, series.ID)
-	if len(current.Occurrences) < 8 {
+	if len(current.Occurrences) != 8 {
 		t.Fatal(current)
 	}
 	if count(t, db, "projects") != len(current.Occurrences) {
@@ -248,6 +249,7 @@ func TestProjectPauseCompactRestoreAndPartialWork(t *testing.T) {
 	}
 	managedApply(t, s, v.ID, SeriesCommand{Action: "pause", StartDate: "2027-02-01", EndDate: "2027-03-01"})
 	priorProjects := count(t, db, "projects")
+	setProjectLimitTest(t, h, 20)
 	drainSeries(t, s, MaterializeInput{SeriesID: v.ID, Through: "2027-03-10"})
 	current := getSeriesTest(t, s, v.ID)
 	compact := []TaskOccurrenceDTO{}
@@ -466,11 +468,12 @@ func TestProjectSeriesRestartAndAPI(t *testing.T) {
 }
 
 func TestProjectCompactCommandsResumeAndExplicitTaskShift(t *testing.T) {
-	db, s, _ := seriesFixture(t)
+	db, s, h := seriesFixture(t)
 	template := createTemplateTest(t, s, cleaningSnapshot())
 	v := projectSeriesTest(t, s, template, "2026-11-16", 14)
 	// Pause not-yet-created cycles, then explicitly process the compact record.
 	managedApply(t, s, v.ID, SeriesCommand{Action: "pause", StartDate: "2027-02-01", EndDate: "2027-03-31"})
+	setProjectLimitTest(t, h, 20)
 	drainSeries(t, s, MaterializeInput{SeriesID: v.ID, Through: "2027-03-31"})
 	current := getSeriesTest(t, s, v.ID)
 	var compact []TaskOccurrenceDTO
@@ -498,6 +501,8 @@ func TestProjectCompactCommandsResumeAndExplicitTaskShift(t *testing.T) {
 		t.Fatal(r)
 	}
 	id = compact[1].ID
+	restoredForCompletion := occurrenceApply(t, s, id, "restore", projectOccurrenceInput(t, s, id))
+	finishProjectTasksTest(t, s, restoredForCompletion.Project.ID, "2026-11-15")
 	in = projectOccurrenceInput(t, s, id)
 	in.CompletedDate = ptr("2026-11-15")
 	in.TasksDecision = "complete_open"
@@ -640,7 +645,8 @@ func TestProjectMigrationPreservesV5HistoryAndLinks(t *testing.T) {
 }
 
 func TestProjectRuleChangeDoesNotImplicitlyChangeEarlierTreeVersion(t *testing.T) {
-	_, s, _ := seriesFixture(t)
+	_, s, h := seriesFixture(t)
+	setProjectLimitTest(t, h, 4)
 	template := createTemplateTest(t, s, cleaningSnapshot())
 	v := projectSeriesTest(t, s, template, "2026-11-16", 14)
 	newer := cleaningSnapshot()

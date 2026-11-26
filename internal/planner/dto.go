@@ -32,6 +32,8 @@ type ProjectDTO struct {
 	RepeatSeriesID *string `json:"repeat_series_id,omitempty"`
 	EffectiveAppearance
 	Appearance
+	CompletionReady   bool    `json:"completion_ready"`
+	RemainingTasks    int     `json:"remaining_tasks"`
 	TaskCount         int     `json:"task_count"`
 	OccurrenceID      *string `json:"occurrence_id,omitempty"`
 	TemplateVersionID *string `json:"template_version_id,omitempty"`

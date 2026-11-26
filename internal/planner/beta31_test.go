@@ -33,6 +33,7 @@ func safeDateChanges(p ProjectDateRepairPreview) int {
 }
 func TestBeta31RepairKeepDatesAndYear(t *testing.T) {
 	db, s, h := seriesFixture(t)
+	legacyProjectPopulation(t, db, 64)
 	s.now = func() time.Time { return time.Date(2026, 11, 24, 12, 0, 0, 0, time.UTC) }
 	source := beta3Draft(t, h, "beta31-source")
 	id := *source.RepeatSeriesID
@@ -281,7 +282,8 @@ func TestBeta31PrivateSnapshot(t *testing.T) {
 }
 
 func TestBeta31FridayYearAndIndependentOffsets(t *testing.T) {
-	_, s, h := seriesFixture(t)
+	db, s, h := seriesFixture(t)
+	legacyProjectPopulation(t, db, 64)
 	source := beta3Draft(t, h, "friday-year31")
 	id := *source.RepeatSeriesID
 	drainSeries(t, s, MaterializeInput{SeriesID: id, Through: "2027-12-31"})
@@ -308,7 +310,8 @@ func TestBeta31FridayYearAndIndependentOffsets(t *testing.T) {
 }
 
 func TestBeta31EqualAdjustedDatesAreNotDuplicateCycles(t *testing.T) {
-	_, s, h := seriesFixture(t)
+	db, s, h := seriesFixture(t)
+	legacyProjectPopulation(t, db, 6)
 	source := beta3Draft(t, h, "holidays31")
 	id := *source.RepeatSeriesID
 	v := getSeriesTest(t, s, id)

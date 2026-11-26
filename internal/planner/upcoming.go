@@ -23,6 +23,10 @@ func (s *Service) ensureUpcomingTx(ctx context.Context, tx *sql.Tx, v *SeriesDTO
 		n, _, e := s.syncCompletionChain(ctx, tx, v, op, now, false, "")
 		return n, e
 	}
+	limit, err := projectRepeatLimit(tx)
+	if err != nil {
+		return 0, err
+	}
 	var count int
 	if e := tx.QueryRow(`SELECT count(*) FROM tasks t JOIN occurrences o ON o.id=t.occurrence_id WHERE o.series_id=? AND t.status IN ('planned','in_progress') AND t.planned_date>=? AND (t.due_date IS NULL OR t.due_date>=?)`, v.ID, s.today(), s.today()).Scan(&count); e != nil {
 		return 0, e
@@ -32,7 +36,7 @@ func (s *Service) ensureUpcomingTx(ctx context.Context, tx *sql.Tx, v *SeriesDTO
 		return 0, e
 	}
 	created := 0
-	for attempt := 0; count < 3 && attempt < materializeCyclesPerBatch; attempt++ {
+	for attempt := 0; count < limit.Limit && attempt < materializeCyclesPerBatch; attempt++ {
 		if e = ctx.Err(); e != nil {
 			return 0, e
 		}
