@@ -12,7 +12,7 @@
    await load();
  };
  function row(item,projectNames){
-   const card=el('article',{class:'pl-occurrence'},el('div',{},el('h3',{},item.title),meta((['task','project','series'].includes(item.kind)?(item.reason||'Требует решения'):item.kind==='skipped'?'Пропущено':'Отменено')+' · '+P.date(item.planned_date)),(['task','project'].includes(item.kind)?null:meta(item.reason||'')),item.snoozed_until>P.today()?meta('Напоминание отложено до '+P.date(item.snoozed_until)):null,item.disposition==='processed'?meta('Обработано · история сохранена'):null));
+   const card=el('article',{class:'pl-occurrence'+(item.kind==='series'?' pl-planning-problem':'')},el('div',{},el('h3',{},item.title),meta((['task','project','series'].includes(item.kind)?(item.reason||'Требует решения'):item.kind==='skipped'?'Пропущено':'Отменено')+' · '+P.date(item.planned_date)),(['task','project'].includes(item.kind)?null:meta(item.reason||'')),item.snoozed_until>P.today()?meta('Напоминание отложено до '+P.date(item.snoozed_until)):null,item.disposition==='processed'?meta('Обработано · история сохранена'):null));
    if(item.project_id&&item.kind!=='project')card.firstChild.append(el('a',{class:'pl-attention-context',href:'#/plans/projects/'+item.project_id},'Проект: '+(projectNames.get(item.project_id)||item.title)));
    if(item.series_id)card.firstChild.append(el('a',{class:'pl-attention-context',href:'#/plans/series/'+item.series_id},'↻ Настройки повторения'));
    const actions=el('div',{class:'pl-actions'}), entries=[];

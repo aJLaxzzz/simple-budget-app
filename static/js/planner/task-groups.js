@@ -65,13 +65,16 @@
   P.projectTaskGroups=function(tasks,allTasks,section,today=P.today(),projects=P.data?.projects||[]) {
     const groups=new Map(),out=[];
     const byID=new Map(projects.map(p=>[p.id,p]));
-    const owner=t=>byID.get(t.project_id)?.repeat_series_id?'series:'+byID.get(t.project_id).repeat_series_id:'project:'+t.project_id;
-    const key=t=>JSON.stringify([section,owner(t),t.planned_date||t.due_date||'undated']);
+    // Overdue/terminal sections retain their previous per-day semantics.
+    const seriesDay=['today','tomorrow','overdue','plan_missed','completed','cancelled','skipped'].includes(section);
+    const multiDay=['month','later'].includes(section);
+    const owner=t=>seriesDay&&byID.get(t.project_id)?.repeat_series_id?'series:'+byID.get(t.project_id).repeat_series_id:'project:'+t.project_id;
+    const key=t=>JSON.stringify([section,owner(t),multiDay?'period':t.planned_date||t.due_date||'undated']);
     for(const task of tasks){
       if(!task.project_id){out.push({task});continue;}
       const id=key(task);let group=groups.get(id);
       if(!group){group={key:id,projectID:task.project_id,seriesID:byID.get(task.project_id)?.repeat_series_id,projectIDs:new Set(),date:task.planned_date||task.due_date, tasks:[],members:[]};groups.set(id,group);out.push(group);}
-      group.tasks.push(task);group.projectIDs.add(task.project_id);
+      if(!group.tasks.some(t=>t.id===task.id))group.tasks.push(task);group.projectIDs.add(task.project_id);
     }
     const terminal=['completed','cancelled','skipped'].includes(section);
     for(const task of allTasks){
@@ -82,7 +85,7 @@
       // Visible rows may be a filtered subset. Completion comes from all real
       // statuses on this project/date/section, not from the active-row count.
       const members=new Map(group.members.map(t=>[t.id,t]));group.tasks.forEach(t=>members.set(t.id,t));
-      group.members=[...members.values()];group.completed=group.members.filter(t=>t.status==='completed').length;
+      group.members=[...members.values()];group.dates=[...new Set(group.members.map(t=>t.planned_date||t.due_date).filter(Boolean))].sort();group.date=group.dates[0];group.endDate=group.dates.at(-1);group.multiDay=multiDay&&group.dates.length>1;group.completed=group.members.filter(t=>t.status==='completed').length;
       const times=group.members.map(t=>t.scheduled_time).filter(Boolean).sort();
       group.time=times.length?(times[0]===times.at(-1)?times[0]:times[0]+'–'+times.at(-1)):'';
     }
@@ -92,8 +95,12 @@
   P.groupedTasks = function (tasks, searching=false, membershipTasks=P.data.tasks) {
     const root = P.el('div', {class:'pl-groups'});
     const projects = new Map(P.data.projects.map(p => [p.id, p]));
-    const parents = new Map(P.data.tasks.map(t => [t.id, t.title]));
-    const row=(task,multiple=false)=>P.taskRow(task,false,[multiple?'Выполнение · '+P.projectDateLabel(projects.get(task.project_id)||{}):projects.get(task.project_id)?.title,task.parent_task_id&&('Подзадача · '+(task.parent_title||parents.get(task.parent_task_id)||'Открыть родителя'))].filter(Boolean).join(' · '));
+    const parents = new Map(P.data.tasks.map(t => [t.id, t]));
+    const row=(task,section,inGroup=false,multiple=false,dateInHeading=false)=>{
+      const parent=parents.get(task.parent_task_id);
+      const parentTitle=parent&&parent.project_id===task.project_id?parent.title:task.parent_title;
+      return P.taskRow(task,false,[multiple?'Выполнение · '+P.projectDateLabel(projects.get(task.project_id)||{}):!inGroup&&projects.get(task.project_id)?.title].filter(Boolean).join(' · '),{section,inGroup,dateInHeading,parentID:task.parent_task_id,parentTitle:parentTitle||'Открыть родителя'});
+    };
     for (const group of P.taskGroups(tasks)) {
       const section = P.el('details', {class:'pl-task-group pl-group-'+group.key, 'data-group':group.key, open:searching || (expanded.get(group.key) ?? group.key!=='later')});
       section.append(P.el('summary', {}, P.el('span', {}, group.title), P.el('span', {class:'pl-group-count'}, String(group.tasks.length))));
@@ -101,14 +108,18 @@
       const entries=P.groupProjects()?P.projectTaskGroups(group.tasks,membershipTasks,group.key):group.tasks.map(task=>({task}));
       const list = P.el('div', {class:'pl-task-list'+(entries.some(entry=>entry.key)?' pl-grouped-list':'')});
       for (const entry of entries) {
-        if(entry.task){list.append(row(entry.task));continue;}
+        if(entry.task){list.append(row(entry.task,group.key));continue;}
         const project=projects.get(entry.projectID)||{title:'Проект'};
         const card=P.paint(P.el('details',{class:'pl-project-task-group','data-project-group':entry.key,'data-project-id':entry.projectIDs.size===1?entry.projectID:'','data-series-id':entry.seriesID||'',open:projectExpanded.has(entry.key)}),project);
         card.budgetIdentity=JSON.stringify([[...entry.projectIDs].map(id=>projects.get(id)),entry.tasks,entry.members]);
-        const summary=P.el('summary',{},P.appearanceIcon(project,true),P.el('span',{class:'pl-project-group-copy'},P.el('strong',{},project.title),P.el('span',{class:'pl-muted'},[P.date(entry.date),entry.time,entry.projectIDs.size>1?'Выполнений: '+entry.projectIDs.size:project.repeat_series_id&&project.start_date?'Выполнение · '+P.projectDateLabel(project):''].filter(Boolean).join(' · '))),P.el('span',{class:'pl-project-group-progress'},entry.completed+' / '+entry.members.length,P.el('span',{class:'pl-muted'},' выполнено')));
-        summary.setAttribute('aria-label',project.title+' · '+P.date(entry.date)+' · выполнено '+entry.completed+' из '+entry.members.length);
+        const dateLabel=!entry.date?'Без даты':entry.multiDay?P.date(entry.date)+'–'+P.date(entry.endDate):P.date(entry.date);
+        const summary=P.el('summary',{},P.appearanceIcon(project,true),P.el('span',{class:'pl-project-group-copy'},P.el('strong',{},project.title),P.el('span',{class:'pl-muted'},[dateLabel,entry.multiDay?null:entry.time,entry.projectIDs.size>1?'Выполнений: '+entry.projectIDs.size:!entry.multiDay&&project.repeat_series_id&&project.start_date?'Выполнение · '+P.projectDateLabel(project):''].filter(Boolean).join(' · '))),P.el('span',{class:'pl-project-group-progress'},entry.completed+' / '+entry.members.length,P.el('span',{class:'pl-muted'},' выполнено')));
+        summary.setAttribute('aria-label',project.title+' · '+dateLabel+' · выполнено '+entry.completed+' из '+entry.members.length);
         const progress=P.el('progress',{max:entry.members.length,value:entry.completed,'aria-label':'Выполнение задач группы'});
-        summary.append(progress);card.append(summary,P.el('div',{class:'pl-project-group-tasks'},entry.tasks.map(t=>row(t,entry.projectIDs.size>1))));
+        summary.append(progress);
+        const rows=P.el('div',{class:'pl-project-group-tasks'});let previousDate;
+        for(const task of entry.tasks){const date=task.planned_date||task.due_date||'';if(entry.multiDay&&date!==previousDate){rows.append(P.el('h4',{class:'pl-group-date','data-date':date},P.date(date)));previousDate=date;}rows.append(row(task,group.key,true,entry.projectIDs.size>1,entry.multiDay));}
+        card.append(summary,rows);
         card.addEventListener('toggle',()=>{if(card.isConnected){if(card.open)projectExpanded.add(entry.key);else projectExpanded.delete(entry.key);}});
         list.append(card);
       }

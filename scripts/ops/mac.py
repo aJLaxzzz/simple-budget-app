@@ -64,7 +64,7 @@ class Transport:
         with tempfile.TemporaryDirectory(prefix='budget-ops-') as tmp:
             f=Path(tmp)/'request.json';atomic(f,req);self.upload(f,token,'request.json')
             for name,path in (files or {}).items():self.upload(path,token,name)
-            if action!='clean-incoming':ui.stage(ui.STAGES.get(action,'Операция: '+action))
+            if action!='clean-incoming':ui.stage('Поиск последней резервной копии' if action=='status' and self.operation=='fetch-backup' else ui.STAGES.get(action,'Операция: '+action))
             elif ui.verbose():ui.stage('Очистка служебных файлов')
             else:ui.LAST_STAGE='Очистка служебных файлов'
             if action=='repair-initialization':

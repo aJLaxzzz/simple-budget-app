@@ -172,19 +172,20 @@
 
       document.querySelector('.pl-quick input')?.focus();
     });
+    const add=form.querySelector('button[type=submit]');add.setAttribute('aria-label','Добавить');add.classList.add('pl-quick-add');add.replaceChildren(el('span',{class:'pl-quick-label'},'Добавить'),el('span',{class:'pl-quick-plus','aria-hidden':'true'},'+'));
     return form;
   };
-  P.taskRow = function (task, child = false, context = '') {
-    const row = el('div', { class: 'pl-task' + (child ? ' pl-child' : '') + (P.active(task) ? '' : ' pl-terminal'), 'data-task-id': task.id });
-    row.budgetIdentity = JSON.stringify([task, child, context, P.data.projects.find(p => p.id === task.project_id)]);
+  P.taskRow = function (task, child = false, context = '', presentation = {}) {
+    const row = el('div', { class: 'pl-task' + (child ? ' pl-child' : '') + (P.active(task) ? '' : ' pl-terminal')+(presentation.parentID?' pl-group-child':''), 'data-task-id': task.id });
+    row.budgetIdentity = JSON.stringify([task, child, context, presentation, P.data.projects.find(p => p.id === task.project_id)]);
     const complete = button(task.status === 'completed' ? '✓' : task.status === 'cancelled' ? '−' : '', () => P.runAction(task, 'complete'), 'pl-check');
     complete.setAttribute('aria-label', 'Завершить: ' + task.title);
     complete.disabled = task.project_pending || !P.active(task) || Boolean(P.data.projects.find(p => p.id === task.project_id)?.archived_at);
     const title = button(task.title, () => P.openTask(task.id), 'pl-task-title');
-    const details = [(task.dynamic||task.project_pending)&&P.active(task)&&meta('Дата может измениться'),task.series_id && el('span', {class:'pl-repeat-mark', title:'Повторяющаяся задача', 'aria-label':'Повторяющаяся задача'}, '↻'), context && meta(context), task.priority === 'high' && el('span', { class: 'pl-priority' }, '↑ Высокий'), task.priority === 'low' && meta('↓ Низкий'), task.priority === 'normal' && el('span',{class:'pl-muted pl-priority-normal'},'Обычный приоритет'), task.planned_date && meta(P.date(task.planned_date) + (task.scheduled_time ? ' · ' + task.scheduled_time : '')), task.due_date && el('span', { class: P.overdue(task) ? 'pl-overdue' : 'pl-muted' }, 'Крайний срок: ' + P.date(task.due_date)), task.completed_with_open_children && meta('Есть открытые подзадачи')].filter(Boolean);
-    P.paint(row,task);title.prepend(P.appearanceIcon(task));
+    const details = [(task.dynamic||task.project_pending)&&P.active(task)&&meta('Дата может измениться'),task.series_id && el('span', {class:'pl-repeat-mark', title:'Повторяющаяся задача', 'aria-label':'Повторяющаяся задача'}, '↻'), context && meta(context), task.priority === 'high' && el('span', { class: 'pl-priority' }, '↑ Высокий'), task.priority === 'low' && meta('↓ Низкий'), task.planned_date && meta(((presentation.dateInHeading||['today','tomorrow'].includes(presentation.section))?'':P.date(task.planned_date)) + (task.scheduled_time ? ((presentation.dateInHeading||['today','tomorrow'].includes(presentation.section))?'':' · ') + task.scheduled_time : '')), task.due_date && el('span', { class: P.overdue(task) ? 'pl-overdue' : 'pl-muted' }, 'Крайний срок: ' + P.date(task.due_date)), task.completed_with_open_children && meta('Есть открытые подзадачи')].filter(Boolean);
+    P.paint(row,task);const icon=P.appearanceIcon(task);if(!task.icon_id&&(task.effective_icon_id||'lucide:circle-check')==='lucide:circle-check')icon.classList.add('pl-neutral-icon');title.prepend(icon);
     const timing=P.timing(task);if(timing.label)details.push(el('span',{class:timing.key==='overdue'?'pl-overdue':'pl-plan-missed'},timing.label));
-    row.append(complete, el('div', { class: 'pl-task-copy' }, title, el('div', { class: 'pl-task-meta' }, details)), P.status(task), P.actionButton(task));
+    row.append(complete, el('div', { class: 'pl-task-copy' }, title, presentation.parentID?el('span',{class:'pl-parent-context','data-parent-id':presentation.parentID},'↳ Подзадача · '+presentation.parentTitle):null,el('div', { class: 'pl-task-meta' }, details,task.status==='planned'?null:P.status(task))), P.actionButton(task));
     return row;
   };
   P.taskTree = function (tasks) {
@@ -240,9 +241,14 @@
           P.data.tasks=data.items; loadedStatus=selected;
         }catch(e){if(turn===loadTurn)results.replaceChildren(el('p',{role:'alert'},e.message),button('Попробовать снова',P.refresh));return;}
       }
-      draw();
+      updateFilterSummary();draw();
     });
-    const filterPanel=el('details',{class:'pl-task-filters',open:!window.matchMedia('(max-width:700px)').matches},el('summary',{},'Поиск и фильтры'+(route.params.has('q')||route.params.has('project')||route.params.has('status')?' · применены':'')),filters);
+    const filterSummary=el('summary',{},'Поиск и фильтры');
+    const reset=button('Сбросить фильтры',()=>{search.value='';status.value='active';showAll.value='nearest';if(project)project.value='all';search.dispatchEvent(new Event('input',{bubbles:true}));});
+    const filterPanel=el('details',{class:'pl-task-filters',open:P.taskFiltersOpen??!window.matchMedia('(max-width:767px)').matches},filterSummary,filters);
+    filters.append(reset);filterPanel.addEventListener('toggle',()=>{if(filterPanel.isConnected)P.taskFiltersOpen=filterPanel.open;});
+    function updateFilterSummary(){const count=[search.value.trim(),status.value!=='active',showAll.value!=='nearest',project&&project.value!=='all'].filter(Boolean).length;filterSummary.textContent='Поиск и фильтры'+(count?' · '+count:'');reset.hidden=!count;}
+    updateFilterSummary();
     content.append(filterPanel, results); draw();
   }
   P.completeProject=async function(project){
@@ -269,14 +275,14 @@
     const total=value.total+(value.cancelled||0)+(value.skipped||0);
     return {total,completed:value.completed,open:value.total-value.completed,cancelled:value.cancelled||0,skipped:value.skipped||0,percent:total?Math.round(100*value.completed/total):null};
   };
-  function progress(project) {
+  function progress(project,compact=false) {
     const v=P.projectDisplayProgress(project);
     if(project.routines){const r=project.routines;return el('div',{class:'pl-progress-block pl-routine-summary'},el('strong',{},'Регулярных дел: '+r.count),r.next_date?meta('Ближайшее выполнение · '+P.date(r.next_date)):null,meta('Актуальных просрочек: '+r.open_dates.filter(d=>d<P.today()).length),v.total?meta('Обычные задачи: выполнено '+v.completed+' из '+v.total+' · открыто '+v.open):null);}
 
     if(!v.total)return el('div',{class:'pl-progress-block'},meta('В проекте пока нет задач'));
     return el('div',{class:'pl-progress-block'},el('div',{class:'pl-progress-label'},meta('Выполнено '+v.completed+' из '+v.total),el('strong',{},v.percent+'%')),
       el('progress',{max:100,value:v.percent,'aria-label':'Доля выполненных задач и подзадач'}),
-      el('div',{class:'pl-progress-details'},meta('Открыто: '+v.open),v.skipped?meta('Пропущено: '+v.skipped):null,v.cancelled?meta('Отменено: '+v.cancelled):null),
+      el('div',{class:'pl-progress-details'},(!compact||v.skipped||v.cancelled)?meta('Открыто: '+v.open):null,v.skipped?meta('Пропущено: '+v.skipped):null,v.cancelled?meta('Отменено: '+v.cancelled):null),
       el('details',{class:'pl-progress-explanation'},el('summary',{},'Как считается'),meta('Каждая задача и подзадача завершается отдельно. Для завершения проекта должны быть выполнены все. Пропуски и отмены не означают выполнения.'),meta('Всего задач и подзадач: '+(project.task_count??project.tasks?.length??v.total))));
   }
   P.projectOrder = function(a,b,today=P.today()) {
@@ -296,6 +302,7 @@
     return C.caption(start,{day:'numeric',month:'long',year:'numeric'});
   };
   function renderProjects(content) {
+    content.classList.add('pl-project-screen');
     content.append(el('div', { class: 'pl-section-head' }, el('div', {}, el('h2', {}, 'Проекты'), el('p', { class: 'pl-muted' }, 'Большие цели, разложенные на понятные шаги.')), button('+ Проект', () => P.navigate(P.base() + '?new=project'), 'pl-primary')));
     const filters = el('div', { class: 'pl-filters' });
     const status = P.field(filters, 'status', 'Статус проекта', 'select', '', [['', 'Все статусы'], ...['planned', 'in_progress', 'completed', 'cancelled'].map(k => [k, P.labels[k]])]);
@@ -306,7 +313,7 @@
       const oldCards = new Map([...grid.querySelectorAll('.pl-project-card')].map(n => [n.dataset.projectId, n]));
       grid.replaceChildren(...projects.map(project => {
         const count = project.task_count ?? project.tasks?.length ?? 0;
-        const card = P.paint(el('article', { class: 'pl-project-card', 'data-project-id':project.id }, el('div', { class: 'pl-card-top' }, P.appearanceIcon(project,true),P.projectCompleteControl(project), P.status(project)), el('h3', {}, el('a',{href:'#/plans/projects/'+project.id},project.title)), project.description?el('p', { class: 'pl-card-description' }, project.description):null, project.start_date?el('p',{class:'pl-project-date'},(project.repeat_series_id?'↻ Выполнение · ':'Начало · ')+P.projectDateLabel(project)):null, progress(project), el('div', { class: 'pl-card-bottom' }, project.repeat_series_id&&!project.occurrence_id?meta('↻ Повторение'):null,project.due_date ? el('span', { class: P.overdue(project) ? 'pl-overdue' : 'pl-muted' }, (P.overdue(project) ? 'Просрочен · ' : 'До ') + P.date(project.due_date)) : meta('Без крайнего срока'))),project);
+        const card = P.paint(el('article', { class: 'pl-project-card', 'data-project-id':project.id }, el('div', { class: 'pl-card-top' },P.projectCompleteControl(project),el('h3',{},el('a',{href:'#/plans/projects/'+project.id},P.appearanceIcon(project,true),project.title)),project.status==='planned'?null:P.status(project)), project.description?el('p', { class: 'pl-card-description' }, project.description):null, project.start_date?el('p',{class:'pl-project-date'},(project.repeat_series_id?'↻ Выполнение · ':'Начало · ')+P.projectDateLabel(project)):null, progress(project,true), el('div', { class: 'pl-card-bottom' }, project.repeat_series_id&&!project.start_date&&!project.occurrence_id?meta('↻ Повторение'):null,project.due_date&&(!project.start_date||P.overdue(project)) ? el('span', { class: P.overdue(project) ? 'pl-overdue' : 'pl-muted' }, (P.overdue(project) ? 'Просрочен · ' : 'До ') + P.date(project.due_date)) : null)),project);
         card.budgetIdentity=JSON.stringify(project);
         card.addEventListener('click',event=>{if(!event.target.closest('a,button,details,input,select'))P.navigate('#/plans/projects/'+project.id);});
         const old = oldCards.get(project.id);
@@ -318,10 +325,11 @@
     filters.addEventListener('change', draw); content.append(filters, grid); draw();
   }
   function renderProject(content, project) {
+    content.classList.add('pl-project-detail');
     content.append(el('a', { class: 'pl-back', href: '#/plans/projects' }, '← Все проекты'));
     const overview=el('section',{class:'pl-project-overview pl-project-compact'});
-    const heading=el('div',{class:'pl-project-heading'},P.projectCompleteControl(project),el('h2',{},P.appearanceIcon(project,true),project.title),P.status(project));
-    const controls=el('div',{class:'pl-actions'},!project.archived_at?button('+ Задача в проект',()=>P.newTask(project.id),'pl-primary'):null,!project.archived_at?button('Добавить существующие',()=>P.addExistingTasks(project)):null,P.projectMenuButton(project));
+    const heading=el('div',{class:'pl-project-heading'},P.projectCompleteControl(project),el('h2',{},P.appearanceIcon(project,true),project.title),project.status==='planned'?null:P.status(project));
+    const controls=el('div',{class:'pl-actions'},!project.archived_at?button('+ Задача в проект',()=>P.newTask(project.id),'pl-primary'):null,!project.archived_at?button('Добавить существующие',()=>P.addExistingTasks(project),'pl-secondary-add'):null,P.projectMenuButton(project));
     overview.append(el('div',{class:'pl-project-top'},heading,controls));
     const dates=el('div',{class:'pl-task-meta'},project.start_date?meta((project.repeat_series_id?'↻ Выполнение: ':'Начало: ')+P.projectDateLabel(project)):null,project.due_date?el('span',{class:P.overdue(project)?'pl-overdue':'pl-muted'},'Крайний срок: '+P.date(project.due_date)):null,project.archived_at?meta('В архиве · только просмотр'):null);
     overview.append(dates);

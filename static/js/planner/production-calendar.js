@@ -4,6 +4,9 @@
    const section=P.route().params.get('section')||'planner';
    host.classList.add('pl-settings');
    host.replaceChildren(el('nav',{class:'pl-tabs pl-settings-nav','aria-label':'Подразделы настроек'},[['planner','Планировщик'],['calendar','Производственный календарь'],['appearance','Оформление'],['backups','Резервные копии'],['security','Безопасность'],['archive','Архив']].map(([key,title])=>el('a',{href:'#/plans/settings?section='+key,class:key===section?'is-active':''},title))));
+   const nav=host.querySelector('.pl-settings-nav'),selected=nav.querySelector('.is-active');
+   const sections=el('details',{class:'pl-settings-sections',open:!P.route().params.has('section')},el('summary',{},'Настройки · '+(selected?.textContent||'Разделы')));
+   nav.replaceWith(sections);sections.append(nav);
    if(section==='templates'){host.append(el('h2',{},'Старые шаблоны'),meta('Сохранённые заготовки. Это не архив задач или проектов.'),el('a',{class:'pl-button',href:'#/plans/task-templates'},'Шаблоны задач'),el('a',{class:'pl-button',href:'#/plans/templates'},'Шаблоны проектов'),button('Создать из шаблона',()=>P.chooseTemplate(P.route())));return;}
    if(section==='archive'){await P.renderArchive(host);return;}
    if(section==='security'){await window.budgetSecurity(host);return;}
@@ -18,7 +21,7 @@
      form.append(meta('От 1 до 20. Текущие и будущие открытые проекты входят в лимит, просроченные показаны дополнительно. У задач это фильтр списка. «Все выполнения» показывает уже доступные задачи, не создавая неограниченное число новых. Уменьшение лимита не удаляет созданные экземпляры.'));
      P.bindForm(form,()=>P.api('/settings/project-repeat-limit','PUT',{limit:Number(count.value),expected_revision:limit.revision}),async result=>{P.repeatLimit=result.limit;P.notify('Лимит сохранён');await P.refresh();});repeat.append(form);
      const checkbox=(box,label,checked,save)=>{const input=el('input',{type:'checkbox',checked});input.addEventListener('change',()=>save(input.checked));box.append(el('label',{class:'pl-checkbox'},input,label));};
-     const tasks=block('Список задач','Группы разделяются по экземпляру проекта и дате');
+     const tasks=block('Список задач','Сегодня и завтра — по серии; в больших секциях — по конкретному выполнению');
      checkbox(tasks,'Группировать по проектам',P.groupProjects(),value=>{try{localStorage.setItem('planner.project-groups',value?'on':'off');}catch(_){}});
      const calendar=block('Календарь','История остаётся на запланированных датах');
      checkbox(calendar,'Показывать выполненные задачи',P.showCompletedCalendar(),P.setCompletedCalendar);
@@ -49,7 +52,7 @@
   }
   const filter=el('div',{class:'pl-filters'}),type=P.field(filter,'archive_type','Тип','select','all',[['all','Все'],['task','Задачи'],['project','Проекты']]),list=el('div',{class:'pl-archive-list'});host.append(filter,list);
   const open=r=>r.kind==='tasks'?P.openTask(r.item.id):P.navigate('#/plans/'+(r.kind==='series'?'series':'projects')+'/'+r.item.id);
-  function draw(){const selected=rows.filter(r=>type.value==='all'||r.type===type.value);list.replaceChildren(...selected.map(r=>{const i=r.item,box=el('article',{class:'pl-settings-block','data-archive-id':i.id},el('h3',{},i.title),el('p',{class:'pl-muted'},r.label+' · '+(P.labels[i.status]||i.status)),el('p',{class:'pl-muted'},(i.archived_at||r.owner?.archived_at)?'В архиве с '+P.date((i.archived_at||r.owner.archived_at).slice(0,10)):'Дата архивирования не сохранена в карточке'),el('div',{class:'pl-actions'},button('Открыть',()=>open(r)),button(r.kind==='tasks'?'Вернуть проект с задачами':'Вернуть из архива',()=>P.unarchive(r.kind==='tasks'?'projects':r.kind,r.owner||i)),button('Удалить навсегда',()=>P.deleteForever(r.kind,i),'pl-danger')));return box;}));if(!selected.length)list.append(P.empty('Архив пуст','Здесь появятся архивные проекты и серии.'));}
+  function draw(){const selected=rows.filter(r=>type.value==='all'||r.type===type.value);list.replaceChildren(...selected.map(r=>{const i=r.item,box=el('article',{class:'pl-settings-block','data-archive-id':i.id},el('h3',{},button(i.title,()=>open(r),'pl-task-title')),el('p',{class:'pl-muted'},r.label+' · '+(P.labels[i.status]||i.status)),el('p',{class:'pl-muted'},(i.archived_at||r.owner?.archived_at)?'В архиве с '+P.date((i.archived_at||r.owner.archived_at).slice(0,10)):'Дата архивирования не сохранена в карточке'),el('div',{class:'pl-actions'},button(r.kind==='tasks'?'Вернуть проект с задачами':'Вернуть из архива',()=>P.unarchive(r.kind==='tasks'?'projects':r.kind,r.owner||i)),button('···',()=>{const h=P.dialog('Действия в архиве');h.dialog.append(button('Открыть',()=>{h.close(true);open(r);}),button('Удалить навсегда',()=>{h.close(true);P.deleteForever(r.kind,i);},'pl-danger'));},'pl-icon')));box.querySelector('.pl-icon').setAttribute('aria-label','Действия в архиве');return box;}));if(!selected.length)list.append(P.empty('Архив пуст','Здесь появятся архивные проекты и серии.'));}
   type.addEventListener('change',draw);draw();
  };
  P.backupViewModel=function(data,staging=false){

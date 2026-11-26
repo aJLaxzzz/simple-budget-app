@@ -39,7 +39,7 @@ def overview():
     if result.returncode:raise Refused('SSH: состояния недоступны. '+result.stderr.strip()[-400:])
     return json.loads(result.stdout)
 
-def menu_lines(instance, identity, states, auth, sudo_mode, local_status='', notices=()):
+def menu_lines(instance, identity, states, auth, sudo_mode, local_status='', notices=(), versions=None):
     columns,height=ui.terminal_size();width=max(12,min(columns-1,100))
     two=width>=77;gap=4;cell=min(46,(width-gap)//2) if two else width
     line_width=cell*2+gap if two else width
@@ -58,18 +58,33 @@ def menu_lines(instance, identity, states, auth, sudo_mode, local_status='', not
         marker=('▸ ' if unicode else '> ') if chosen else '  '
         if two and height>=30 and unicode:
             name=label+(' · выбрано' if chosen else '')
-            top='╭─ '+name+' '+rule*max(0,cell-ui.visible_width(name)-5)+'╮'
-            return [ui.color(top,'blue' if chosen else 'gray'),
-                    ui.color('│ ','gray')+ui.pad(ui.color(state,tone),cell-4)+ui.color(' │','gray'),
-                    ui.color('│ ','gray')+ui.pad(ui.color(revision,'gray'),cell-4)+ui.color(' │','gray'),
-                    ui.color('╰'+rule*(cell-2)+'╯','gray')]
+            lines=[state,revision]
+            if versions:
+                info=versions.get(internal,{})
+                lines+=version_status.menu_metadata(info)+[info.get('relation','Не удалось определить')]
+            rows=[ui.color('╭─ '+name+' '+rule*max(0,cell-ui.visible_width(name)-5)+'╮','blue' if chosen else 'gray')]
+            for index,value in enumerate(lines):
+                for row in ui.wrap(value,cell-4):rows.append(ui.color('│ ','gray')+ui.pad(ui.color(row,tone if index==0 else 'gray'),cell-4)+ui.color(' │','gray'))
+            return rows+[ui.color('╰'+rule*(cell-2)+'╯','gray')]
         text=marker+label+'  '+state+' · '+revision
-        # Unknown states wrap rather than truncate a diagnostic.
-        return [ui.color(row,tone) for row in ui.wrap(text,cell)]
+        rows=[ui.color(row,tone) for row in ui.wrap(text,cell)]
+        if versions:
+            info=versions.get(internal,{})
+            for value in version_status.menu_metadata(info)+[info.get('relation','Не удалось определить')]:
+                rows.extend(ui.color(row,'gray') for row in ui.wrap(value,cell))
+        return rows
     header=[ui.color(row,'blue') for row in ui.wrap('Simple Budget — Server Manager',line_width)]
     header+=styled_lines('Сервер '+IP+(' · ' if unicode else ' | ')+'Выбрано: '+selected,'blue')
     prod,stg=service('production','PROD'),service('acceptance','STG')
     header+=pair(prod,stg) if two else prod+stg
+    if versions:
+        for key,label in [('head','Локальный HEAD'),('origin','origin/main · локально известный')]:
+            info=versions.get(key,{})
+            if key=='origin' and not info.get('revision'):continue
+            header+=styled_lines(label+' · '+(info.get('revision') or 'недоступен')[:12],'blue')
+            header+=styled_lines(' · '.join(version_status.menu_metadata(info)))
+            if key=='origin':header+=styled_lines(info.get('relation','Не удалось определить')+' · без проверки GitHub')
+        if local_status=='':header+=styled_lines('Незакоммиченные изменения: нет')
     header+=styled_lines('ID '+identity)
     header+=styled_lines('AUTH='+auth+'; SUDO_MODE='+sudo_mode)
     if local_status:header+=styled_lines('Локально есть незакоммиченные изменения. Релиз требует коммита.','yellow')
@@ -105,7 +120,17 @@ def menu_lines(instance, identity, states, auth, sudo_mode, local_status='', not
 def render(instance, identity, states, auth, sudo_mode):
     status=version_status.git(Path(__file__).resolve().parents[2],'status','--porcelain=v1','--untracked-files=normal')
     ui.clear_menu()
-    for line in menu_lines(instance,identity,states,auth,sudo_mode,status):print(line)
+    for line in menu_lines(instance,identity,states,auth,sudo_mode,status,versions=version_status.menu_snapshot(Path(__file__).resolve().parents[2],states)):print(line)
+
+def operation_lines(choice,instance,states):
+    names={'1':'Состояние сервера','2':'Обновить приложение','3':'Просмотреть журналы','4':'Создать резервную копию','5':'Скачать резервную копию','6':'Восстановить данные','7':'Откатить обновление','8':'Управление устройствами','9':'Проверить HTTPS','10':'Создать PKI-бэкап','11':'Авторизация и Keychain','12':'Выбрать PROD / STG','13':'Продолжить прерванную операцию','14':{'running':'Остановить STG','stopped':'Запустить STG'}.get(states.get('acceptance',{}).get('service'),'STG: состояние неизвестно'),'15':'Сбросить синтетические данные STG','16':'Установить проверенный релиз STG в PROD'}
+    if choice not in names:return []
+    scope='Целевое окружение: '+('STG' if choice in ('14','15') or instance=='acceptance' else 'PROD')
+    if choice=='16':scope='Источник: STG → Назначение: PROD'
+    elif choice in ('11','12'):scope='Область: локальные настройки администратора'
+    elif choice in ('8','9','10'):scope='Область: общая безопасность сервера (PROD и STG)'
+    width=max(12,min(ui.terminal_size()[0]-1,96))
+    return [ui.color(row,'blue') for line in ['Simple Budget — Server Manager','',choice.zfill(2)+' — '+names[choice],scope,'Сервер: '+IP,''] for row in (ui.wrap(line,width) if line else [''])]
 
 def main(input_fn=None,run=None,observe=None):
     instance=os.environ.get('INSTANCE') or 'acceptance'
@@ -125,13 +150,15 @@ def main(input_fn=None,run=None,observe=None):
             except (Refused,OSError,ValueError,subprocess.SubprocessError) as e:
                 states={};observation_error=str(e)
             status=version_status.git(Path(__file__).resolve().parents[2],'status','--porcelain=v1','--untracked-files=normal')
+            versions=version_status.menu_snapshot(Path(__file__).resolve().parents[2],states)
             notices=[(observation_error,'red')] if observation_error else []
             pending=state.with_name('pending-'+instance+'.json')
             if pending.exists():notices.append(('Есть незавершённая операция: сначала состояние (1), затем recovery (13).','yellow'))
             # Resize redraws cached observations; it never invokes SSH or sudo.
-            choice=ui.menu_choice(lambda:menu_lines(instance,identity,states,auth,sudo_mode,status,notices),input_fn).strip()
+            choice=ui.menu_choice(lambda:menu_lines(instance,identity,states,auth,sudo_mode,status,notices,versions),input_fn).strip()
             ui.clear_menu()
             if choice=='0':return 0
+            for line in operation_lines(choice,instance,states):print(line)
             if choice=='12':
                 name=input('Введите PROD или STG: ').strip().lower()
                 name={'prod':'production','stg':'acceptance'}.get(name,name)

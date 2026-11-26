@@ -5,7 +5,7 @@
   P.navigation = function (page, route) {
     const group = P.navGroup(route);
     const ready = window.AppNavigation.render('plans',route);
-    if(group==='tasks'&&route.view==='tasks')page.append(el('h1',{class:'pl-mobile-screen-title'},'Задачи'));
+    if(group==='tasks'&&route.view==='tasks'&&route.params.get('view')!=='regular')page.append(el('h1',{class:'pl-mobile-screen-title'},'Задачи'));
     if (group==='tasks' || group==='projects') {
       const project = group==='projects';
       const entries = project ? [['#/plans/projects','Все проекты','all'],['#/plans/projects?view=regular','Регулярные проекты','regular']] : [['#/plans/tasks','Все задачи','all'],['#/plans/tasks?view=regular','Регулярные','regular'],['#/plans/tasks?view=undated','Без даты','undated']];

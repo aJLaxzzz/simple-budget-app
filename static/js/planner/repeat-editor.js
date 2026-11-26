@@ -10,15 +10,23 @@ P.repeatEditor=async function(id,options={}){
   const existing=[...document.querySelectorAll('[data-repeat-editor]')].find(d=>d.dataset.repeatEditor===id);if(existing){existing.focus();return;}
   if(P.guardActive&&!await P.guardActive())return;
   const h=P.dialog('Настроить повторение');h.dialog.classList.add('pl-repeat-editor','pl-wide-dialog');h.dialog.dataset.repeatEditor=id;
-  const title=el('h3'),tabs=el('div',{class:'pl-editor-tabs',role:'tablist','aria-label':'Настройки повторения'}),body=el('section',{class:'pl-repeat-body',role:'tabpanel'});h.dialog.append(title,tabs,body);body.closeEditor=h.close;
+  const title=el('h3'),tabs=el('div',{class:'pl-editor-tabs',role:'tablist','aria-label':'Настройки повторения'}),body=el('section',{class:'pl-repeat-body',role:'tabpanel'});const actions=el('div',{class:'pl-repeat-actions'});h.dialog.append(title,tabs,body,actions);body.closeEditor=h.close;
+  let actionSequence=0;
+  body.pinActions=function(){
+   for(const footer of actions.querySelectorAll('.pl-form-footer'))if(!footer.querySelector('button')?.form?.isConnected)footer.remove();
+   for(const footer of body.querySelectorAll('.pl-form-footer')){
+    const form=footer.closest('form');form.id ||= 'repeat-form-'+id+'-'+(++actionSequence);
+    footer.querySelectorAll('button').forEach(b=>b.setAttribute('form',form.id));actions.append(footer);
+   }
+  };
   let selected='',busy=false;const projectID=options.projectID;
   async function choose(tab){
    if(busy||selected===tab)return;if(body.plannerGuard&&!await body.plannerGuard())return;busy=true;tabs.querySelectorAll('button').forEach(b=>b.disabled=true);
-   try{const s=await P.api('/series/'+id+'?limit=100');if(!h.dialog.isConnected)return;selected=tab;body.replaceChildren();body.plannerGuard=null;title.textContent=P.seriesTitle(s);tabs.querySelectorAll('button').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.tab===tab)));
+   try{const s=await P.api('/series/'+id+'?limit=100');if(!h.dialog.isConnected)return;selected=tab;actions.replaceChildren();body.replaceChildren();body.plannerGuard=null;title.textContent=P.seriesTitle(s);tabs.querySelectorAll('button').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.tab===tab)));
     const selectedID=projectID||s.source_project_id||(s.occurrences||[]).find(o=>o.project)?.project.id;const p=s.source_type==='project'&&selectedID?await P.api('/projects/'+selectedID):null;
     if(tab==='schedule'){
      if(['disabled','archived'].includes(s.state))body.append(meta('Повторение прекращено. Выполнения и история доступны в дополнительных настройках.'));
-     else{P.seriesChange(s,'change_rule',options.extras||{},body);if(s.source_type==='project')body.prepend(meta('Даты проектов рассчитываются по расписанию. Каждое выполнение доступно независимо от остальных.'));if(s.end_date)body.prepend(meta('Дата окончания: '+P.date(s.end_date)));}
+     else{P.seriesChange(s,'change_rule',options.extras||{},body);if(s.source_type==='project')body.prepend(meta('Независимые выполнения по расписанию'));if(s.end_date)body.prepend(meta('Дата окончания: '+P.date(s.end_date)));}
     }else if(tab==='tasks')await P.projectComposition(p||{repeat_series_id:s.id,title:P.seriesTitle(s)},false,body);
         else{
      const leave=fn=>()=>{h.close(true);fn();};const advanced=el('details',{open:true},el('summary',{},'Дополнительные настройки'));body.append(advanced);
@@ -37,6 +45,11 @@ P.repeatEditor=async function(id,options={}){
      const danger=el('div',{class:'pl-repeat-danger'});body.append(danger);
      if(!['disabled'].includes(s.state))danger.append(button('Отключить повторение',leave(()=>P.disableRepeat(id,p?.id)),'pl-danger'));
      danger.append(button('Удалить всё повторение навсегда',leave(()=>P.deleteForever('series',s)),'pl-danger'));
+    }
+    body.pinActions();
+    for(const select of body.querySelectorAll('select')){
+     const caption=el('span',{class:'pl-select-value'});select.after(caption);
+     const update=()=>{const text=select.selectedOptions[0]?.textContent||'';caption.textContent=text.length>30?text:'';caption.hidden=!caption.textContent;select.title=text;};select.addEventListener('change',update);update();
     }
     h.dialog.plannerGuard=async()=>!body.plannerGuard||await body.plannerGuard();
    }catch(e){body.append(el('p',{role:'alert'},P.errorMessage(e)));}finally{busy=false;tabs.querySelectorAll('button').forEach(b=>b.disabled=false);}
@@ -65,7 +78,7 @@ P.projectScopeField=function(form,project){
  if(!project?.repeat_series_id)return null;
  const scope=P.projectContext(project)?'this_and_following':'this';
  const input=el('input',{type:'hidden',name:'change_scope',value:scope});
- form.append(el('div',{class:'pl-field pl-scope-note'},input,meta(scope==='this'?'Изменяется только эта задача':'Состав и даты: это и последующие выполнения. Индивидуальные исключения защищены.')));return input;
+ form.append(el('div',{class:'pl-field pl-scope-note'},input,meta(scope==='this'?'Изменяется только эта задача':'Состав и даты: это и следующие выполнения')));return input;
 };
 const pendingScope=new Map();
 P.scopedProjectSave=async function(project,input){

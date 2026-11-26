@@ -65,3 +65,32 @@ def display(info, release):
     print('Сравнение: '+labels[info['relation']]+'. Это сравнение коммитов; незакоммиченные изменения в него не входят.')
     if release.get('modified') is not False:
         print('Чистота серверной сборки не подтверждена; одинаковый SHA не доказывает совпадение исходников.')
+
+
+def menu_snapshot(root, states):
+    """Cache local Git facts for one menu frame, including all resize redraws."""
+    head=(git(root,'rev-parse','--verify','HEAD') or '').strip()
+    origin=(git(root,'rev-parse','--verify','refs/remotes/origin/main') or '').strip()
+    revisions={'head':head,'origin':origin,**{key:value.get('revision') for key,value in states.items()}}
+    objects={sha:commit(root,sha) for sha in set(revisions.values()) if sha}
+    result={}
+    for key,sha in revisions.items():
+        metadata=objects.get(sha);relation='Не удалось определить'
+        if metadata and objects.get(head):
+            if sha==head:relation='Совпадает с HEAD'
+            else:
+                counts=git(root,'rev-list','--left-right','--count',head+'...'+sha,'--')
+                if counts and re.fullmatch(r'\s*\d+\s+\d+\s*',counts):
+                    ahead,behind=map(int,counts.split())
+                    relation='История разошлась' if ahead and behind else 'Отстаёт от HEAD' if ahead else 'Опережает HEAD'
+        result[key]={'revision':sha,'commit':metadata,'relation':relation}
+    return result
+
+
+def menu_metadata(info):
+    from datetime import datetime, timezone, timedelta
+    metadata=info.get('commit')
+    if not metadata:return ['Название и дата коммита недоступны']
+    try:stamp=datetime.fromisoformat(metadata['committed_at']).astimezone(timezone(timedelta(hours=3))).strftime('%d.%m.%Y %H:%M:%S')+' МСК'
+    except (ValueError,TypeError):stamp='Дата недоступна'
+    return [metadata['title'],stamp]

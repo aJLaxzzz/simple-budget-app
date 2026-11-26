@@ -45,7 +45,7 @@ class MenuTerminal(unittest.TestCase):
                 states={'production':{'service':'running','revision':'a'*40},'acceptance':{'service':'stopped','revision':'b'*40}}
                 observe=Mock(return_value=states)
                 def operation(*args,**kwargs):
-                    self.assertTrue(out.getvalue().endswith('\033[3J'))
+                    self.assertIn('01 — Состояние сервера',out.getvalue().rsplit('\033[3J',1)[-1])
                     print('Ввод паролей и диагностический вывод операции')
                     return subprocess.CompletedProcess([],code)
                 execute=Mock(side_effect=operation)
@@ -53,7 +53,7 @@ class MenuTerminal(unittest.TestCase):
                 def answer(prompt):
                     if prompt.startswith('Нажмите Enter'):
                         screen=out.getvalue().rsplit('\033[3J',1)[-1]
-                        self.assertNotIn('Server Manager',screen)
+                        self.assertIn('01 — Состояние сервера',screen)
                         self.assertIn('диагностический вывод',screen)
                         self.assertIn('Операция завершена.' if code==0 else 'кодом 1',screen)
                     return next(choices)
@@ -62,12 +62,12 @@ class MenuTerminal(unittest.TestCase):
                 self.assertNotIn('1049',out.getvalue())
                 self.assertTrue(out.getvalue().endswith('\033[3J'))
 
-    def test_compact_menu_fits_standard_terminal_and_keeps_all_commands(self):
+    def test_compact_menu_wraps_version_metadata_and_keeps_all_commands(self):
         states={'production':{'service':'running','revision':'a'*40},'acceptance':{'service':'running','revision':'b'*40}}
         with patch.dict(os.environ,{'TERM':'xterm-256color','OUTPUT':'','NO_COLOR':'1'}),patch.object(ui,'interactive',return_value=True),patch.object(ui.shutil,'get_terminal_size',return_value=os.terminal_size((80,24))),patch.object(menu.version_status,'git',return_value=''),contextlib.redirect_stdout(io.StringIO()) as out:
             menu.render('production','a'*32,states,'manual','session')
             value=ui.ANSI.sub('',out.getvalue())
-            self.assertLessEqual(len(value.splitlines())+1,24)
+            self.assertIn("Локальный HEAD",value) # excess rows use the existing terminal pager
             self.assertTrue(all(len(line)<80 for line in value.splitlines()))
             for n in range(17):self.assertIn(str(n)+'. ',value)
 
@@ -130,7 +130,7 @@ sys.exit(result)
                 self.assertIn('Server Manager',screen())
                 for count,(choice,action) in enumerate(((b'3\n','logs'),(b'1\n','status')),1):
                     os.write(master,choice);until('Синтетический пароль: ',count)
-                    self.assertNotIn('Server Manager',screen())
+                    self.assertIn('03 — Просмотреть журналы' if action=='logs' else '01 — Состояние сервера',screen())
                     self.assertIn('CURRENT_OPERATION='+action,screen())
                     self.assertNotIn('RESULT=',screen())
                     os.write(master,b'synthetic-private-input\n');until('Нажмите Enter',count)
@@ -140,8 +140,8 @@ sys.exit(result)
                     self.assertNotIn(b'synthetic-private-input',captured)
                     # Result stays until Enter; no asynchronous clearing.
                     self.assertFalse(select.select([master],[],[],.1)[0])
-                    os.write(master,b'\n');until('Server Manager',count+1)
-                    until(' 0. Выход',count+1)
+                    headings=captured.count(b'Server Manager');prompts=captured.count('Выбор: '.encode())
+                    os.write(master,b'\n');until('Server Manager',headings+1);until('Выбор: ',prompts+1)
                     self.assertNotIn('RESULT=',screen())
                     self.assertNotIn('CURRENT_OPERATION=',screen())
                     self.assertIn('Server Manager',screen())
