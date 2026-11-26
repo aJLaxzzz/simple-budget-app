@@ -1,10 +1,10 @@
 (function () {
   'use strict';
   const indicator = document.createElement('span'); indicator.id = 'sync-status'; indicator.setAttribute('role', 'status');
-  indicator.style.cssText = 'position:fixed;bottom:8px;right:12px;z-index:30;font-size:12px;line-height:16px;padding:3px 7px;border:1px solid var(--border);border-radius:6px;background:var(--bg-card, #161b22);color:var(--text-muted, #8b949e);pointer-events:none';
+
   document.body.append(indicator);
   const notice = document.createElement('div'); notice.hidden = true; notice.setAttribute('role', 'status');
-  notice.style.cssText = 'background:#fff7dc;color:#332e1b;border:1px solid #c9b77a;padding:12px;border-radius:8px';(document.querySelector('header') || document.body).after(notice);
+  notice.className='budget-sync-notice';(document.querySelector('header') || document.body).after(notice);
   let stream, retry, connectTurn = 0, pending = false, running = false, failed = false, connected = false, delay = 1000, scope = 'all', lastActivity = Date.now(), generation, revision, nextReconcile = 0, reconcileDelay = 1000;
   let pointerDown = false, dragging = false, keyboardDown = false, interactionUntil = 0;
   const interacted = () => { window.budgetInteractionEpoch = (window.budgetInteractionEpoch || 0) + 1; };
@@ -24,7 +24,7 @@
   function placeNotice() {
     const dialogs = document.querySelectorAll('dialog[open]');
     const host = dialogs[dialogs.length-1] || document.querySelector('#modal-root .modal, .pl-drawer-shell');
-    if(host){const heading=host.querySelector('.pl-dialog-head, .modal-header');if(heading)heading.after(notice);else host.prepend(notice);}
+    if(host){const heading=host.querySelector('.pl-drawer-head, .pl-dialog-head, .modal-header');if(heading)heading.after(notice);else host.prepend(notice);}
     else (document.querySelector('header') || document.body).after(notice);
   }
   function editing() { if(window.budgetDraftDirty && window.budgetDraftNode && !window.budgetDraftNode.isConnected)window.budgetDraftDirty=false;return window.budgetDraftDirty || !!document.querySelector('.pl-dialog, .pl-drawer-shell form, #modal-root form'); }

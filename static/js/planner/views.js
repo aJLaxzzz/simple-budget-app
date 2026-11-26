@@ -3,7 +3,7 @@
   const { el, button, meta } = P;
   let generation = 0;
   let host, mountedHash;
-  const screenKey = hash => { const [path, query] = (hash || '').split('?'); const params = new URLSearchParams(query); ['task','new','edit'].forEach(k => params.delete(k)); return path + '?' + params; };
+  const screenKey = hash => { const [path, query] = (hash || '').split('?'); const params = new URLSearchParams(query); ['task','new','edit','id','for_project','parent','for_date'].forEach(k => params.delete(k)); return path + '?' + params; };
   P.unmount = function () {
     P.guardActive = null; P.deferNavigation = null;
     generation++;
@@ -23,7 +23,17 @@
     }
     return true;
   };
-  P.mount = (root, background = false) => window.budgetViews.run(() => mount(root, background === true), background === true);
+  P.mount = (root, background = false) => window.budgetViews.run(async () => {
+    const returning=P.editorReturn || (document.querySelector('.pl-editor-shell') ? P.editorOrigin : null);
+    const result=await mount(root, background === true);
+    if(returning?.url===location.hash&&!document.querySelector('.pl-editor-shell')){
+      // Restore after reconciliation releases inert and native dialog focus.
+      if(returning.focus?.isConnected)returning.focus.focus({preventScroll:true});
+      window.scrollTo(returning.scrollX||0,returning.scrollY||0);
+      P.editorReturn=null;P.editorOrigin=null;
+    }
+    return result;
+  }, background === true);
   async function mount(root, background) {
     const sameView = host === root && screenKey(mountedHash) === screenKey(location.hash) && root.querySelector('.planner');
     if (sameView) generation++; else P.unmount();
@@ -157,7 +167,7 @@
     const create = P.commandSender('/tasks');
     P.bindForm(form, () => scope&&scope.value!=='this'?P.scopedProjectSave(projectRecord,{scope:scope.value,action:'add',parent_id:parent||'',patch:{title:input.value.trim()}}).then(r=>({...r.task,scope_notice:r.scope_notice})):create( { title: input.value.trim(), ...(!project&&P.route().view==='tasks'&&P.route().params.get('view')!=='undated'?{planned_date:P.today()}:{}), ...(project ? { project_id: project } : {}), ...(parent ? { parent_task_id: parent } : {}) }), async saved => {
       P.drafts.delete(key); input.value=''; P.notify(saved.scope_notice||('Задача «'+saved.title+'» добавлена'), saved.id?{label:'Открыть',run:()=>P.openTask(saved.id)}:undefined);
-      if(['tasks','inbox'].includes(P.route().view)){const q=new URLSearchParams(P.route().params);['q','status','project'].forEach(k=>q.delete(k));window.history.replaceState(null,'',P.base()+(q.size?'?'+q:''));}
+      if(['tasks','inbox'].includes(P.route().view)){const q=new URLSearchParams(P.route().params);['q','status','project'].forEach(k=>q.delete(k));P.replaceRoute(P.base()+(q.size?'?'+q:''));}
       await P.refresh();
 
       document.querySelector('.pl-quick input')?.focus();
@@ -219,7 +229,7 @@
       params.set('q', search.value); params.set('status', status.value);params.set('future',showAll.value);
       if (project) params.set('project', project.value);
       // Filters survive reload and editor back/forward without creating one history entry per keystroke.
-      window.history.replaceState(null, '', P.base() + '?' + params);
+      P.replaceRoute(P.base() + '?' + params);
       const turn=++loadTurn;
       if(inbox&&loadedStatus!==status.value){
         results.replaceChildren(el('p',{class:'pl-loading'},'Загружаем задачи…'));

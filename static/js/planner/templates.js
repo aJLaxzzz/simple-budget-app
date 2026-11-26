@@ -60,7 +60,8 @@
    workflow.mount?.(form,dialog,close);
    const send=P.commandSender(template?'/templates/'+template.id+'/versions':'/templates');
    P.bindForm(form,()=>{capture();const clean=structuredClone(snapshot);for(const task of clean.tasks)if(!task.scheduled_time)delete task.scheduled_time;if(workflow.submit)return workflow.submit(clean);return send({snapshot:clean,...(template?{expected_revision:template.revision}:{})});},async result=>{if(workflow.done)return workflow.done(result,form,dialog,close);P.drafts.delete(key);close(true);P.navigate('#/plans/templates/'+result.template.id);P.notify('Шаблон «'+result.template.snapshot.title+'» сохранён');await P.refresh();},template?async()=>{const latest=await P.api('/templates/'+template.id);return {record:{title:latest.snapshot.title,description:latest.snapshot.description,revision:latest.revision},related:latest.snapshot.tasks,accept(){template=latest;}};}:undefined);
-   dialog.append(form);P.guardForm(form,key,template||{},dialog,{previewOnly:!!workflow.submit});
+   if(dialog.editorShell){dialog.editorShell.attach(form);dialog.editorShell.show(title);}else dialog.append(form);
+   P.guardForm(form,key,template||{},dialog,{previewOnly:!!workflow.submit});
  }
  function instantiate(t,context={}){
    const key='instantiate-project:'+t.id;

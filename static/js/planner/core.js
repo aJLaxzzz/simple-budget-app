@@ -35,7 +35,14 @@
     return { view: ['inbox', 'projects', 'tasks', 'calendar', 'series', 'templates', 'task-templates', 'attention', 'settings'].includes(parts[1]) ? parts[1] : 'calendar', id: ['projects','series','templates','task-templates'].includes(parts[1]) && parts[2] ? decodeURIComponent(parts[2]) : null, params: new URLSearchParams(query) };
   };
   P.base = () => window.location.hash.split('?')[0];
-  P.navigate = hash => { if(hash!==window.location.hash)P.clearNotice(); window.location.hash = hash; };
+  const editorRoute=hash=>{const q=new URLSearchParams((hash||'').split('?')[1]);return q.has('task')||q.get('new')==='task'||q.get('new')==='project'||q.get('edit')==='project';};
+  P.rememberEditorOrigin=hash=>{
+    if(!editorRoute(hash)||editorRoute(window.location.hash))return;
+    P.editorOrigin={url:window.location.hash,scrollY:window.scrollY,scrollX:window.scrollX,focus:document.activeElement};
+  };
+  P.navigate = hash => { P.rememberEditorOrigin(hash);if(hash!==window.location.hash)P.clearNotice(); window.location.hash = hash; };
+  // Native links and programmatic navigation share the same return context.
+  if(typeof document!=='undefined')document.addEventListener?.('click',event=>{const link=event.target.closest?.('a[href^="#/plans"]');if(link)P.rememberEditorOrigin(link.getAttribute('href'));},true);
   window.addEventListener('hashchange', () => { if(document.getElementById('planner-toast')?.dataset.route!==window.location.hash)P.clearNotice(); });
   P.panelURL = function (params = {}) {
     const query = new URLSearchParams(window.location.hash.split('?')[1] || '');
@@ -43,13 +50,52 @@
     Object.entries(params).forEach(([key, value]) => { if (value) query.set(key, value); });
     return P.base() + (query.size ? '?' + query : '');
   };
-  P.closeEditor = () => P.navigate(P.panelURL());
-  P.openTask = id => {P.editorOrigin={url:P.panelURL(),scrollY:window.scrollY};P.navigate(P.panelURL({ task: id }));};
-  P.newTask = (project, parent, date) => {P.editorOrigin={url:P.panelURL(),scrollY:window.scrollY};P.navigate(P.panelURL({ new: 'task', for_project: project, parent, for_date: date }));};
+  // Tag only same-document entries we observe. Unknown/external history remains native.
+  const historySession=String(Date.now())+Math.random();
+  let historyEntry, historyTransition, restoringHash;
+  const tagHistory=(index,hash=window.location.hash)=>{
+    const entry={session:historySession,index,hash};
+    window.history.replaceState({...window.history.state,plannerEntry:entry},'',hash||window.location.href);
+    return entry;
+  };
+  if(window.history?.replaceState){
+    historyEntry=tagHistory(0);
+    window.addEventListener('hashchange',()=>{
+      const state=window.history.state?.plannerEntry;
+      const next=state?.session===historySession&&state.hash===window.location.hash?state:tagHistory(historyEntry.index+1);
+      historyTransition={from:historyEntry,to:next};historyEntry=next;
+    });
+  }
+  P.replaceRoute=hash=>{
+    window.history.replaceState(window.history.state,'',hash);
+    if(historyEntry){historyEntry=tagHistory(historyEntry.index,hash);if(historyTransition)historyTransition.to=historyEntry;}
+  };
+  P.historyEntry=()=>historyEntry;
+  P.restoreEditorEntry=entry=>{
+    if(restoringHash===entry.hash)return;
+    if(entry?.session===historySession&&historyEntry?.session===historySession&&entry.index!==historyEntry.index){
+      restoringHash=entry.hash;window.history.go(entry.index-historyEntry.index);
+    }else {window.history.replaceState(window.history.state,'',entry.hash);historyEntry=tagHistory(entry.index,entry.hash);}
+  };
+  P.consumeHistoryRestore=()=>{
+    if(restoringHash!==window.location.hash)return false;
+    restoringHash=null;return true;
+  };
+  P.closeEditor = () => {
+    const target=P.panelURL();
+    P.editorReturn=P.editorOrigin;
+    if(!window.history?.replaceState){P.navigate(target);return;}
+    if(historyTransition&&historyTransition.to===historyEntry&&historyTransition.from.hash===target&&historyTransition.from.index===historyEntry.index-1)window.history.back();
+    else {P.replaceRoute(target);window.dispatchEvent(new HashChangeEvent('hashchange'));}
+  };
+  P.openTask = id => P.navigate(P.panelURL({ task: id }));
+  P.newTask = (project, parent, date) => P.navigate(P.panelURL({ new: 'task', for_project: project, parent, for_date: date }));
   P.clearNotice = () => { clearTimeout(P.toastTimer); document.getElementById('planner-toast')?.remove(); };
   P.notify = function (message, action) {
     let toast = document.getElementById('planner-toast');
-    if (!toast) { toast = P.el('div', { id: 'planner-toast', class: 'pl-toast', role: 'status' }); document.body.append(toast); }
+    if (!toast) { toast = P.el('div', { id: 'planner-toast', class: 'pl-toast', role: 'status' }); }
+    const dialog=[...document.querySelectorAll('dialog[open]')].at(-1);
+    if(dialog){const footer=dialog.querySelector(':scope > .pl-drawer-footer');dialog.insertBefore(toast,footer);}else document.body.append(toast);
     toast.dataset.route=window.location.hash;
     toast.replaceChildren(P.el('span', {}, message));
     if(action)toast.append(P.button(action.label,action.run));
@@ -148,18 +194,45 @@
       else if(!e.shiftKey&&(document.activeElement===last||!dialog.contains(document.activeElement))){e.preventDefault();first.focus();}
     });
   };
-  P.dialog = function (title, host) {
+  P.dialog = function (title, host, options = {}) {
     if(host)return {dialog:host,close:host.closeEditor};
     const previous = document.activeElement;
     const headingID='planner-dialog-'+(++fieldSequence);
     const dialog = P.el('dialog', { class: 'pl-dialog planner', 'aria-labelledby':headingID });
-    const close = async (force) => { if (force !== true && dialog.querySelector('[data-busy="true"]')) return; if(force!==true && dialog.plannerGuard && !await dialog.plannerGuard())return; dialog.close(); dialog.remove(); if(previous?.isConnected)previous.focus(); };
+    const close = async (force) => { if (force !== true && dialog.querySelector('[data-busy="true"]')) return; if(force!==true && dialog.plannerGuard && !await dialog.plannerGuard())return; dialog.close(); dialog.remove(); if(previous?.isConnected)previous.focus({preventScroll:true}); options.onClosed?.(force); };
     const x = P.button('×', close, 'pl-icon'); x.setAttribute('aria-label', 'Закрыть диалог');
     dialog.append(P.el('div', { class: 'pl-dialog-head' }, P.el('h2', {id:headingID}, title), x));
     dialog.addEventListener('cancel', e => { e.preventDefault(); close(); });
     P.trapFocus(dialog);
-    document.body.append(dialog); dialog.showModal();
+    document.body.append(dialog); if(!options.deferOpen)dialog.showModal();
     return { dialog, close };
+  };
+  // The same form and dialog survive changes of viewport. Only CSS changes layout.
+  P.editorShell = function(title, options={}) {
+    const h=P.dialog(title,null,{deferOpen:true,onClosed:force=>{if(force!==true&&editorRoute(window.location.hash))P.closeEditor();}});
+    const dialog=h.dialog;
+    dialog.classList.add('pl-drawer','pl-drawer-shell','pl-editor-shell');
+    // Preserve task/action-dialog selectors used by existing commands.
+    if(options.kind==='task')dialog.classList.remove('pl-dialog');
+    if(options.label){dialog.removeAttribute('aria-labelledby');dialog.setAttribute('aria-label',options.label);}
+    if(options.width)dialog.style.setProperty('--editor-width',options.width+'px');
+    const head=dialog.querySelector('.pl-dialog-head');head.classList.add('pl-drawer-head');
+    const heading=head.querySelector('h2');heading.tabIndex=-1;heading.autofocus=true;
+    const x=head.querySelector('button');x.classList.add('pl-editor-close');x.setAttribute('aria-label','Закрыть редактор');
+    x.replaceChildren(P.el('span',{class:'pl-editor-back','aria-hidden':'true'},'←'),P.el('span',{class:'pl-editor-x','aria-hidden':'true'},'×'));
+    const body=P.el('div',{class:'pl-drawer-body'});dialog.append(body);
+    const shell={...h,body,attach(form){
+      if(!body.contains(form))body.append(form);
+      form.id ||= 'planner-editor-form-'+(++fieldSequence);
+      const footer=form.querySelector('.pl-form-footer');
+      if(footer){footer.classList.add('pl-drawer-footer');footer.querySelectorAll('button').forEach(b=>b.setAttribute('form',form.id));dialog.append(footer);}
+    },show(focus){
+      if(!dialog.open)dialog.showModal();
+      document.body.classList.add('planner-open');
+      if(window.matchMedia('(max-width:767px)').matches)heading.focus({preventScroll:true});else (focus||heading).focus({preventScroll:true});
+    }};
+    dialog.editorShell=shell;dialog.closeEditor=h.close;
+    return shell;
   };
   P.showPreview = function (section) {
     section.tabIndex=-1;

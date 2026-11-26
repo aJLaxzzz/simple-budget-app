@@ -40,12 +40,8 @@
     let record = draft?.record || fresh;
     let related = draft?.related || (context ? context.children : []);
     const value = draft?.values || record;
-    const drawer = el('dialog', { class: 'planner pl-drawer pl-drawer-shell', 'aria-label': id ? 'Редактор задачи' : 'Новая задача' });
-    const close = async () => { if (!drawer.querySelector('[data-busy="true"]') && (!drawer.plannerGuard || await drawer.plannerGuard())) {P.deferNavigation=null;P.closeEditor();} };
-    drawer.addEventListener('cancel', e => { e.preventDefault(); close(); });
-    const x = button('×', close, 'pl-icon'); x.setAttribute('aria-label', 'Закрыть редактор');
-    drawer.append(el('header', { class: 'pl-drawer-head' }, el('div', {}, el('h2', {}, id ? 'Детали задачи' : 'Новая задача')), x));
-    const body = el('div', { class: 'pl-drawer-body' }); drawer.append(body);
+    const shell=P.editorShell(id?'Детали задачи':'Новая задача',{kind:'task',label:id?'Редактор задачи':'Новая задача'});
+    const drawer=shell.dialog, body=shell.body;
     const form = el('form', { 'aria-label': 'Редактор задачи', class: 'pl-edit-form' });
     P.appearanceField(form,{...record,...value},false,()=>({project:project?.value,parent:parent?.value}));
     const title = P.field(form, 'title', 'Название', 'textarea', value.title); title.required = true;
@@ -138,7 +134,7 @@
       return create(data);
     }, async saved => {
       P.drafts.delete(key);
-      P.guardActive=null;P.deferNavigation=null;window.history.replaceState(null,'',P.panelURL());await P.refresh();window.scrollTo(0,originScroll);
+      P.guardActive=null;P.deferNavigation=null;P.replaceRoute(P.panelURL());await P.refresh();window.scrollTo(0,originScroll);
       P.notify(saved.scope_notice||('Задача «'+saved.title+'» '+(id?'сохранена':'создана')));
     }, async () => {
       const latestContext = await P.api('/tasks/' + id + '/context');
@@ -186,10 +182,7 @@
       form.addEventListener('invalid',()=>select('main'),true);form.addEventListener('submit',()=>select('main'));
     }
     form.id='planner-task-editor-form';
-    const footer=form.querySelector('.pl-form-footer');footer.classList.add('pl-drawer-footer');footer.querySelector('button[type=submit]').setAttribute('form',form.id);drawer.append(footer);
-    P.trapFocus(drawer);document.body.append(drawer); drawer.showModal();
-    document.body.classList.add('planner-open');
-    title.focus();
+    shell.attach(form);shell.show(title);
   };
   P.projectEditor = function (route) {
     const originHash = window.location.hash;
@@ -198,9 +191,8 @@
     const draft = P.drafts.get(key);
     let record = draft?.record || P.data.projects.find(p => p.id === id) || { title: '', description: '', status: 'planned' };
     const value = draft?.values || record;
-    const { dialog, close } = P.dialog(id ? 'Редактирование проекта' : 'Новый проект');
-    // Project forms are hash-addressable just like the task drawer.
-    dialog.addEventListener('close', () => { if (P.route().params.has('edit') || P.route().params.get('new') === 'project') P.closeEditor(); });
+    const shell=P.editorShell(id?'Редактирование проекта':'Новый проект',{width:520});
+    const {dialog,close}=shell;
     const form = el('form', { 'aria-label': 'Редактор проекта' });
     P.appearanceField(form,{...record,...value},true);
     P.field(form, 'title', 'Название проекта', 'text', value.title).required = true;
@@ -221,7 +213,7 @@
       const latest = await P.api('/projects/' + id);
       return { record: latest, reload() { P.drafts.delete(key); P.refresh(); }, accept() { rebase(form, record, latest); record = latest; P.drafts.set(key, { record, values: P.values(form) }); } };
     });
-    dialog.append(form);P.guardForm(form,key,record,dialog);form.elements.title.focus();
+    shell.attach(form);P.guardForm(form,key,record,dialog);shell.show(form.elements.title);
   };
   P.projectAction = function (project, action) {
     const titles = { complete: 'Завершить проект?', cancel: 'Отменить проект?', archive: 'Переместить проект в архив?' };

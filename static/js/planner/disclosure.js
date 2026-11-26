@@ -24,17 +24,19 @@
      });return prompting;
    };
    container.plannerGuard=guard;
-   const hash=window.location.hash;
+   const hash=window.location.hash,entry=P.historyEntry?.();
    P.guardActive=guard;
    let navigating=false;
    P.deferNavigation=function(resume){
      if(!container.isConnected||window.location.hash===hash)return false;
+     const top=[...document.querySelectorAll('dialog[open]')].at(-1);
+     if(entry&&top&&top!==container){top.dispatchEvent(new Event('cancel',{cancelable:true}));P.restoreEditorEntry(entry);return true;}
      if(!dirty()&&!form.dataset.busy&&!form.dataset.uncertain)return false;
      if(navigating)return true;
      navigating=true;
-     // Keep the destination's history entry intact while the old form remains
-     // visible. Cancelling returns to the editor without overwriting that entry.
-     guard().then(ok=>{navigating=false;if(ok){P.guardActive=null;P.deferNavigation=null;resume();}else window.history.pushState(null,'',hash);});return true;
+     // Cancelling a traversal returns to the original entry without rebuilding
+     // the form or adding another editor entry to browser history.
+     guard().then(ok=>{navigating=false;if(ok){P.guardActive=null;P.deferNavigation=null;resume();}else if(entry)P.restoreEditorEntry(entry);else window.history.replaceState(window.history.state,'',hash);});return true;
    };
    return guard;
  };

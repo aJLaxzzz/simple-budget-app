@@ -221,7 +221,7 @@
     if (tab) tab.href = saved;
     // Canonical URL also preserves responsive defaults when opening the editor.
     const current = new URLSearchParams(route.params); current.set('mode', value.mode); current.set('date', value.date);
-    window.history.replaceState(null, '', '#/plans/calendar?' + current);
+    P.replaceRoute('#/plans/calendar?' + current);
     window.budgetViews.rekey();
     let data, recurrenceErrors;
     try {

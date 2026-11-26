@@ -982,6 +982,7 @@
   }
 
   function render(background = false) {
+    if (window.Planner?.consumeHistoryRestore?.()) return;
     if (window.Planner?.deferNavigation?.(render) || window.AppNavigation.deferNavigation()) return;
     var route = parseHash();
     if (route.page === 'plans') {

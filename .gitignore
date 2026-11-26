@@ -88,3 +88,6 @@ __pycache__/
 # Local agent instructions stay on this machine
 /AGENTS.md
 /agent.md
+
+# Local visual references
+/design-references/

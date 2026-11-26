@@ -1,6 +1,6 @@
 (function(P){
  'use strict';const {el,button,meta}=P;
- P.updateAttentionCount=async nav=>{try{const result=await P.api('/attention?limit=1');const link=nav.querySelector('[href="#/plans/attention"]');if(link){link.replaceChildren(document.createTextNode('Внимание'),el('span',{class:'pl-attention-count','aria-label':'Необработанных проблем: '+result.count},String(result.count)));}}catch{/* The view exposes retry and details; navigation stays usable. */}};
+ P.updateAttentionCount=async nav=>{try{const result=await P.api('/attention?limit=1');const link=nav.querySelector('[href="#/plans/attention"]');if(link){const host=link.querySelector('.app-tab-icon')||link;let count=host.querySelector('.pl-attention-count');if(!count){count=el('span',{class:'pl-attention-count'});host.append(count);}count.textContent=String(result.count);count.setAttribute('aria-label','Необработанных проблем: '+result.count);count.hidden=!result.count;}}catch{/* The view exposes retry and details; navigation stays usable. */}};
  P.renderAttention=async function(host,route){
    const tab=['processed','history'].includes(route.params.get('tab'))?'history':'active';const series=route.params.get('series_id');
    host.replaceChildren(el('div',{class:'pl-section-head'},el('div',{},el('h2',{},'Требуют внимания'),meta('Пропущенное не исчезает. Выберите, что делать дальше.'))));

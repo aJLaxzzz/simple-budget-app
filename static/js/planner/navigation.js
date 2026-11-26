@@ -5,6 +5,7 @@
   P.navigation = function (page, route) {
     const group = P.navGroup(route);
     const ready = window.AppNavigation.render('plans',route);
+    if(group==='tasks'&&route.view==='tasks')page.append(el('h1',{class:'pl-mobile-screen-title'},'Задачи'));
     if (group==='tasks' || group==='projects') {
       const project = group==='projects';
       const entries = project ? [['#/plans/projects','Все проекты','all'],['#/plans/projects?view=regular','Регулярные проекты','regular']] : [['#/plans/tasks','Все задачи','all'],['#/plans/tasks?view=regular','Регулярные','regular'],['#/plans/tasks?view=undated','Без даты','undated']];
@@ -33,7 +34,7 @@
       if(route.view==='tasks'||route.view==='inbox') {
         const q=new URLSearchParams(route.params);['q','status','project','task'].forEach(k=>q.delete(k));
         if(q.get('view')==='regular' || (q.get('view')==='undated' && saved.planned_date))q.delete('view');
-        window.history.replaceState(null,'',P.base()+(q.size?'?'+q:''));
+        P.replaceRoute(P.base()+(q.size?'?'+q:''));
       }
       await P.refresh();
       const row=[...document.querySelectorAll('[data-task-id]')].find(n=>n.dataset.taskId===saved.id);
